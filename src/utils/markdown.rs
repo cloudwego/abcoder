@@ -6,7 +6,7 @@ pub fn get_all_md(dir: &Path, files_list: &mut Vec<String>) -> std::io::Result<(
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() {
+            if path.is_dir() && !path.ends_with(".github") {
                 get_all_md(&path, files_list)?;
             } else if path.is_file() {
                 if let Some(ext) = path.extension() {
