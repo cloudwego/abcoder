@@ -26,6 +26,6 @@ fn main() {
     markdown::get_all_md(repo_dir, &mut md_list).expect("TODO: panic message");
 
     for md in &md_list {
-        println!("{}:{:?}", md, files::count_lines(Path::new(md.as_str())).unwrap())
+        println!("{}:{:?}", md, files::count_lines(Path::new(md.as_str()), true).unwrap())
     }
 }
