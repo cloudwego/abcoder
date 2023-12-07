@@ -1,14 +1,21 @@
 // Import necessary types from the standard library
 use std::path::Path;
+use std::ptr::addr_of_mut;
 
+use tokio::runtime::Runtime;
+
+// use crate::llm::llm;
+use crate::llm::llm::count_tokens_rough;
 use crate::utils::files;
 // Import the git module
-// use crate::utils::git;
+use crate::utils::git;
 use crate::utils::markdown;
 
+mod llm;
 mod utils;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Url of the repository to be cloned
     let repo_url = "https://github.com/cloudwego/hertz.git";
 
@@ -27,5 +34,18 @@ fn main() {
 
     for md in &md_list {
         println!("{}:{:?}", md, files::count_lines(Path::new(md.as_str()), true).unwrap())
+    }
+    for md in &md_list {
+        println!("{}:{:?}", md, files::count_lines(Path::new(md.as_str()), false).unwrap())
+    }
+
+    for md in &md_list {
+        println!("{}:{:?}", md, count_tokens_rough(Path::new(md.as_str())).unwrap())
+    }
+
+
+    match git::get_repo_stats("cloudwego", "hertz").await {
+        Ok(_) => println!("Successfully fetched repo stats"),
+        Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
     }
 }
