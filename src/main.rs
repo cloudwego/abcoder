@@ -5,13 +5,13 @@ use std::ptr::addr_of_mut;
 use tokio::runtime::Runtime;
 
 // use crate::llm::llm;
-use crate::llm::llm::count_tokens_rough;
+use utils::llm::count_tokens_rough;
+
 use crate::utils::files;
 // Import the git module
 use crate::utils::git;
 use crate::utils::markdown;
 
-mod llm;
 mod utils;
 
 #[tokio::main]
