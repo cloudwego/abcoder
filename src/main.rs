@@ -1,6 +1,7 @@
 // Import necessary types from the standard library
 use std::path::Path;
 
+use crate::utils::files;
 // Import the git module
 // use crate::utils::git;
 use crate::utils::markdown;
@@ -24,5 +25,7 @@ fn main() {
     let mut md_list = Vec::new();
     markdown::get_all_md(repo_dir, &mut md_list).expect("TODO: panic message");
 
-    println!("{:?}", md_list);
+    for md in &md_list {
+        println!("{}:{:?}", md, files::count_lines(Path::new(md.as_str())).unwrap())
+    }
 }
