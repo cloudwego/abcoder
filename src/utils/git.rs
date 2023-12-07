@@ -1,3 +1,5 @@
+use std::io::Read;
+use std::ops::Add;
 use std::path::Path;
 use std::process::Command;
 
@@ -37,13 +39,22 @@ pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
     let request_url = format!("https://api.github.com/repos/{}/{}", user, repo);
     let client = reqwest::Client::new();
 
-    let response: Repository = client
+    // TODO config-lize
+    let token_value = env!("ABCoder_github_token");
+
+    let response = client
         .get(&request_url)
         .header("User-Agent", "reqwest")
+        .header("Authorization", "Bearer ".to_string().add(token_value))
         .send()
-        .await?
-        .json()
         .await?;
+
+    if response.status() != 200 {
+        println!("status is not 200, body is: {}", response.text().await?);
+        return Ok(());
+    }
+
+    let response: Repository = response.json().await?;
 
     println!("Stars: {}", response.stargazers_count);
     println!("Forks: {}", response.forks);
