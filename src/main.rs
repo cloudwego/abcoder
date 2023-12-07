@@ -44,8 +44,10 @@ async fn main() {
     }
 
 
-    match git::get_repo_stats("cloudwego", "hertz").await {
-        Ok(_) => println!("Successfully fetched repo stats"),
-        Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
-    }
+    // match git::get_repo_stats("cloudwego", "kitex").await {
+    //     Ok(_) => println!("Successfully fetched repo stats"),
+    //     Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
+    // }
+
+    git::search_issue("cloudwego", "hertz","server closed connection").await;
 }

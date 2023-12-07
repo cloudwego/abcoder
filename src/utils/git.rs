@@ -1,13 +1,21 @@
+use std::fs::File;
 use std::io::Read;
+use std::io::Write;
 use std::ops::Add;
 use std::path::Path;
 use std::process::Command;
 
+use reqwest::Client;
 use reqwest::Error as RError;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use serde_yaml;
 use tokio;
 
 use super::errors::Error;
+
+// TODO config-lize
+static GLOBAL_GIT_TOKEN: &str = env!("ABCoder_github_token");
 
 // Function that clones a git repository and takes the URL of the
 // repository and the directory where it should be cloned as arguments
@@ -38,14 +46,10 @@ struct Repository {
 pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
     let request_url = format!("https://api.github.com/repos/{}/{}", user, repo);
     let client = reqwest::Client::new();
-
-    // TODO config-lize
-    let token_value = env!("ABCoder_github_token");
-
     let response = client
         .get(&request_url)
         .header("User-Agent", "reqwest")
-        .header("Authorization", "Bearer ".to_string().add(token_value))
+        .header("Authorization", "Bearer ".to_string().add(GLOBAL_GIT_TOKEN))
         .send()
         .await?;
 
@@ -54,11 +58,59 @@ pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
         return Ok(());
     }
 
-    let response: Repository = response.json().await?;
+    // println!("{}",response.text().await?);
 
-    println!("Stars: {}", response.stargazers_count);
-    println!("Forks: {}", response.forks);
-    println!("Open Issues: {}", response.open_issues);
+    let resp: Repository = response.json().await?;
 
+    println!("Stars: {}", resp.stargazers_count);
+    println!("Forks: {}", resp.forks);
+    println!("Open Issues: {}", resp.open_issues);
+
+
+    Ok(())
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Issue {
+    title: String,
+    body: String,
+    url: String,
+    isClosed: bool,
+}
+
+pub async fn search_issue(org: &str, repo: &str, keywords: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::new();
+
+    let resp = client
+        .get(format!("https://api.github.com/search/issues?q=repo:{}/{}+is:issue+{}", org, repo, keywords))
+        .header("User-Agent", "Your-User-Agent")  // Replace "Your-User-Agent" with the actual one
+        .send()
+        .await?;
+
+    let body = resp.text().await?;
+
+    let data: Value = serde_json::from_str(&body)?;
+    let issues_data = data["items"].as_array().unwrap();
+
+    let mut issues = vec![];
+
+    for item in issues_data {
+        let issue = Issue {
+            title: item["title"].as_str().unwrap().to_string(),
+            body: item["body"].as_str().unwrap().to_string(),
+            url: item["html_url"].as_str().unwrap().to_string(),
+            isClosed: item["state"].as_str().unwrap().eq("closed"),
+        };
+
+        issues.push(issue);
+    }
+
+    let doc_content = serde_yaml::to_string(&issues)?;
+
+    let mut file = File::create("issues.yml")?;
+    file.write_all(doc_content.as_bytes())?;
+
+    println!("Done");
     Ok(())
 }
