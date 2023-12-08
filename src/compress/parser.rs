@@ -1,7 +1,7 @@
 pub struct Function {
-    name: String,
-    content: String,
-    calls: Vec<String>,  // names of the functions this one calls
+    pub(crate) name: String,
+    pub(crate) content: String,
+    pub(crate) calls: Vec<String>,  // names of the functions this one calls
 }
 
 pub trait LanguageParser {
