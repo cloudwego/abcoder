@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::compress::parser::Function;
-
-use super::super::parser::LanguageParser;
+use crate::compress::parser::{Function, LanguageParser};
 
 struct GolangParser {
     functions: HashMap<String, Function>,
