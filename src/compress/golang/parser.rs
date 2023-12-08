@@ -1,47 +1,36 @@
 use std::collections::{HashMap, HashSet};
+use std::collections::VecDeque;
 
 use crate::compress::parser::{Function, LanguageParser};
 
-struct GolangParser {
+pub struct GolangParser {
     functions: HashMap<String, Function>,
-    processed: HashSet<String>,
+    // function name mapped to Function struct
+    processed: HashSet<String>,            // names of functions already processed
 }
 
 impl LanguageParser for GolangParser {
     fn new() -> Self {
-        Self {
+        GolangParser {
             functions: HashMap::new(),
             processed: HashSet::new(),
         }
     }
 
-    fn add_function(&mut self, name: String, content: String, calls: Vec<String>) {
-        let function = Function { name: name.clone(), content, calls };
-        self.functions.insert(name, function);
+    fn process(&mut self) {
+        // Parse golang project here.
+        // This is a rather complex topic and can't be done in a few lines of code.
+        // You might want to use some existing libraries for parsing golang code.
     }
 
-    fn process_functions(&mut self) {
-        let main = self.functions.get("main").unwrap();  // we presume there is a "main" function
-        self.process_function(main);
-    }
-
-    fn process_function(&mut self, function: &Function) {
-        if self.processed.contains(&function.name) {
-            return;
-        }
-        self.processed.insert(function.name.clone());
-
-        let semantics = self.summarize(function);  // summarize function
-        println!("Function: {}; Semantics: {}", function.name, semantics);
-
-        for call in &function.calls {
-            let other = self.functions.get(call).unwrap();  // we presume function 'call' exists
-            self.process_function(&other);
-        }
-    }
-
-    fn summarize(&self, _function: &Function) -> String {
-        // TODO: Implement function summarization. Now it just returns a stub
-        "Function Summary".to_string()
+    fn summarize(&self, function: &Function) -> String {
+        // Summarize the function here.
+        // For example, this can output function's name and number of calls.
+        let summary = format!(
+            "Function name: {}\nNumber of calls: {}",
+            function.name,
+            function.calls.len()
+        );
+        summary
     }
 }
