@@ -15,7 +15,7 @@ use tokio;
 use super::errors::Error;
 
 // TODO config-lize
-static GLOBAL_GIT_TOKEN: &str = env!("ABCoder_github_token");
+static GLOBAL_GIT_TOKEN: Option<&str> = option_env!("ABCoder_github_token");
 
 // Function that clones a git repository and takes the URL of the
 // repository and the directory where it should be cloned as arguments
@@ -49,7 +49,7 @@ pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
     let response = client
         .get(&request_url)
         .header("User-Agent", "reqwest")
-        .header("Authorization", "Bearer ".to_string().add(GLOBAL_GIT_TOKEN))
+        .header("Authorization", "Bearer ".to_string().add(GLOBAL_GIT_TOKEN.unwrap()))
         .send()
         .await?;
 
@@ -85,6 +85,7 @@ pub async fn search_issue(org: &str, repo: &str, keywords: &str) -> Result<(), B
     let resp = client
         .get(format!("https://api.github.com/search/issues?q=repo:{}/{}+is:issue+{}", org, repo, keywords))
         .header("User-Agent", "Your-User-Agent")  // Replace "Your-User-Agent" with the actual one
+        .header("Authorization", "Bearer ".to_string().add(GLOBAL_GIT_TOKEN.unwrap()))
         .send()
         .await?;
 
