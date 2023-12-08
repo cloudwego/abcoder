@@ -13,6 +13,7 @@ use crate::utils::git;
 use crate::utils::markdown;
 
 mod utils;
+mod compress;
 
 #[tokio::main]
 async fn main() {
@@ -23,10 +24,10 @@ async fn main() {
     let repo_dir = Path::new("./tmp/hertz");
 
     // Call the git_clone function and handle any errors that occur
-    // match git::git_clone(repo_url, repo_dir) {
-    //     Ok(()) => println!("Git repo cloned successfully!"),
-    //     Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
-    // }
+    match git::git_clone(repo_url, repo_dir) {
+        Ok(()) => println!("Git repo cloned successfully!"),
+        Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
+    }
 
 
     let mut md_list = Vec::new();
@@ -44,10 +45,10 @@ async fn main() {
     }
 
 
-    // match git::get_repo_stats("cloudwego", "kitex").await {
-    //     Ok(_) => println!("Successfully fetched repo stats"),
-    //     Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
-    // }
+    match git::get_repo_stats("cloudwego", "hertz").await {
+        Ok(_) => println!("Successfully fetched repo stats"),
+        Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
+    }
 
     git::search_issue("cloudwego", "hertz","server closed connection").await;
 }
