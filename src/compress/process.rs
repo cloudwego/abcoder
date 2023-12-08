@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 struct Function {
     name: String,
@@ -8,11 +8,15 @@ struct Function {
 
 struct Project {
     functions: HashMap<String, Function>,
+    processed: HashSet<String>,  // names of the functions that have been processed
 }
 
 impl Project {
     pub fn new() -> Self {
-        Self { functions: HashMap::new() }
+        Self {
+            functions: HashMap::new(),
+            processed: HashSet::new(),
+        }
     }
 
     pub fn add_function(&mut self, name: String, content: String, calls: Vec<String>) {
@@ -20,12 +24,17 @@ impl Project {
         self.functions.insert(name, function);
     }
 
-    pub fn process_functions(&self) {
+    pub fn process_functions(&mut self) {
         let main = self.functions.get("main").unwrap();  // we presume there is a "main" function
         self.process_function(main);
     }
 
-    fn process_function(&self, function: &Function) {
+    fn process_function(&mut self, function: &Function) {
+        if self.processed.contains(&function.name) {
+            return;
+        }
+        self.processed.insert(function.name.clone());
+
         let semantics = self.summarize(function);  // summarize function
         println!("Function: {}; Semantics: {}", function.name, semantics);
 
