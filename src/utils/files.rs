@@ -44,9 +44,9 @@ impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn recurse(node: &Node, f: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
             for _ in 0..depth {
-                write!(f, "  ")?;
+                write!(f, "   ")?;
             }
-            writeln!(f, "└ {}", node.name)?;
+            writeln!(f, "└──{}", node.name)?;
 
             for child in &node.children {
                 recurse(child, f, depth + 1)?;
