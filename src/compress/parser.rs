@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Function {
     pub(crate) name: String,
