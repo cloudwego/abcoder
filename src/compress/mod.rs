@@ -1,2 +1,2 @@
 pub mod parser;
-mod golang;
+pub mod golang;
