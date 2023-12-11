@@ -1,5 +1,5 @@
 // Import necessary types from the standard library
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr::addr_of_mut;
 
 use tokio::runtime::Runtime;
@@ -7,6 +7,8 @@ use tokio::runtime::Runtime;
 // use crate::llm::llm;
 use utils::llm::count_tokens_rough;
 
+use crate::compress::golang;
+use crate::compress::parser::LanguageParser;
 use crate::utils::files;
 // Import the git module
 use crate::utils::git;
@@ -24,10 +26,10 @@ async fn main() {
     let repo_dir = Path::new("./tmp/hertz");
 
     // Call the git_clone function and handle any errors that occur
-    match git::git_clone(repo_url, repo_dir) {
-        Ok(()) => println!("Git repo cloned successfully!"),
-        Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
-    }
+    // match git::git_clone(repo_url, repo_dir) {
+    //     Ok(()) => println!("Git repo cloned successfully!"),
+    //     Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
+    // }
 
 
     let mut md_list = Vec::new();
@@ -45,10 +47,21 @@ async fn main() {
     }
 
 
-    match git::get_repo_stats("cloudwego", "hertz").await {
-        Ok(_) => println!("Successfully fetched repo stats"),
-        Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
-    }
+    // match git::get_repo_stats("cloudwego", "hertz").await {
+    //     Ok(_) => println!("Successfully fetched repo stats"),
+    //     Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
+    // }
 
-    git::search_issue("cloudwego", "hertz","server closed connection").await;
+    // git::search_issue("cloudwego", "hertz","server closed connection").await;
+
+
+    // let mut p = golang::parser::GolangParser::new();
+    // p.process();
+
+
+    let suffix = "rs";
+    let path = PathBuf::from(".");
+    if let Some(tree) = files::tree(&path, suffix) {
+        println!("{}", tree);
+    }
 }
