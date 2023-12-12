@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -14,15 +15,17 @@ import (
 
 type Function struct {
 	Name                    string
+	CallName                string // Has meaning only for its parent nodes
+	PkgDir                  string
 	IsMethod                bool
 	AssociatedStruct        string
 	Content                 string
-	FunctionCalls           []string // Holds internal function calls
-	ThirdPartyFunctionCalls []string // Holds third party function calls
+	FunctionCalls           []Function // Holds internal function calls
+	ThirdPartyFunctionCalls []string   // Holds third party function calls
 	MethodCalls             []string
 }
 
-func ParseFile(filePath string, modName string) ([]Function, error) {
+func (p *goParser) parseFile(filePath string) ([]Function, error) {
 	fset := token.NewFileSet()
 
 	bs, err := ioutil.ReadFile(filePath)
@@ -36,7 +39,7 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 	}
 
 	thirdPartyImports := make(map[string]struct{})
-	projectImports := make(map[string]struct{})
+	projectImports := make(map[string]string)
 	for _, imp := range f.Imports {
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
 		importBaseName := filepath.Base(importPath)
@@ -52,8 +55,8 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 		// Ignoring golang standard libraries（like net/http）
 		if !isSysPkg {
 			// Distinguish between project packages and third party packages
-			if strings.HasPrefix(importPath, modName) {
-				projectImports[importAlias] = struct{}{}
+			if strings.HasPrefix(importPath, p.modName) {
+				projectImports[importAlias] = importPath
 			} else {
 				thirdPartyImports[importAlias] = struct{}{}
 			}
@@ -74,7 +77,8 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 			end := fset.PositionFor(node.End(), false).Offset
 			content := string(bs[pos:end])
 
-			var functionCalls, thirdPartyFunctionCalls, methodCalls []string
+			var thirdPartyFunctionCalls, methodCalls []string
+			var functionCalls []Function
 			ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
 				call, ok := node.(*ast.CallExpr)
 				if ok {
@@ -82,8 +86,11 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 					switch expr := call.Fun.(type) {
 					case *ast.SelectorExpr:
 						funcName = expr.X.(*ast.Ident).Name + "." + expr.Sel.Name
-						if _, ok = projectImports[expr.X.(*ast.Ident).Name]; ok {
-							functionCalls = append(functionCalls, funcName)
+						if importName, ok := projectImports[expr.X.(*ast.Ident).Name]; ok {
+							// TODO: build.Import didn't work here. Calculate manually.
+							suffix := strings.TrimPrefix(importName, p.modName)
+							pkgDir := filepath.Join(p.homePageDir, suffix)
+							functionCalls = append(functionCalls, Function{Name: expr.Sel.Name, CallName: funcName, PkgDir: pkgDir})
 							return true
 						}
 						if _, ok = thirdPartyImports[expr.X.(*ast.Ident).Name]; ok {
@@ -95,7 +102,7 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 						return true
 					case *ast.Ident:
 						funcName = expr.Name
-						functionCalls = append(functionCalls, funcName)
+						functionCalls = append(functionCalls, Function{Name: funcName, CallName: funcName, PkgDir: filepath.Dir(filePath)})
 						return true
 					}
 				}
@@ -104,6 +111,7 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 
 			funcs = append(funcs, Function{
 				Name:                    funcDecl.Name.Name,
+				PkgDir:                  filepath.Dir(filePath),
 				IsMethod:                isMethod,
 				AssociatedStruct:        associatedStruct,
 				Content:                 content,
@@ -118,24 +126,53 @@ func ParseFile(filePath string, modName string) ([]Function, error) {
 	return funcs, nil
 }
 
-func main() {
-	if len(os.Args) < 3 {
-		fmt.Println("Missing filepath argument or module name")
-		os.Exit(1)
-	}
+type goParser struct {
+	modName     string
+	homePageDir string
+}
 
-	funcs, err := ParseFile(os.Args[1], os.Args[2])
-
+func getGoFilesInDir(dir string) []string {
+	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		fmt.Println("Error parsing file:", err)
-		os.Exit(1)
+		fmt.Println(err.Error())
+		return nil
 	}
 
-	bs, err := json.Marshal(funcs)
+	goFiles := make([]string, 0)
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".go") {
+			goFiles = append(goFiles, filepath.Join(dir, file.Name()))
+		}
+	}
+	return goFiles
+}
+
+func main() {
+	//if len(os.Args) < 3 {
+	//	fmt.Println("Missing filepath argument or module name")
+	//	os.Exit(1)
+	//}
+	//
+	//funcs, err := parseFile(os.Args[1], os.Args[2])
+	p := &goParser{modName: "a.com/b/c", homePageDir: "./tmp/demo"}
+	functionList := make([]Function, 0)
+	for _, f := range getGoFilesInDir("./tmp/demo") {
+		funcs, err := p.parseFile(f)
+		if err != nil {
+			fmt.Println("Error parsing file:", err)
+			continue
+		}
+		functionList = append(functionList, funcs...)
+	}
+
+	out := bytes.NewBuffer(nil)
+	encoder := json.NewEncoder(out)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(functionList)
 	if err != nil {
 		fmt.Println("Error marshalling functions to JSON:", err)
 		os.Exit(1)
 	}
 
-	fmt.Println(string(bs))
+	fmt.Println(out.String())
 }
