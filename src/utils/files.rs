@@ -11,7 +11,8 @@ pub fn count_lines(path: &Path, skip_empty: bool) -> io::Result<usize> {
     let reader = io::BufReader::new(file);
 
     if skip_empty {
-        let line_count = reader.lines()
+        let line_count = reader
+            .lines()
             .filter_map(Result::ok)
             .filter(|line| !line.trim().is_empty())
             .count();
@@ -22,7 +23,6 @@ pub fn count_lines(path: &Path, skip_empty: bool) -> io::Result<usize> {
     Ok(line_count)
 }
 
-
 // Define our tree node
 pub struct Node {
     name: String,
@@ -31,7 +31,10 @@ pub struct Node {
 
 impl Node {
     fn new(name: String) -> Node {
-        Node { name, children: Vec::new() }
+        Node {
+            name,
+            children: Vec::new(),
+        }
     }
 
     fn add_child(&mut self, child: Node) {

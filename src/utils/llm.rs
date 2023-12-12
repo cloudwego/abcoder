@@ -11,7 +11,9 @@ pub fn count_tokens_rough(path: &Path) -> io::Result<usize> {
 
     for line in reader.lines() {
         let line = line?;
-        let tokens: Vec<&str> = line.split(|c: char| c.is_whitespace() || c.is_ascii_punctuation()).collect();
+        let tokens: Vec<&str> = line
+            .split(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
+            .collect();
         token_count += tokens.len();
     }
 

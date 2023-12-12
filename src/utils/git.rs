@@ -34,7 +34,6 @@ pub fn git_clone(url: &str, directory: &Path) -> Result<(), Error> {
     }
 }
 
-
 // 以下代码用于描述返回的 json 数据结构
 #[derive(Serialize, Deserialize, Debug)]
 struct Repository {
@@ -49,7 +48,10 @@ pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
     let response = client
         .get(&request_url)
         .header("User-Agent", "reqwest")
-        .header("Authorization", "Bearer ".to_string().add(GLOBAL_GIT_TOKEN.unwrap()))
+        .header(
+            "Authorization",
+            "Bearer ".to_string().add(GLOBAL_GIT_TOKEN.unwrap()),
+        )
         .send()
         .await?;
 
@@ -66,10 +68,8 @@ pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
     println!("Forks: {}", resp.forks);
     println!("Open Issues: {}", resp.open_issues);
 
-
     Ok(())
 }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Issue {
@@ -79,13 +79,23 @@ struct Issue {
     isClosed: bool,
 }
 
-pub async fn search_issue(org: &str, repo: &str, keywords: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn search_issue(
+    org: &str,
+    repo: &str,
+    keywords: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
 
     let resp = client
-        .get(format!("https://api.github.com/search/issues?q=repo:{}/{}+is:issue+{}", org, repo, keywords))
-        .header("User-Agent", "Your-User-Agent")  // Replace "Your-User-Agent" with the actual one
-        .header("Authorization", "Bearer ".to_string().add(GLOBAL_GIT_TOKEN.unwrap()))
+        .get(format!(
+            "https://api.github.com/search/issues?q=repo:{}/{}+is:issue+{}",
+            org, repo, keywords
+        ))
+        .header("User-Agent", "Your-User-Agent") // Replace "Your-User-Agent" with the actual one
+        .header(
+            "Authorization",
+            "Bearer ".to_string().add(GLOBAL_GIT_TOKEN.unwrap()),
+        )
         .send()
         .await?;
 

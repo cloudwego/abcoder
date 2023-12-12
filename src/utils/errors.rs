@@ -1,6 +1,6 @@
 // Import necessary types from the standard library
-use std::{fmt, io, num::ParseIntError};
 use std::process::Output;
+use std::{fmt, io, num::ParseIntError};
 
 // Our custom error type that can encompass various types of errors
 // that may occur in our application
