@@ -127,8 +127,9 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 }
 
 type goParser struct {
-	modName     string
-	homePageDir string
+	modName      string
+	homePageDir  string
+	processedPkg map[string][]Function
 }
 
 func getGoFilesInDir(dir string) []string {
@@ -147,7 +148,10 @@ func getGoFilesInDir(dir string) []string {
 	return goFiles
 }
 
-func (p *goParser) ParseDir(dir string) []Function {
+func (p *goParser) ParseDir(dir string) ([]Function, bool) {
+	if p.processedPkg[dir] != nil {
+		return p.processedPkg[dir], false
+	}
 	functionList := make([]Function, 0)
 	for _, f := range getGoFilesInDir(dir) {
 		funcs, err := p.parseFile(f)
@@ -157,7 +161,8 @@ func (p *goParser) ParseDir(dir string) []Function {
 		}
 		functionList = append(functionList, funcs...)
 	}
-	return functionList
+	p.processedPkg[dir] = functionList
+	return functionList, true
 }
 
 func main() {
@@ -168,15 +173,7 @@ func main() {
 	//
 	//funcs, err := parseFile(os.Args[1], os.Args[2])
 	p := &goParser{modName: "a.com/b/c", homePageDir: "./tmp/demo"}
-	functionList := make([]Function, 0)
-	for _, f := range getGoFilesInDir("./tmp/demo") {
-		funcs, err := p.parseFile(f)
-		if err != nil {
-			fmt.Println("Error parsing file:", err)
-			continue
-		}
-		functionList = append(functionList, funcs...)
-	}
+	functionList, _ := p.ParseDir("./tmp/demo")
 
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)
