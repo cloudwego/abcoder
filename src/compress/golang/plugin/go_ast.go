@@ -147,6 +147,19 @@ func getGoFilesInDir(dir string) []string {
 	return goFiles
 }
 
+func (p *goParser) ParseDir(dir string) []Function {
+	functionList := make([]Function, 0)
+	for _, f := range getGoFilesInDir(dir) {
+		funcs, err := p.parseFile(f)
+		if err != nil {
+			fmt.Println("Error parsing file:", err)
+			continue
+		}
+		functionList = append(functionList, funcs...)
+	}
+	return functionList
+}
+
 func main() {
 	//if len(os.Args) < 3 {
 	//	fmt.Println("Missing filepath argument or module name")
