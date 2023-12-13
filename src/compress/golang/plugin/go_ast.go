@@ -165,6 +165,20 @@ func (p *goParser) ParseDir(dir string) ([]Function, bool) {
 	return functionList, true
 }
 
+// TODO: Parallel transformation
+func (p *goParser) ParseTilTheEnd(startDir string) {
+	functionList, _ := p.ParseDir(startDir)
+	for _, f := range functionList {
+		for _, fc := range f.FunctionCalls {
+			if p.processedPkg[fc.PkgDir] != nil {
+				return
+			}
+			p.ParseTilTheEnd(fc.PkgDir)
+		}
+	}
+	return
+}
+
 func main() {
 	//if len(os.Args) < 3 {
 	//	fmt.Println("Missing filepath argument or module name")
@@ -172,13 +186,13 @@ func main() {
 	//}
 	//
 	//funcs, err := parseFile(os.Args[1], os.Args[2])
-	p := &goParser{modName: "a.com/b/c", homePageDir: "./tmp/demo"}
-	functionList, _ := p.ParseDir("./tmp/demo")
+	p := &goParser{modName: "a.com/b/c", homePageDir: "./tmp/demo", processedPkg: make(map[string][]Function)}
+	p.ParseTilTheEnd("./tmp/demo")
 
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)
 	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(functionList)
+	err := encoder.Encode(p.processedPkg)
 	if err != nil {
 		fmt.Println("Error marshalling functions to JSON:", err)
 		os.Exit(1)
