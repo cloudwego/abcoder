@@ -179,6 +179,47 @@ func (p *goParser) ParseTilTheEnd(startDir string) {
 	return
 }
 
+type MainStream struct {
+	MainFunc         string
+	RelatedFunctions map[string]string
+}
+
+func (p *goParser) generate() *MainStream {
+	m := &MainStream{
+		RelatedFunctions: make(map[string]string),
+	}
+
+	var functionCalledInMain []Function
+
+Out:
+	for _, v := range p.processedPkg {
+		for _, vv := range v {
+			if vv.Name == "main" {
+				m.MainFunc = vv.Content
+				functionCalledInMain = vv.FunctionCalls
+				break Out
+			}
+		}
+	}
+
+	p.fillFunctionContent(functionCalledInMain, m.RelatedFunctions)
+	return m
+}
+
+func (p *goParser) fillFunctionContent(f []Function, fm map[string]string) {
+	for _, ff := range f {
+		for _, pf := range p.processedPkg[ff.PkgDir] {
+			if ff.Name == pf.Name {
+				fm[ff.CallName] = pf.Content
+
+				if len(pf.FunctionCalls) != 0 {
+					p.fillFunctionContent(pf.FunctionCalls, fm)
+				}
+			}
+		}
+	}
+}
+
 func main() {
 	//if len(os.Args) < 3 {
 	//	fmt.Println("Missing filepath argument or module name")
@@ -189,10 +230,12 @@ func main() {
 	p := &goParser{modName: "a.com/b/c", homePageDir: "./tmp/demo", processedPkg: make(map[string][]Function)}
 	p.ParseTilTheEnd("./tmp/demo")
 
+	m := p.generate()
+
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)
 	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(p.processedPkg)
+	err := encoder.Encode(m)
 	if err != nil {
 		fmt.Println("Error marshalling functions to JSON:", err)
 		os.Exit(1)
