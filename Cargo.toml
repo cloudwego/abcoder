@@ -11,3 +11,9 @@ serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "^1", features = ["full"] }
 serde_json = "1.0"
 serde_yaml = "0.8"
+walkdir = "^2.3"
+regex = "^1.5"
+ryze = { git = "https://github.com/welkeyever/ryze.git" }
+hyper = { version = "0.14", features = ["full"] }
+serde_urlencoded = "0.7.0"
+
