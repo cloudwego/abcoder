@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -85,15 +86,26 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 					var funcName string
 					switch expr := call.Fun.(type) {
 					case *ast.SelectorExpr:
-						funcName = expr.X.(*ast.Ident).Name + "." + expr.Sel.Name
-						if importName, ok := projectImports[expr.X.(*ast.Ident).Name]; ok {
+						funcName := ""
+						// TODO: not the best but works, optimize it later.
+						x := expr.X
+						for {
+							if _, ok := x.(*ast.Ident); !ok {
+								seleExp, _ := x.(*ast.SelectorExpr)
+								x = seleExp.X
+								continue
+							}
+							break
+						}
+						funcName = x.(*ast.Ident).Name + "." + expr.Sel.Name
+						if importName, ok := projectImports[x.(*ast.Ident).Name]; ok {
 							// TODO: build.Import didn't work here. Calculate manually.
 							suffix := strings.TrimPrefix(importName, p.modName)
 							pkgDir := filepath.Join(p.homePageDir, suffix)
 							functionCalls = append(functionCalls, Function{Name: expr.Sel.Name, CallName: funcName, PkgDir: pkgDir})
 							return true
 						}
-						if _, ok = thirdPartyImports[expr.X.(*ast.Ident).Name]; ok {
+						if _, ok = thirdPartyImports[x.(*ast.Ident).Name]; ok {
 							thirdPartyFunctionCalls = append(thirdPartyFunctionCalls, funcName)
 							return true
 						}
@@ -167,6 +179,14 @@ func (p *goParser) ParseDir(dir string) ([]Function, bool) {
 
 // TODO: Parallel transformation
 func (p *goParser) ParseTilTheEnd(startDir string) {
+	if p.modName == "" {
+		var err error
+		p.modName, err = getModuleName(p.homePageDir + "/go.mod")
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+	}
 	functionList, _ := p.ParseDir(startDir)
 	for _, f := range functionList {
 		for _, fc := range f.FunctionCalls {
@@ -220,15 +240,43 @@ func (p *goParser) fillFunctionContent(f []Function, fm map[string]string) {
 	}
 }
 
+func getModuleName(modFilePath string) (string, error) {
+	file, err := os.Open(modFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "module") {
+			// Assuming 'module' keyword is followed by module name
+			parts := strings.Split(line, " ")
+			if len(parts) > 1 {
+				return parts[1], nil
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to scan file: %v", err)
+	}
+
+	return "", nil
+}
+
 func main() {
-	//if len(os.Args) < 3 {
-	//	fmt.Println("Missing filepath argument or module name")
-	//	os.Exit(1)
-	//}
+	if len(os.Args) < 2 {
+		fmt.Println("Missing home dir of the project to parse.")
+		os.Exit(1)
+	}
 	//
-	//funcs, err := parseFile(os.Args[1], os.Args[2])
-	p := &goParser{modName: "a.com/b/c", homePageDir: "./tmp/demo", processedPkg: make(map[string][]Function)}
-	p.ParseTilTheEnd("./tmp/demo")
+
+	homeDir := os.Args[1]
+
+	p := &goParser{modName: "", homePageDir: homeDir, processedPkg: make(map[string][]Function)}
+	p.ParseTilTheEnd(p.homePageDir)
 
 	m := p.generate()
 
