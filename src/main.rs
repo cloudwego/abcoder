@@ -70,9 +70,15 @@ fn repo_stats(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
 
 fn check_repo_exist(repo: &String) -> String {
     // Url of the repository to be cloned
-    let repo_url = format!("https://github.com/{}.git", repo);
+    let mut base_repo = repo.clone();
+    // sub git module
+    if repo.split("/").count() > 2 {
+        let parts: Vec<&str> = repo.split("/").take(2).collect();
+        base_repo = parts.join("/");
+    }
+    let repo_url = format!("https://github.com/{}.git", base_repo);
     println!("{}", repo_url);
-    let repo_dir = format!("./tmp/{}", repo);
+    let repo_dir = format!("./tmp/{}", base_repo);
     // Directory where you want to clone the repository
     let repo_dir_path = Path::new(repo_dir.as_str());
     if !repo_dir_path.exists() {
@@ -82,7 +88,7 @@ fn check_repo_exist(repo: &String) -> String {
             Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
         }
     } else {
-        println!("Already cloned: {}", repo)
+        println!("Already cloned: {}", base_repo)
     }
     repo_dir
 }
