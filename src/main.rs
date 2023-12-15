@@ -154,7 +154,7 @@ async fn main() {
     h.get("/code_analyze", Arc::new(code_analyze)).await;
 
 
-    h.spin(SocketAddr::from(([0, 0, 0, 0], 8888))).await.expect("TODO: panic message");
+    h.spin(SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 0], 8888))).await.expect("TODO: panic message");
 
     // Url of the repository to be cloned
     let repo_url = "https://github.com/cloudwego/hertz.git";
