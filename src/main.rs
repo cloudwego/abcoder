@@ -90,6 +90,9 @@ fn check_repo_exist(repo: &String) -> String {
     } else {
         println!("Already cloned: {}", base_repo)
     }
+
+    // return the real repo dir - submodule case
+    let repo_dir = format!("./tmp/{}", repo);
     repo_dir
 }
 
