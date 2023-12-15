@@ -19,6 +19,7 @@ use utils::llm::count_tokens_rough;
 
 use crate::compress::golang;
 use crate::compress::parser::LanguageParser;
+use crate::utils::cmd;
 use crate::utils::files;
 // Import the git module
 use crate::utils::git;
@@ -68,7 +69,7 @@ fn repo_stats(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
 }
 
 fn check_repo_exist(repo: &String) -> String {
-// Url of the repository to be cloned
+    // Url of the repository to be cloned
     let repo_url = format!("https://github.com/{}.git", repo);
     println!("{}", repo_url);
     let repo_dir = format!("./tmp/{}", repo);
@@ -93,6 +94,12 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let repo = parsed.get("repo").unwrap().clone();
     (async move {
         check_repo_exist(&repo);
+
+        if let Ok(output) = cmd::run_command("./go_ast", vec!["./tmp/welkeyever/hertz/cmd/hz"]) {
+            *ctx.resp.body_mut() = Body::from(output);
+            return;
+        }
+        *ctx.resp.body_mut() = Body::from("analyze failed.");
     }).boxed()
 }
 
