@@ -99,9 +99,9 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
     let repo = parsed.get("repo").unwrap().clone();
     (async move {
-        check_repo_exist(&repo);
+        let repo_dir = check_repo_exist(&repo);
 
-        if let Ok(output) = cmd::run_command("./go_ast", vec![repo.as_str()]) {
+        if let Ok(output) = cmd::run_command("./go_ast", vec![repo_dir.as_str()]) {
             *ctx.resp.body_mut() = Body::from(output);
             return;
         }
