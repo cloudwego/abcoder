@@ -100,10 +100,30 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
 fn issue_trace(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
     let repo = parsed.get("repo").unwrap().clone();
-    let issue_key_words = parsed.get("issue").unwrap().clone();
+
     (async move {
-        let mut issues = git::search_issue(repo.as_str(), issue_key_words.as_str(), 3).await.unwrap();
-        let body = serde_json::to_string_pretty(&issues).unwrap();
+        let mut body = String::from("please pass the key words through query key： issue");
+
+        if let Some(issue_key_words) = parsed.get("issue") {
+            let mut issues = git::search_issue(repo.as_str(), issue_key_words.as_str(), 3).await.unwrap();
+            body = serde_json::to_string_pretty(&issues).unwrap();
+        }
+        *ctx.resp.body_mut() = Body::from(body);
+    }).boxed()
+}
+
+// tree_structure handler
+fn tree_structure(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
+    let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
+    let repo = parsed.get("repo").unwrap().clone();
+    (async move {
+        check_repo_exist(&repo);
+        let suffix = "go";
+        let mut body = String::from("generate tree failed.");
+        let repo = PathBuf::from(format!("./tmp/{}", repo));
+        if let Some(tree) = files::tree(&repo, suffix) {
+            body = tree.to_string()
+        }
         *ctx.resp.body_mut() = Body::from(body);
     }).boxed()
 }
@@ -115,6 +135,8 @@ async fn main() {
     h.get("/basic_info", Arc::new(basic_info)).await;
     h.get("/repo_stats", Arc::new(repo_stats)).await;
     h.get("/issue_trace", Arc::new(issue_trace)).await;
+
+    h.get("/repo_structure", Arc::new(tree_structure)).await;
 
     h.get("/code_analyze", Arc::new(code_analyze)).await;
 
@@ -168,10 +190,4 @@ async fn main() {
 
     // let mut p = golang::parser::GolangParser::new();
     // p.process();
-
-    let suffix = "go";
-    let path = PathBuf::from("./tmp/demo");
-    if let Some(tree) = files::tree(&path, suffix) {
-        println!("{}", tree);
-    }
 }
