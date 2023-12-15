@@ -72,24 +72,24 @@ pub async fn get_repo_stats(repo: &str) -> Result<(Repository), Box<dyn std::err
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Issue {
-    title: String,
-    body: String,
-    url: String,
-    isClosed: bool,
+pub struct Issue {
+    pub title: String,
+    pub body: String,
+    pub url: String,
+    pub isClosed: bool,
 }
 
+
 pub async fn search_issue(
-    org: &str,
     repo: &str,
-    keywords: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+    keywords: &str, limit: i8,
+) -> Result<Vec<Issue>, Box<dyn std::error::Error>> {
     let client = Client::new();
 
     let resp = client
         .get(format!(
-            "https://api.github.com/search/issues?q=repo:{}/{}+is:issue+{}",
-            org, repo, keywords
+            "https://api.github.com/search/issues?q=repo:{}+is:issue+{}",
+            repo, keywords
         ))
         .header("User-Agent", "Your-User-Agent") // Replace "Your-User-Agent" with the actual one
         .header(
@@ -106,7 +106,13 @@ pub async fn search_issue(
 
     let mut issues = vec![];
 
+    let mut issue_count = 0;
+
     for item in issues_data {
+        if limit != -1 && issue_count >= limit {
+            break;
+        }
+
         let issue = Issue {
             title: item["title"].as_str().unwrap().to_string(),
             body: item["body"].as_str().unwrap().to_string(),
@@ -115,13 +121,14 @@ pub async fn search_issue(
         };
 
         issues.push(issue);
+        issue_count += 1;
     }
 
-    let doc_content = serde_yaml::to_string(&issues)?;
+    // let doc_content = serde_yaml::to_string(&issues)?;
 
-    let mut file = File::create("issues.yml")?;
-    file.write_all(doc_content.as_bytes())?;
+    // let mut file = File::create("issues.yml")?;
+    // file.write_all(doc_content.as_bytes())?;
 
     println!("Done");
-    Ok(())
+    Ok(issues)
 }
