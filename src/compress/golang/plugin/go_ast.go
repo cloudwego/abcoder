@@ -200,13 +200,19 @@ func (p *goParser) ParseTilTheEnd(startDir string) {
 }
 
 type MainStream struct {
-	MainFunc         string
-	RelatedFunctions map[string]string
+	MainFunc string
+
+	RelatedFunctions []SingleFunction
+}
+
+type SingleFunction struct {
+	CallName string
+	Content  string
 }
 
 func (p *goParser) generate() *MainStream {
 	m := &MainStream{
-		RelatedFunctions: make(map[string]string),
+		RelatedFunctions: make([]SingleFunction, 0),
 	}
 
 	var functionCalledInMain []Function
@@ -222,18 +228,22 @@ Out:
 		}
 	}
 
-	p.fillFunctionContent(functionCalledInMain, m.RelatedFunctions)
+	p.fillFunctionContent(functionCalledInMain, &m.RelatedFunctions)
 	return m
 }
 
-func (p *goParser) fillFunctionContent(f []Function, fm map[string]string) {
+func (p *goParser) fillFunctionContent(f []Function, fl *[]SingleFunction) {
 	for _, ff := range f {
 		for _, pf := range p.processedPkg[ff.PkgDir] {
 			if ff.Name == pf.Name {
-				fm[ff.CallName] = pf.Content
+				s := SingleFunction{
+					CallName: ff.CallName,
+					Content:  pf.Content,
+				}
+				*fl = append(*fl, s)
 
 				if len(pf.FunctionCalls) != 0 {
-					p.fillFunctionContent(pf.FunctionCalls, fm)
+					p.fillFunctionContent(pf.FunctionCalls, fl)
 				}
 			}
 		}
