@@ -53,7 +53,8 @@ impl fmt::Display for Node {
             for _ in 0..depth {
                 write!(f, "   ")?;
             }
-            writeln!(f, "└──{}", node.name)?;
+            let display_name = node.name.trim_start_matches("./tmp/");
+            writeln!(f, "└──{}", display_name)?;
 
             for child in &node.children {
                 recurse(child, f, depth + 1)?;
