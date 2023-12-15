@@ -101,7 +101,7 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     (async move {
         check_repo_exist(&repo);
 
-        if let Ok(output) = cmd::run_command("./go_ast", vec!["./tmp/welkeyever/hertz/cmd/hz"]) {
+        if let Ok(output) = cmd::run_command("./go_ast", vec![repo.as_str()]) {
             *ctx.resp.body_mut() = Body::from(output);
             return;
         }
