@@ -1,6 +1,10 @@
 use std::fs;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
+use crate::utils::files;
+
 pub fn get_all_md(dir: &Path, files_list: &mut Vec<String>) -> std::io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -18,4 +22,27 @@ pub fn get_all_md(dir: &Path, files_list: &mut Vec<String>) -> std::io::Result<(
         }
     }
     Ok(())
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FileWithContent {
+    pub(crate) name: String,
+    pub(crate) content: String,
+}
+
+pub fn get_readme_json(repo_dir: &Path) -> Option<String> {
+    let mut md_list = Vec::new();
+    get_all_md(repo_dir, &mut md_list).expect("TODO: panic message");
+    for md in &md_list {
+        if md.ends_with("README.md") {
+            let content = files::read_file(md).unwrap();
+            let readme = &FileWithContent {
+                name: "README".to_string(),
+                content,
+            };
+
+            return Some(serde_json::to_string_pretty(readme).unwrap());
+        }
+    }
+    None
 }

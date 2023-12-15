@@ -5,6 +5,10 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
 
+pub fn read_file(path: &str) -> io::Result<String> {
+    fs::read_to_string(path)
+}
+
 // Function to count the lines in a file
 pub fn count_lines(path: &Path, skip_empty: bool) -> io::Result<usize> {
     let file = File::open(path)?;

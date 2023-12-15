@@ -1,3 +1,4 @@
+use std::arch::asm;
 use std::net::SocketAddr;
 // Import necessary types from the standard library
 use std::path::{Path, PathBuf};
@@ -7,6 +8,7 @@ use std::sync::Arc;
 use hyper::Body;
 use reqwest::Url;
 use ryze::hertz::{Hertz, RequestContext};
+use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
 // use crate::llm::llm;
@@ -23,7 +25,7 @@ mod compress;
 mod utils;
 
 
-// Index handler
+// basic_info handler
 fn basic_info(ctx: &mut RequestContext) {
     let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
 
@@ -47,17 +49,23 @@ fn basic_info(ctx: &mut RequestContext) {
         Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
     }
 
-    let mut md_list = Vec::new();
-    markdown::get_all_md(repo_dir, &mut md_list).expect("TODO: panic message");
+    if let Some(body) = markdown::get_readme_json(repo_dir) {
+        *ctx.resp.body_mut() = Body::from(body);
+        return;
+    }
+
+    *ctx.resp.body_mut() = Body::from("Not found README.md in this project.")
+}
 
 
-    for md in &md_list {
-        let body = format!("{}:{:?}",
-                           md,
-                           files::count_lines(Path::new(md.as_str()), true).unwrap()).clone();
-        let body = *ctx.resp.body_mut() = Body::from(body);
+// repo_stats handler
+async fn repo_stats(ctx: &mut RequestContext) {
+    match git::get_repo_stats("cloudwego/hertz").await {
+        Ok(_) => println!("Successfully fetched repo stats"),
+        Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
     }
 }
+
 
 #[tokio::main]
 async fn main() {
