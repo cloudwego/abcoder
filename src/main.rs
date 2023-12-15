@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 use std::ptr::addr_of_mut;
 use std::sync::Arc;
 
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use hyper::Body;
+use hyper::body::HttpBody;
 use reqwest::Url;
 use ryze::hertz::{Hertz, RequestContext};
 use serde::{Deserialize, Serialize};
@@ -26,9 +29,8 @@ mod utils;
 
 
 // basic_info handler
-fn basic_info(ctx: &mut RequestContext) {
+fn basic_info(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
-
     let repo = parsed.get("repo").unwrap();
 
 
@@ -51,19 +53,30 @@ fn basic_info(ctx: &mut RequestContext) {
 
     if let Some(body) = markdown::get_readme_json(repo_dir) {
         *ctx.resp.body_mut() = Body::from(body);
-        return;
+        return (async move {}).boxed();
     }
 
-    *ctx.resp.body_mut() = Body::from("Not found README.md in this project.")
+    *ctx.resp.body_mut() = Body::from("Not found README.md in this project.");
+    return (async move {}).boxed();
 }
 
 
 // repo_stats handler
-async fn repo_stats(ctx: &mut RequestContext) {
-    match git::get_repo_stats("cloudwego/hertz").await {
-        Ok(_) => println!("Successfully fetched repo stats"),
-        Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
-    }
+fn repo_stats(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
+    let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
+    let repo = parsed.get("repo").unwrap().clone();
+    println!("{}", repo);
+
+
+    (async move {
+        match git::get_repo_stats(repo.as_str()).await {
+            Ok(repo) => {
+                println!("Successfully fetched repo stats");
+                *ctx.resp.body_mut() = Body::from("hhh");
+            }
+            Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
+        };
+    }).boxed()
 }
 
 
@@ -71,6 +84,9 @@ async fn repo_stats(ctx: &mut RequestContext) {
 async fn main() {
     let h = Hertz::new();
     h.get("/basic_info", Arc::new(basic_info)).await;
+    h.get("/repo_stats", Arc::new(repo_stats)).await;
+
+
     h.spin(SocketAddr::from(([0, 0, 0, 0], 8888))).await;
 
     // Url of the repository to be cloned

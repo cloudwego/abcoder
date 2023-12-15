@@ -42,8 +42,8 @@ struct Repository {
     open_issues: usize,
 }
 
-pub async fn get_repo_stats(user: &str, repo: &str) -> Result<(), RError> {
-    let request_url = format!("https://api.github.com/repos/{}/{}", user, repo);
+pub async fn get_repo_stats(repo: &str) -> Result<(), RError> {
+    let request_url = format!("https://api.github.com/repos/{}", repo);
     let client = reqwest::Client::new();
     let response = client
         .get(&request_url)
