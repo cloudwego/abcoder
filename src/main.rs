@@ -39,12 +39,9 @@ fn basic_info(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     // Url of the repository to be cloned
     let repo_url = format!("https://github.com/{}.git", repo);
     println!("{}", repo_url);
-
-
     let repo_dir = format!("./tmp/{}", repo);
     // Directory where you want to clone the repository
     let repo_dir = Path::new(repo_dir.as_str());
-
     // Call the git_clone function and handle any errors that occur
     match git::git_clone(repo_url.as_str(), repo_dir) {
         Ok(()) => println!("Git repo cloned successfully!"),
@@ -69,10 +66,24 @@ fn repo_stats(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
 
 
     (async move {
+        // Url of the repository to be cloned
+        let repo_url = format!("https://github.com/{}.git", repo);
+        println!("{}", repo_url);
+        let repo_dir = format!("./tmp/{}", repo);
+        // Directory where you want to clone the repository
+        let repo_dir = Path::new(repo_dir.as_str());
+        // Call the git_clone function and handle any errors that occur
+        match git::git_clone(repo_url.as_str(), repo_dir) {
+            Ok(()) => println!("Git repo cloned successfully!"),
+            Err(e) => eprintln!("An error occurred while cloning the repo: {}", e),
+        }
+
+
         match git::get_repo_stats(repo.as_str()).await {
             Ok(repo) => {
                 println!("Successfully fetched repo stats");
-                *ctx.resp.body_mut() = Body::from("hhh");
+                let body = serde_json::to_string_pretty(&repo).unwrap();
+                *ctx.resp.body_mut() = Body::from(body);
             }
             Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
         };
