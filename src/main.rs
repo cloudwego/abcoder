@@ -146,6 +146,13 @@ fn issue_trace(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     }).boxed()
 }
 
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TreeStructure {
+    tree: String,
+}
+
+
 // tree_structure handler
 fn tree_structure(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
@@ -155,8 +162,10 @@ fn tree_structure(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
         let suffix = "go";
         let mut body = String::from("generate tree failed.");
         let repo = PathBuf::from(format!("./tmp/{}", repo));
+        let mut tree_struct = TreeStructure { tree: "".to_string() };
         if let Some(tree) = files::tree(&repo, suffix) {
-            body = tree.to_string()
+            tree_struct.tree = tree.to_string();
+            body = serde_json::to_string_pretty(&tree_struct).unwrap();
         }
         *ctx.resp.body_mut() = Body::from(body);
     }).boxed()
@@ -168,10 +177,9 @@ async fn main() {
     let h = Hertz::new();
     h.get("/basic_info", Arc::new(basic_info)).await;
     h.get("/repo_stats", Arc::new(repo_stats)).await;
+
     h.get("/issue_trace", Arc::new(issue_trace)).await;
-
     h.get("/repo_structure", Arc::new(tree_structure)).await;
-
     h.get("/code_analyze", Arc::new(code_analyze)).await;
 
 
