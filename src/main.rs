@@ -23,10 +23,18 @@ use crate::utils::cmd;
 use crate::utils::files;
 // Import the git module
 use crate::utils::git;
+use crate::utils::git::Repository;
 use crate::utils::markdown;
 
 mod compress;
 mod utils;
+
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BasicInfo {
+    readme: String,
+    repo_stats: Repository,
+}
 
 
 // basic_info handler
@@ -40,8 +48,18 @@ fn basic_info(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let repo_dir = check_repo_exist(&repo);
 
     if let Some(body) = markdown::get_readme_json(Path::new(repo_dir.as_str())) {
-        *ctx.resp.body_mut() = Body::from(body);
-        return (async move {}).boxed();
+        let repo = repo.clone();
+        return (async move {
+            match git::get_repo_stats(repo.as_str()).await {
+                Ok(repo) => {
+                    println!("Successfully fetched repo stats");
+                    let mut basic_info = BasicInfo { readme: body, repo_stats: repo };
+                    let body = serde_json::to_string_pretty(&basic_info).unwrap();
+                    *ctx.resp.body_mut() = Body::from(body);
+                }
+                Err(e) => eprintln!("Failed to fetch repo stats: {}", e),
+            };
+        }).boxed();
     }
 
     *ctx.resp.body_mut() = Body::from("Not found README.md in this project.");
