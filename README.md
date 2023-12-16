@@ -1,5 +1,7 @@
 # ABCoder: AI-Based Coder(AKA: A Brand-new Coder)
 
+![ABCoder](images/ABCoder.png)
+
 ABCoder, an AI-powered tool, streamlines coding by keeping real-time status updates, providing lossless code compression, and giving development guidance. It enhances testing by identifying quality, generating reports, and auto-creating test cases. It also offers guidance for refactoring, including language stack switches.
 
 # Table of Contents
