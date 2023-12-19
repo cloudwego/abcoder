@@ -94,7 +94,7 @@ fn check_repo_exist(repo: &String) -> String {
         let parts: Vec<&str> = repo.split("/").take(2).collect();
         base_repo = parts.join("/");
     }
-    let repo_url = format!("https://github.com/{}.git", base_repo);
+    let repo_url = format!("git@github.com:{}.git", base_repo);
     println!("{}", repo_url);
     let repo_dir = format!("./tmp/{}", base_repo);
     // Directory where you want to clone the repository
