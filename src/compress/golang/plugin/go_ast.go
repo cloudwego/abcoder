@@ -161,6 +161,12 @@ func getGoFilesInDir(dir string) []string {
 }
 
 func (p *goParser) ParseDir(dir string) ([]Function, bool) {
+	// unify dir ./xxx/xxx -> xxx/xxx
+	relativePrefix := "./"
+	if strings.HasPrefix(dir, relativePrefix) {
+		dir = strings.TrimPrefix(dir, relativePrefix)
+	}
+
 	if p.processedPkg[dir] != nil {
 		return p.processedPkg[dir], false
 	}
@@ -191,7 +197,7 @@ func (p *goParser) ParseTilTheEnd(startDir string) {
 	for _, f := range functionList {
 		for _, fc := range f.FunctionCalls {
 			if p.processedPkg[fc.PkgDir] != nil {
-				return
+				continue
 			}
 			p.ParseTilTheEnd(fc.PkgDir)
 		}
