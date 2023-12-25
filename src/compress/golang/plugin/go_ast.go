@@ -41,6 +41,7 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 
 	thirdPartyImports := make(map[string]struct{})
 	projectImports := make(map[string]string)
+	sysImports := make(map[string]string)
 	for _, imp := range f.Imports {
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
 		importBaseName := filepath.Base(importPath)
@@ -52,6 +53,10 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 		}
 
 		isSysPkg := !strings.Contains(strings.Split(importPath, "/")[0], ".")
+
+		if isSysPkg {
+			sysImports[importAlias] = importPath
+		}
 
 		// Ignoring golang standard libraries（like net/http）
 		if !isSysPkg {
@@ -110,6 +115,11 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 						}
 						if _, ok = thirdPartyImports[x.(*ast.Ident).Name]; ok {
 							thirdPartyFunctionCalls = append(thirdPartyFunctionCalls, funcName)
+							return true
+						}
+
+						// skip sys imports
+						if _, ok = sysImports[x.(*ast.Ident).Name]; ok {
 							return true
 						}
 
