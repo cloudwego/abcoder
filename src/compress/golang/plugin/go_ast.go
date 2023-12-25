@@ -254,6 +254,10 @@ Out:
 func (p *goParser) fillFunctionContent(f []Function, fl *[]SingleFunction) {
 	for _, ff := range f {
 		for _, pf := range p.processedPkg[ff.PkgDir] {
+			if pf.IsMethod {
+				// Skip method here
+				continue
+			}
 			if ff.Name == pf.Name {
 				s := SingleFunction{
 					CallName: ff.CallName,
