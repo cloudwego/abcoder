@@ -91,7 +91,10 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 						x := expr.X
 						for {
 							if _, ok := x.(*ast.Ident); !ok {
-								seleExp, _ := x.(*ast.SelectorExpr)
+								seleExp, ok := x.(*ast.SelectorExpr)
+								if !ok {
+									return false
+								}
 								x = seleExp.X
 								continue
 							}
