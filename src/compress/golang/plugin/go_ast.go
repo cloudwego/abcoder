@@ -26,6 +26,12 @@ type Function struct {
 	MethodCalls             []string
 }
 
+type Struct struct {
+	Name    string
+	Content string
+	methods map[string]Function
+}
+
 func (p *goParser) parseFile(filePath string) ([]Function, error) {
 	fset := token.NewFileSet()
 
@@ -152,9 +158,10 @@ func (p *goParser) parseFile(filePath string) ([]Function, error) {
 }
 
 type goParser struct {
-	modName      string
-	homePageDir  string
-	processedPkg map[string][]Function
+	modName               string
+	homePageDir           string
+	processedPkgFunctions map[string][]Function
+	processedPkgStruct    map[string][]Struct
 }
 
 func getGoFilesInDir(dir string) []string {
@@ -180,8 +187,8 @@ func (p *goParser) ParseDir(dir string) ([]Function, bool) {
 		dir = strings.TrimPrefix(dir, relativePrefix)
 	}
 
-	if p.processedPkg[dir] != nil {
-		return p.processedPkg[dir], false
+	if p.processedPkgFunctions[dir] != nil {
+		return p.processedPkgFunctions[dir], false
 	}
 	functionList := make([]Function, 0)
 	for _, f := range getGoFilesInDir(dir) {
@@ -192,7 +199,7 @@ func (p *goParser) ParseDir(dir string) ([]Function, bool) {
 		}
 		functionList = append(functionList, funcs...)
 	}
-	p.processedPkg[dir] = functionList
+	p.processedPkgFunctions[dir] = functionList
 	return functionList, true
 }
 
@@ -209,7 +216,7 @@ func (p *goParser) ParseTilTheEnd(startDir string) {
 	functionList, _ := p.ParseDir(startDir)
 	for _, f := range functionList {
 		for _, fc := range f.FunctionCalls {
-			if p.processedPkg[fc.PkgDir] != nil {
+			if p.processedPkgFunctions[fc.PkgDir] != nil {
 				continue
 			}
 			p.ParseTilTheEnd(fc.PkgDir)
@@ -229,7 +236,42 @@ type SingleFunction struct {
 	Content  string
 }
 
-func (p *goParser) generate() *MainStream {
+func (p *goParser) generateStruct() {
+	processedStruct := make(map[string]*Struct)
+	for pkgName, fs := range p.processedPkgFunctions {
+		if len(fs) == 0 {
+			continue
+		}
+		for _, f := range fs {
+			if !f.IsMethod {
+				continue
+			}
+			if processedStruct[f.AssociatedStruct] == nil {
+				st := &Struct{Name: f.AssociatedStruct, methods: make(map[string]Function)}
+				st.methods[f.Name] = f
+				processedStruct[f.AssociatedStruct] = st
+				continue
+			}
+
+			processedStruct[f.AssociatedStruct].methods[f.Name] = f
+			continue
+		}
+
+		if len(processedStruct) == 0 {
+			continue
+		}
+
+		structList := make([]Struct, 0, len(processedStruct))
+
+		for _, s := range processedStruct {
+			structList = append(structList, *s)
+		}
+
+		p.processedPkgStruct[pkgName] = structList
+	}
+}
+
+func (p *goParser) getMain() *MainStream {
 	m := &MainStream{
 		RelatedFunctions: make([]SingleFunction, 0),
 	}
@@ -237,7 +279,7 @@ func (p *goParser) generate() *MainStream {
 	var functionCalledInMain []Function
 
 Out:
-	for _, v := range p.processedPkg {
+	for _, v := range p.processedPkgFunctions {
 		for _, vv := range v {
 			if vv.Name == "main" {
 				m.MainFunc = vv.Content
@@ -253,7 +295,7 @@ Out:
 
 func (p *goParser) fillFunctionContent(f []Function, fl *[]SingleFunction) {
 	for _, ff := range f {
-		for _, pf := range p.processedPkg[ff.PkgDir] {
+		for _, pf := range p.processedPkgFunctions[ff.PkgDir] {
 			if pf.IsMethod {
 				// Skip method here
 				continue
@@ -308,10 +350,11 @@ func main() {
 
 	homeDir := os.Args[1]
 
-	p := &goParser{modName: "", homePageDir: homeDir, processedPkg: make(map[string][]Function)}
+	p := &goParser{modName: "", homePageDir: homeDir, processedPkgFunctions: make(map[string][]Function), processedPkgStruct: make(map[string][]Struct)}
 	p.ParseTilTheEnd(p.homePageDir)
 
-	m := p.generate()
+	p.generateStruct()
+	m := p.getMain()
 
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)
