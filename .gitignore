@@ -53,3 +53,4 @@ Cargo.lock
 
 .idea
 
+*.out
