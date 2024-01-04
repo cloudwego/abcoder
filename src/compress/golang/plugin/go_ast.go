@@ -31,19 +31,19 @@ type Function struct {
 
 	// call to third-party function calls, key is the {{pkgAlias.funcName}}
 	// ex: http.Get() -> {"http.Get":{PkgDir: "net/http", Name: "Get"}}
-	ThirdPartyFunctionCalls map[string]*ThirdPartyCall
+	ThirdPartyFunctionCalls map[string]*ThirdPartyIdentity
 
 	// call to internal methods, key is the {{object.funcName}}
 	InternalMethodCalls map[string]*Function
 
 	// call to thrid-party methods, key is the {{object.funcName}}
-	ThirdPartyMethodCalls map[string]*ThirdPartyCall
+	ThirdPartyMethodCalls map[string]*ThirdPartyIdentity
 }
 
-// ThirdPartyCall holds location information about a third party declaration
-type ThirdPartyCall struct {
-	PkgPath  string // Import Path of the third party package
-	Identity string // Unique Name of declaration (FunctionName, or StructName.MethodName etc)
+// ThirdPartyIdentity holds identity information about a third party declaration
+type ThirdPartyIdentity struct {
+	PkgPath         // Import Path of the third party package
+	Identity string // Unique Name of declaration (FunctionName, StructName.MethodName, or StructName)
 }
 
 // Struct holds the information about a struct
@@ -57,7 +57,7 @@ type Struct struct {
 
 	// related third party structs in fields,
 	// ex: type A struct { B pkg.B }, pkg.B is a child of A, key is "pkg.B"
-	ThirdPartyChildren map[string]ThirdPartyCall
+	ThirdPartyChildren map[string]ThirdPartyIdentity
 
 	// method name to Function
 	Methods map[string]*Function
@@ -155,7 +155,7 @@ func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
 			end := fset.PositionFor(node.End(), false).Offset
 			content := string(bs[pos:end])
 
-			var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]*ThirdPartyCall{}, map[string]*ThirdPartyCall{}
+			var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]*ThirdPartyIdentity{}, map[string]*ThirdPartyIdentity{}
 			var functionCalls, methodCalls = map[string]*Function{}, map[string]*Function{}
 
 			ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
@@ -187,7 +187,7 @@ func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
 						}
 						// third-party function calls
 						if impt, ok := thirdPartyImports[x.(*ast.Ident).Name]; ok {
-							thirdPartyFunctionCalls[funcName] = &ThirdPartyCall{PkgPath: impt, Identity: expr.Sel.Name}
+							thirdPartyFunctionCalls[funcName] = &ThirdPartyIdentity{PkgPath: impt, Identity: expr.Sel.Name}
 							return true
 						}
 						// WHY: skip sys imports?
