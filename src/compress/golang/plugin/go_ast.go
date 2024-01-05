@@ -102,13 +102,7 @@ func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
 	sysImports := make(map[string]string)
 	for _, imp := range f.Imports {
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
-		var importAlias string
-		if imp.Name != nil {
-			importAlias = imp.Name.Name
-		} else {
-			importAlias = filepath.Base(importPath) // use the base name as alias by default
-		}
-
+		importAlias := filepath.Base(importPath)                // use the base name as alias by default
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
 			importAlias = imp.Name.Name // update the alias
