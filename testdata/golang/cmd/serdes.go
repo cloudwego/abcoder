@@ -31,6 +31,9 @@ func InternalFunc(in []byte) {
 	}
 }
 
+func DuplicateName() {
+}
+
 type Struct struct {
 	Field1 string
 	Field2 pkg.StructA
@@ -44,4 +47,7 @@ func (s *Struct) InternalMethod(in []byte) {
 	if err := s.Field2.MethodA(in); err != nil {
 		println(err.Error())
 	}
+}
+
+func (s *Struct) DuplicateName(in []byte) {
 }

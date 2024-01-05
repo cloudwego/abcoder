@@ -211,7 +211,11 @@ func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
 			})
 
 			// update detailed function call info
-			f := p.getOrSetFunc(pkgPath, funcDecl.Name.Name)
+			name := funcDecl.Name.Name
+			if isMethod {
+				name = associatedStruct.Name + "." + name
+			}
+			f := p.getOrSetFunc(pkgPath, name)
 			*f = Function{
 				Name:                    funcDecl.Name.Name,
 				PkgPath:                 pkgPath,
@@ -224,7 +228,7 @@ func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
 				InternalMethodCalls:     methodCalls,
 				ThirdPartyMethodCalls:   thirdPartyMethodCalls,
 			}
-			fileFuncs[funcDecl.Name.Name] = f
+			fileFuncs[name] = f
 		}
 		return true
 	})
