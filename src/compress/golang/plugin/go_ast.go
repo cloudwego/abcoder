@@ -14,53 +14,30 @@ import (
 	"strings"
 )
 
-// PkgPath is the import path of a package, it is either absolute path or url
-type PkgPath = string
+//---------------- Golang Parser -----------------
 
-// Function holds the information about a function
-type Function struct {
-	IsMethod         bool    // If the function is a method
-	Name             string  // Name of the function
-	PkgPath                  // import path to the package where the function is defined
-	FilePath         string  // File where the function is defined, empty if the function declaration is not scanned
-	Content          string  // Content of the function, including functiion signature and body
-	AssociatedStruct *Struct // Method receiver
-
-	// call to in-the-project functions, key is {{pkgAlias.funcName}} or {{funcName}}
-	InternalFunctionCalls map[string]*Function
-
-	// call to third-party function calls, key is the {{pkgAlias.funcName}}
-	// ex: http.Get() -> {"http.Get":{PkgDir: "net/http", Name: "Get"}}
-	ThirdPartyFunctionCalls map[string]*ThirdPartyIdentity
-
-	// call to internal methods, key is the {{object.funcName}}
-	InternalMethodCalls map[string]*Function
-
-	// call to thrid-party methods, key is the {{object.funcName}}
-	ThirdPartyMethodCalls map[string]*ThirdPartyIdentity
+// golang parser, used parse multle packages from the entire project
+type goParser struct {
+	modName               string
+	homePageDir           string
+	visited               map[string]bool
+	processedPkgFunctions map[PkgPath]map[string]*Function
+	processedPkgStruct    map[PkgPath]map[string]*Struct
 }
 
-// ThirdPartyIdentity holds identity information about a third party declaration
-type ThirdPartyIdentity struct {
-	PkgPath         // Import Path of the third party package
-	Identity string // Unique Name of declaration (FunctionName, StructName.MethodName, or StructName)
-}
-
-// Struct holds the information about a struct
-type Struct struct {
-	Name    string // Name of the struct
-	PkgPath        // Path to the package where the struct is defined
-	Content string // struct declaration content
-
-	// related local structs in fields, key is {{pkgName.typName}} or {{typeName}}, val is declaration of the struct
-	InternalStructs map[string]*Struct
-
-	// related third party structs in fields,
-	// ex: type A struct { B pkg.B }, pkg.B is a child of A, key is "pkg.B"
-	ThirdPartyChildren map[string]ThirdPartyIdentity
-
-	// method name to Function
-	Methods map[string]*Function
+// newGoParser
+func newGoParser(modName, homePageDir string) *goParser {
+	abs, err := filepath.Abs(homePageDir)
+	if err != nil {
+		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
+	}
+	return &goParser{
+		modName:               modName,
+		homePageDir:           abs,
+		processedPkgFunctions: map[PkgPath]map[string]*Function{},
+		processedPkgStruct:    map[PkgPath]map[string]*Struct{},
+		visited:               map[string]bool{},
+	}
 }
 
 // ToABS converts a local package path to absolute path
@@ -82,209 +59,6 @@ func (p *goParser) pkgPathFromABS(path string) PkgPath {
 	}
 }
 
-// parseFile parse single go file and return all functions in it
-// warning: this function has no cache, do not call it with repeated file
-func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
-	fset := token.NewFileSet()
-
-	bs, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := parser.ParseFile(fset, filePath, bs, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	thirdPartyImports := make(map[string]string)
-	projectImports := make(map[string]string)
-	sysImports := make(map[string]string)
-	for _, imp := range f.Imports {
-		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
-		importAlias := filepath.Base(importPath)                // use the base name as alias by default
-		// Check if user has defined an alias for current import
-		if imp.Name != nil {
-			importAlias = imp.Name.Name // update the alias
-		}
-
-		isSysPkg := !strings.Contains(strings.Split(importPath, "/")[0], ".")
-
-		if isSysPkg {
-			sysImports[importAlias] = importPath
-		}
-
-		// Ignoring golang standard libraries（like net/http）
-		if !isSysPkg {
-			// Distinguish between project packages and third party packages
-			if strings.HasPrefix(importPath, p.modName) {
-				projectImports[importAlias] = importPath
-			} else {
-				thirdPartyImports[importAlias] = importPath
-			}
-		}
-	}
-
-	pkgPath := p.pkgPathFromABS(filepath.Dir(filePath))
-	fileFuncs := map[string]*Function{}
-
-	ast.Inspect(f, func(node ast.Node) bool {
-		funcDecl, ok := node.(*ast.FuncDecl)
-		if ok {
-			var associatedStruct *Struct
-			isMethod := funcDecl.Recv != nil
-			if isMethod {
-				var structName string
-				// TODO: reserve the pointer message?
-				switch x := funcDecl.Recv.List[0].Type.(type) {
-				case *ast.Ident:
-					structName = x.Name
-				case *ast.StarExpr:
-					structName = x.X.(*ast.Ident).Name
-				}
-				associatedStruct = p.getOrSetStruct(p.modName, structName)
-			}
-
-			pos := fset.PositionFor(node.Pos(), false).Offset
-			end := fset.PositionFor(node.End(), false).Offset
-			content := string(bs[pos:end])
-
-			var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]*ThirdPartyIdentity{}, map[string]*ThirdPartyIdentity{}
-			var functionCalls, methodCalls = map[string]*Function{}, map[string]*Function{}
-
-			ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
-				call, ok := node.(*ast.CallExpr)
-				if ok {
-					var funcName string
-					switch expr := call.Fun.(type) {
-					case *ast.SelectorExpr:
-						funcName := ""
-						// TODO: not the best but works, optimize it later.
-						x := expr.X
-						for {
-							if _, ok := x.(*ast.Ident); !ok {
-								seleExp, ok := x.(*ast.SelectorExpr)
-								if !ok {
-									return false
-								}
-								x = seleExp.X
-								continue
-							}
-							break
-						}
-						// fixme: in closure like func(importName StructX) { ... }, importName is not in projectImports
-						funcName = x.(*ast.Ident).Name + "." + expr.Sel.Name
-						// internal function calls
-						if impt, ok := projectImports[x.(*ast.Ident).Name]; ok {
-							functionCalls[funcName] = p.getOrSetFunc(impt, expr.Sel.Name)
-							return true
-						}
-						// third-party function calls
-						if impt, ok := thirdPartyImports[x.(*ast.Ident).Name]; ok {
-							thirdPartyFunctionCalls[funcName] = &ThirdPartyIdentity{PkgPath: impt, Identity: expr.Sel.Name}
-							return true
-						}
-						// WHY: skip sys imports?
-						if _, ok := sysImports[x.(*ast.Ident).Name]; ok {
-							// internalFunctionCalls[funcName] = p.getOrSetFunc(impt, expr.Sel.Name)
-							return true
-						}
-
-						// Fallback must be method calls
-						// FIXME: get type info of object
-						f := p.getOrSetFunc(pkgPath, funcName)
-						f.IsMethod = true
-						f.AssociatedStruct = &Struct{Name: x.(*ast.Ident).Name}
-						methodCalls[funcName] = f
-						// TODO: seperate internal method and third-party method
-
-						return true
-					case *ast.Ident:
-						funcName = expr.Name
-						if !isGoBuiltinFunc(funcName) {
-							functionCalls[funcName] = p.getOrSetFunc(pkgPath, funcName)
-						}
-						return true
-					}
-				}
-				return true
-			})
-
-			// update detailed function call info
-			name := funcDecl.Name.Name
-			if isMethod {
-				name = associatedStruct.Name + "." + name
-			}
-			f := p.getOrSetFunc(pkgPath, name)
-			*f = Function{
-				Name:                    funcDecl.Name.Name,
-				PkgPath:                 pkgPath,
-				FilePath:                filePath,
-				IsMethod:                isMethod,
-				AssociatedStruct:        associatedStruct,
-				Content:                 content,
-				InternalFunctionCalls:   functionCalls,
-				ThirdPartyFunctionCalls: thirdPartyFunctionCalls,
-				InternalMethodCalls:     methodCalls,
-				ThirdPartyMethodCalls:   thirdPartyMethodCalls,
-			}
-			fileFuncs[name] = f
-		}
-		return true
-	})
-
-	return fileFuncs, nil
-}
-
-type goParser struct {
-	modName               string
-	homePageDir           string
-	visited               map[string]bool
-	processedPkgFunctions map[PkgPath]map[string]*Function
-	processedPkgStruct    map[PkgPath]map[string]*Struct
-}
-
-func newGoParser(modName, homePageDir string) *goParser {
-	abs, _ := filepath.Abs(homePageDir)
-	return &goParser{
-		modName:               modName,
-		homePageDir:           abs,
-		processedPkgFunctions: map[PkgPath]map[string]*Function{},
-		processedPkgStruct:    map[PkgPath]map[string]*Struct{},
-		visited:               map[string]bool{},
-	}
-}
-
-// getOrSetFunc get a function in the map, or alloc and set a new one if not exists
-func (p *goParser) getOrSetFunc(pkg, name string) *Function {
-	pkgFuncs := p.processedPkgFunctions[pkg]
-	if pkgFuncs == nil {
-		pkgFuncs = make(map[string]*Function)
-		p.processedPkgFunctions[pkg] = pkgFuncs
-	}
-	if pkgFuncs[name] == nil {
-		f := &Function{Name: name, PkgPath: pkg}
-		pkgFuncs[name] = f
-		return f
-	}
-	return pkgFuncs[name]
-}
-
-// getOrSetStruct get a struct in the map, or alloc and set a new one if not exists
-func (p *goParser) getOrSetStruct(pkg, name string) *Struct {
-	pkgStructs := p.processedPkgStruct[pkg]
-	if pkgStructs == nil {
-		pkgStructs = make(map[string]*Struct)
-		p.processedPkgStruct[pkg] = pkgStructs
-	}
-	if pkgStructs[name] == nil {
-		s := &Struct{Name: name, PkgPath: pkg}
-		pkgStructs[name] = s
-		return s
-	}
-	return pkgStructs[name]
-}
-
 func getGoFilesInDir(dir string) []string {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
@@ -301,6 +75,80 @@ func getGoFilesInDir(dir string) []string {
 	return goFiles
 }
 
+func (p *goParser) associateStructWithMethods() {
+	for _, fs := range p.processedPkgFunctions {
+		for _, f := range fs {
+			if f.IsMethod && f.AssociatedStruct != nil {
+				// entrue the Struct has been visted
+				if f.AssociatedStruct.FilePath != "" {
+					if f.AssociatedStruct.Methods == nil {
+						f.AssociatedStruct.Methods = map[string]*Function{}
+					}
+					f.AssociatedStruct.Methods[f.Name] = f
+				}
+			}
+		}
+	}
+}
+
+// parseFile parse single go file and return all functions in it
+// warning: this function has no cache, do not call it with repeated file
+func (p *goParser) parseFile(filePath string) (map[string]*Function, error) {
+	fset := token.NewFileSet()
+
+	bs, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := parser.ParseFile(fset, filePath, bs, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	sysImports, projectImports, thirdPartyImports := p.seprateImports(f.Imports)
+	pkgPath := p.pkgPathFromABS(filepath.Dir(filePath))
+	ctx := &fileContext{
+		filePath:          filePath,
+		pkgPath:           pkgPath,
+		bs:                bs,
+		fset:              fset,
+		sysImports:        sysImports,
+		projectImports:    projectImports,
+		thirdPartyImports: thirdPartyImports,
+	}
+
+	fileFuncs, _, err := p.inspectFile(ctx, f)
+	return fileFuncs, err
+}
+
+func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Function, map[string]*Struct, error) {
+	fileStructs := map[string]*Struct{}
+	fileFuncs := map[string]*Function{}
+	cont := true
+	ast.Inspect(f, func(node ast.Node) bool {
+		if funcDecl, ok := node.(*ast.FuncDecl); ok {
+			// parse funcs
+			f, ct := p.parseFunc(ctx, funcDecl)
+			fileFuncs[f.Name] = f
+			cont = ct
+		} else if typDecl, ok := node.(*ast.TypeSpec); ok {
+			// parse structs
+			struName := typDecl.Name.Name
+			struDecl, ok := typDecl.Type.(*ast.StructType)
+			if ok {
+				st, ct := p.parseStruct(ctx, struName, struDecl)
+				fileStructs[struName] = st
+				cont = ct
+			}
+		}
+		return cont
+	})
+	return fileFuncs, fileStructs, nil
+}
+
+// ParseDir parse a single go package in the dir
+// If the dir has been visted, return cache
 func (p *goParser) ParseDir(dir string) (map[string]*Function, error) {
 	// unify dir ./xxx/xxx -> xxx/xxx
 	if !strings.HasPrefix(dir, "/") {
@@ -321,6 +169,8 @@ func (p *goParser) ParseDir(dir string) (map[string]*Function, error) {
 }
 
 // TODO: Parallel transformation
+// ParseTilTheEnd parse the all go files from the starDir,
+// and their related go files in the project recursively
 func (p *goParser) ParseTilTheEnd(startDir string) error {
 	if p.modName == "" {
 		var err error
@@ -344,6 +194,8 @@ func (p *goParser) ParseTilTheEnd(startDir string) error {
 			}
 		}
 	}
+
+	p.associateStructWithMethods()
 	return nil
 }
 
@@ -351,6 +203,8 @@ type MainStream struct {
 	MainFunc string
 
 	RelatedFunctions []SingleFunction
+
+	RelatedStruct []SingleStruct
 }
 
 type SingleFunction struct {
@@ -358,95 +212,57 @@ type SingleFunction struct {
 	Content  string
 }
 
-// TODO: generate struct
-// func (p *goParser) generateStruct() {
-// 	processedStruct := make(map[string]*Struct)
-// 	for pkgName, fs := range p.processedPkgFunctions {
-// 		if len(fs) == 0 {
-// 			continue
-// 		}
-// 		for _, f := range fs {
-// 			if !f.IsMethod {
-// 				continue
-// 			}
-// 			if processedStruct[f.AssociatedStruct] == nil {
-// 				st := &Struct{Name: f.AssociatedStruct, methods: make(map[string]Function)}
-// 				st.methods[f.Name] = f
-// 				processedStruct[f.AssociatedStruct] = st
-// 				continue
-// 			}
-
-// 			processedStruct[f.AssociatedStruct].methods[f.Name] = f
-// 			continue
-// 		}
-
-// 		if len(processedStruct) == 0 {
-// 			continue
-// 		}
-
-// 		structList := make([]Struct, 0, len(processedStruct))
-
-// 		for _, s := range processedStruct {
-// 			structList = append(structList, *s)
-// 		}
-
-// 		p.processedPkgStruct[pkgName] = structList
-// 	}
-// }
+type SingleStruct struct {
+	Name    string
+	Content string
+}
 
 func (p *goParser) getMain() (*MainStream, *Function) {
 	m := &MainStream{
 		RelatedFunctions: make([]SingleFunction, 0),
 	}
 
-	var functionCalledInMain = map[string]*Function{}
 	var mainFunc *Function
 
-Out:
 	for _, v := range p.processedPkgFunctions {
 		for _, vv := range v {
 			if vv.Name == "main" {
 				mainFunc = vv
 				m.MainFunc = vv.Content
-				for k, v := range vv.InternalFunctionCalls {
-					functionCalledInMain[k] = v
-				}
-				for k, v := range vv.InternalMethodCalls {
-					functionCalledInMain[k] = v
-				}
-				//TODO: add methods
-				break Out
+				break
 			}
 		}
 	}
-	p.fillFunctionContent(functionCalledInMain, &m.RelatedFunctions)
+	p.fillRelatedContent(mainFunc, &m.RelatedFunctions, &m.RelatedStruct)
 	return m, mainFunc
 }
 
-func (p *goParser) fillFunctionContent(f map[string]*Function, fl *[]SingleFunction) {
-	for call, ff := range f {
+func (p *goParser) fillRelatedContent(f *Function, fl *[]SingleFunction, sl *[]SingleStruct) {
+	for call, ff := range f.InternalFunctionCalls {
 		s := SingleFunction{
 			CallName: call,
 			Content:  ff.Content,
 		}
-
 		*fl = append(*fl, s)
-
-		if len(ff.InternalFunctionCalls) != 0 {
-			p.fillFunctionContent(ff.InternalFunctionCalls, fl)
-		}
-		//TODO: add methods
+		p.fillRelatedContent(ff, fl, sl)
 	}
-}
 
-func isGoBuiltinFunc(name string) bool {
-	switch name {
-	case "append", "cap", "close", "complex", "copy", "delete", "imag", "len", "make", "new", "panic", "print", "println", "real", "recover":
-		return true
-	case "string", "bool", "byte", "complex64", "complex128", "error", "float32", "float64", "int", "int8", "int16", "int32", "int64", "rune", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr":
-		return true
-	default:
-		return false
+	for call, ff := range f.InternalMethodCalls {
+		s := SingleFunction{
+			CallName: call,
+			Content:  ff.Content,
+		}
+		*fl = append(*fl, s)
+		p.fillRelatedContent(ff, fl, sl)
+		// for method which has been associated with struct, push the struct
+		if ff.AssociatedStruct != nil && ff.AssociatedStruct.Content != "" {
+			ss := SingleStruct{
+				Name:    ff.AssociatedStruct.Name,
+				Content: ff.AssociatedStruct.Content,
+			}
+			*sl = append(*sl, ss)
+		}
+		p.fillRelatedContent(ff, fl, sl)
 	}
 }
 
