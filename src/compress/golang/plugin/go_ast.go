@@ -394,17 +394,19 @@ type SingleFunction struct {
 // 	}
 // }
 
-func (p *goParser) getMain() *MainStream {
+func (p *goParser) getMain() (*MainStream, *Function) {
 	m := &MainStream{
 		RelatedFunctions: make([]SingleFunction, 0),
 	}
 
 	var functionCalledInMain = map[string]*Function{}
+	var mainFunc *Function
 
 Out:
 	for _, v := range p.processedPkgFunctions {
 		for _, vv := range v {
 			if vv.Name == "main" {
+				mainFunc = vv
 				m.MainFunc = vv.Content
 				for k, v := range vv.InternalFunctionCalls {
 					functionCalledInMain[k] = v
@@ -418,7 +420,7 @@ Out:
 		}
 	}
 	p.fillFunctionContent(functionCalledInMain, &m.RelatedFunctions)
-	return m
+	return m, mainFunc
 }
 
 func (p *goParser) fillFunctionContent(f map[string]*Function, fl *[]SingleFunction) {
@@ -490,7 +492,7 @@ func main() {
 	}
 
 	// p.generateStruct()
-	m := p.getMain()
+	m, _ := p.getMain()
 
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)
