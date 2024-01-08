@@ -38,7 +38,10 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 				t.Fatalf("goParser.ParseTilTheEnd() error = %v", err)
 			}
 			spew.Dump(p)
-			out, _ := p.getMain()
+			out, fun := p.getMain()
+			if fun.Name != "main" {
+				t.Fail()
+			}
 			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {

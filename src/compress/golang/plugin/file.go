@@ -206,9 +206,12 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 		}
 		return true
 	})
-
+	name := funcDecl.Name.Name
+	if isMethod {
+		name = associatedStruct.Name + "." + name
+	}
 	// update detailed function call info
-	f := p.getOrSetFunc(ctx.pkgPath, funcDecl.Name.Name)
+	f := p.getOrSetFunc(ctx.pkgPath, name)
 	*f = Function{
 		Name:                    funcDecl.Name.Name,
 		PkgPath:                 ctx.pkgPath,
