@@ -17,4 +17,4 @@ ryze = { git = "https://github.com/welkeyever/ryze.git" }
 hyper = { version = "0.14", features = ["full"] }
 serde_urlencoded = "0.7.0"
 futures = "0.3"
-
+async-recursion = "1.0.5"
