@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 func Test_goParser_ParseTilTheEnd(t *testing.T) {
@@ -23,10 +21,10 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "../../../../testdata/golang",
+				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
 			},
 			args: args{
-				startDir: "./cmd",
+				startDir: "cmd/hz",
 			},
 		},
 	}
@@ -37,8 +35,8 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 			if err != nil {
 				t.Fatalf("goParser.ParseTilTheEnd() error = %v", err)
 			}
-			spew.Dump(p)
-			out, fun := p.getMain()
+			// spew.Dump(p)
+			out, fun := p.getMain(2)
 			if fun.Name != "main" {
 				t.Fail()
 			}
@@ -46,7 +44,7 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {
-				println(string(out))
+				println("size:", len(out))
 			}
 		})
 	}

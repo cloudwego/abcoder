@@ -28,13 +28,22 @@ func newGoParser(modName, homePageDir string) *goParser {
 	if err != nil {
 		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
 	}
-	return &goParser{
+
+	p := &goParser{
 		modName:               modName,
 		homePageDir:           abs,
 		processedPkgFunctions: map[PkgPath]map[string]*Function{},
 		processedPkgStruct:    map[PkgPath]map[string]*Struct{},
 		visited:               map[string]bool{},
 	}
+	if p.modName == "" {
+		var err error
+		p.modName, err = getModuleName(p.homePageDir + "/go.mod")
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+	return p
 }
 
 // ToABS converts a local package path to absolute path
@@ -92,21 +101,26 @@ func (p *goParser) associateStructWithMethods() {
 // ParseTilTheEnd parse the all go files from the starDir,
 // and their related go files in the project recursively
 func (p *goParser) ParseTilTheEnd(startDir string) error {
-	if p.modName == "" {
-		var err error
-		p.modName, err = getModuleName(p.homePageDir + "/go.mod")
-		if err != nil {
-			return err
-		}
-	}
 	if err := p.ParseDir(startDir); err != nil {
 		return err
 	}
-	for _, pkg := range p.processedPkgFunctions {
+	for path, pkg := range p.processedPkgFunctions {
+		// ignore third-party packages
+		if !strings.Contains(path, p.modName) {
+			continue
+		}
 		for _, f := range pkg {
 			// Notice: local funcs has been parsed in ParseDir
 			for _, fc := range f.InternalFunctionCalls {
-				if fc.FilePath != "" {
+				if p.visited[fc.PkgPath] {
+					continue
+				}
+				if err := p.ParseTilTheEnd(p.pkgPathToABS(fc.PkgPath)); err != nil {
+					return err
+				}
+			}
+			for _, fc := range f.InternalMethodCalls {
+				if p.visited[fc.PkgPath] {
 					continue
 				}
 				if err := p.ParseTilTheEnd(p.pkgPathToABS(fc.PkgPath)); err != nil {
@@ -164,7 +178,7 @@ type SingleStruct struct {
 	Content string
 }
 
-func (p *goParser) getMain() (*MainStream, *Function) {
+func (p *goParser) getMain(depth int) (*MainStream, *Function) {
 	m := &MainStream{
 		RelatedFunctions: make([]SingleFunction, 0),
 	}
@@ -180,36 +194,61 @@ func (p *goParser) getMain() (*MainStream, *Function) {
 			}
 		}
 	}
-	p.fillRelatedContent(mainFunc, &m.RelatedFunctions, &m.RelatedStruct)
+	visited := map[string]map[string]bool{}
+	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited)
 	return m, mainFunc
 }
 
-func (p *goParser) fillRelatedContent(f *Function, fl *[]SingleFunction, sl *[]SingleStruct) {
+func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited map[string]map[string]bool) {
+	if depth == 0 {
+		return
+	}
+	if f == nil || (visited[f.PkgPath] != nil && visited[f.PkgPath][f.Name]) {
+		return
+	} else {
+		if visited[f.PkgPath] == nil {
+			visited[f.PkgPath] = map[string]bool{}
+		}
+		visited[f.PkgPath][f.Name] = true
+	}
 	for call, ff := range f.InternalFunctionCalls {
 		s := SingleFunction{
 			CallName: call,
 			Content:  ff.Content,
 		}
 		*fl = append(*fl, s)
-		p.fillRelatedContent(ff, fl, sl)
+		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
 	}
 
 	for call, ff := range f.InternalMethodCalls {
+		content := ff.Content
+		if ff.AssociatedStruct != nil && ff.AssociatedStruct.IsInterface {
+			content = ff.AssociatedStruct.Content
+		}
 		s := SingleFunction{
 			CallName: call,
-			Content:  ff.Content,
+			Content:  content,
 		}
 		*fl = append(*fl, s)
-		p.fillRelatedContent(ff, fl, sl)
+		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
+
 		// for method which has been associated with struct, push the struct
 		if ff.AssociatedStruct != nil && ff.AssociatedStruct.Content != "" {
+			st := ff.AssociatedStruct
+			if visited[st.PkgPath] != nil && visited[st.PkgPath][st.Name] {
+				continue
+			} else if visited[st.PkgPath] == nil {
+				visited[st.PkgPath] = map[string]bool{}
+			}
+			visited[st.PkgPath][st.Name] = true
 			ss := SingleStruct{
-				Name:    ff.PkgPath + "." + ff.AssociatedStruct.Name,
-				Content: ff.AssociatedStruct.Content,
+				Name:    ff.PkgPath + "." + st.Name,
+				Content: st.Content,
 			}
 			*sl = append(*sl, ss)
 		}
-		p.fillRelatedContent(ff, fl, sl)
+
+		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
 	}
 }
 
@@ -255,7 +294,7 @@ func main() {
 	}
 
 	// p.generateStruct()
-	m, _ := p.getMain()
+	m, _ := p.getMain(100)
 	m.Dedup()
 
 	out := bytes.NewBuffer(nil)

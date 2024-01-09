@@ -78,14 +78,19 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 			fileFuncs[f.Name] = f
 			cont = ct
 		} else if typDecl, ok := node.(*ast.TypeSpec); ok {
-			// parse structs
 			struName := typDecl.Name.Name
-			struDecl, ok := typDecl.Type.(*ast.StructType)
-			if ok {
-				st, ct := p.parseStruct(ctx, struName, struDecl)
-				fileStructs[struName] = st
-				cont = ct
+			var st *Struct
+			var ct bool
+			// parse structs
+			if struDecl, ok := typDecl.Type.(*ast.StructType); ok {
+				st, ct = p.parseStruct(ctx, struName, struDecl)
+				// parse interface
+			} else if interDecl, ok := typDecl.Type.(*ast.InterfaceType); ok {
+				struName := typDecl.Name.Name
+				st, ct = p.parseInterface(ctx, struName, interDecl)
 			}
+			fileStructs[struName] = st
+			cont = ct
 		}
 		return cont
 	})
@@ -175,6 +180,9 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]*ThirdPartyIdentity{}, map[string]*ThirdPartyIdentity{}
 	var functionCalls, methodCalls = map[string]*Function{}, map[string]*Function{}
 
+	if funcDecl.Body == nil {
+		goto set_func
+	}
 	ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
 		// scope := ctx.pkgTypeInfo.Scopes[node]
 		call, ok := node.(*ast.CallExpr)
@@ -230,12 +238,9 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					mpkg := m.Pkg().Path()
 					//NOTICE: use {structName.methodName} as method key
 					mname := obj.Name() + "." + m.Name()
-					f := p.getOrSetFunc(mpkg, mname)
-					f.AssociatedStruct = p.getOrSetStruct(mpkg, obj.Name())
-					f.IsMethod = true
-
 					if strings.HasPrefix(mpkg, p.modName) {
 						// internal pkg
+						f := p.getOrSetFunc(mpkg, mname)
 						methodCalls[funcName] = f
 					} else {
 						// external pkg
@@ -253,6 +258,8 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 		}
 		return true
 	})
+
+set_func:
 	name := funcDecl.Name.Name
 	if isMethod {
 		name = associatedStruct.Name + "." + name
@@ -292,10 +299,11 @@ func (ctx *fileContext) IsSysImport(alias string) bool {
 
 // Struct holds the information about a struct
 type Struct struct {
-	Name     string // Name of the struct
-	PkgPath         // Path to the package where the struct is defined
-	FilePath string // File where the struct is defined
-	Content  string // struct declaration content
+	IsInterface bool   //maybe a interface type decl
+	Name        string // Name of the struct
+	PkgPath            // Path to the package where the struct is defined
+	FilePath    string // File where the struct is defined
+	Content     string // struct declaration content
 
 	// related local structs in fields, key is {{pkgName.typName}} or {{typeName}}, val is declaration of the struct
 	InternalStructs map[string]*Struct
@@ -325,8 +333,7 @@ type fileContext struct {
 
 // parse a ast.StructType node and renturn allocated *Struct
 func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.StructType) (*Struct, bool) {
-	pkgPath := p.pkgPathFromABS(filepath.Dir(ctx.filePath))
-	st := p.getOrSetStruct(pkgPath, struName)
+	st := p.getOrSetStruct(ctx.pkgPath, struName)
 	st.FilePath = ctx.filePath
 
 	pos := ctx.fset.PositionFor(struDecl.Pos(), false).Offset
@@ -347,7 +354,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 			// TODO: combine all names
 			name = fieldDecl.Names[0].String()
 		} else {
-			name = string(ctx.bs[fieldDecl.Type.Pos():fieldDecl.Type.End()])
+			name = string(ctx.GetRawContent(fieldDecl))
 		}
 
 		types := []ThirdPartyIdentity{}
@@ -374,7 +381,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 				}
 			} else {
 				// local package
-				sub := p.getOrSetStruct(pkgPath, ty.Identity)
+				sub := p.getOrSetStruct(ctx.pkgPath, ty.Identity)
 				inStructs[name] = sub
 			}
 
@@ -387,6 +394,52 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 	st.ThirdPartyStructs = exStructs
 	st.FieldFunctions = fieldFuncs
 
+	return st, true
+}
+
+func (ctx *fileContext) GetRawContent(node ast.Node) []byte {
+	return ctx.bs[ctx.fset.Position(node.Pos()).Offset:ctx.fset.Position(node.End()).Offset]
+}
+
+func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.InterfaceType) (*Struct, bool) {
+	if decl == nil || decl.Incomplete {
+		return nil, true
+	}
+
+	st := p.getOrSetStruct(ctx.pkgPath, name)
+	st.FilePath = ctx.filePath
+	st.IsInterface = true
+	st.Content = string(ctx.GetRawContent(decl))
+
+	methods := map[string]*Function{}
+	ast.Inspect(decl.Methods, func(n ast.Node) bool {
+		fieldDecl, ok := n.(*ast.Field)
+		if !ok {
+			return true
+		}
+		fname := ""
+		if len(fieldDecl.Names) > 0 {
+			// TODO: combine all names
+			fname = fieldDecl.Names[0].String()
+		} else {
+			fname = string(ctx.GetRawContent(fieldDecl.Type))
+		}
+
+		types := []ThirdPartyIdentity{}
+		isFunc := getTypeName(ctx.fset, ctx.bs, fieldDecl.Type, &types)
+		if !isFunc {
+			return true
+		}
+
+		f := p.getOrSetFunc(ctx.pkgPath, name+"."+fname)
+		f.IsMethod = true
+		f.AssociatedStruct = st
+		f.FilePath = ctx.filePath
+		methods[fname] = f
+		return true
+	})
+
+	st.Methods = methods
 	return st, true
 }
 

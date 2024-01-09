@@ -34,6 +34,7 @@ func (p *goParser) ParseDir(dir string) (err error) {
 	if p.visited[pkgPath] {
 		return nil
 	}
+	p.visited[pkgPath] = true
 
 	// slow-path: load packages in the dir, including sub pakcages
 	fset := token.NewFileSet()
