@@ -42,6 +42,7 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 			if fun.Name != "main" {
 				t.Fail()
 			}
+			out.Dedup()
 			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {

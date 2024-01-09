@@ -36,6 +36,7 @@ func main() {
 	println(string(content))
 	InternalFunc(content)
 	var s = new(Struct)
+	s.Field4 = InternalFunc
 	s.InternalMethod(content)
 }
 

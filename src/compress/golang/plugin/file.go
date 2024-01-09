@@ -19,6 +19,7 @@ package main
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"strings"
 )
@@ -64,6 +65,31 @@ func isGoBuiltinFunc(name string) bool {
 	default:
 		return false
 	}
+}
+
+func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Function, map[string]*Struct, error) {
+	fileStructs := map[string]*Struct{}
+	fileFuncs := map[string]*Function{}
+	cont := true
+	ast.Inspect(f, func(node ast.Node) bool {
+		if funcDecl, ok := node.(*ast.FuncDecl); ok {
+			// parse funcs
+			f, ct := p.parseFunc(ctx, funcDecl)
+			fileFuncs[f.Name] = f
+			cont = ct
+		} else if typDecl, ok := node.(*ast.TypeSpec); ok {
+			// parse structs
+			struName := typDecl.Name.Name
+			struDecl, ok := typDecl.Type.(*ast.StructType)
+			if ok {
+				st, ct := p.parseStruct(ctx, struName, struDecl)
+				fileStructs[struName] = st
+				cont = ct
+			}
+		}
+		return cont
+	})
+	return fileFuncs, fileStructs, nil
 }
 
 // getOrSetFunc get a function in the map, or alloc and set a new one if not exists
@@ -127,7 +153,7 @@ func (p *goParser) seprateImports(impts []*ast.ImportSpec) (map[string]string, m
 
 // parseFunc parses all function declaration in one file
 func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Function, bool) {
-
+	// funcObj := ctx.pkgTypeInfo.Defs[funcDecl.Name]
 	var associatedStruct *Struct
 	isMethod := funcDecl.Recv != nil
 	if isMethod {
@@ -150,6 +176,7 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	var functionCalls, methodCalls = map[string]*Function{}, map[string]*Function{}
 
 	ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
+		// scope := ctx.pkgTypeInfo.Scopes[node]
 		call, ok := node.(*ast.CallExpr)
 		if ok {
 			var funcName string
@@ -181,20 +208,40 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					thirdPartyFunctionCalls[funcName] = &ThirdPartyIdentity{PkgPath: impt, Identity: expr.Sel.Name}
 					return true
 				}
-				// WHY: skip sys imports?
-				if _, ok := ctx.sysImports[x.(*ast.Ident).Name]; ok {
+				// NOTICE: skip sys imports?
+				if ctx.IsSysImport(x.(*ast.Ident).Name) {
 					// internalFunctionCalls[funcName] = p.getOrSetFunc(impt, expr.Sel.Name)
 					return true
 				}
+				// check if it's method calls
+				sel, ok := ctx.pkgTypeInfo.Selections[expr]
+				if ok && (sel.Kind() == types.MethodExpr || sel.Kind() == types.MethodVal) {
+					// builtin or std libs, just ignore
+					m := sel.Obj()
+					if m.Pkg() == nil || ctx.IsSysImport(m.Pkg().Name()) {
+						return true
+					}
+					// try assert as named type
+					obj := getTypeNamed(sel.Recv())
+					if obj == nil {
+						return true
+					}
 
-				// Fallback must be method calls
-				// FIXME: get type info of object
-				f := p.getOrSetFunc(ctx.pkgPath, funcName)
-				f.IsMethod = true
-				f.AssociatedStruct = &Struct{Name: x.(*ast.Ident).Name}
-				methodCalls[funcName] = f
-				// TODO: seperate internal method and third-party method
+					mpkg := m.Pkg().Path()
+					//NOTICE: use {structName.methodName} as method key
+					mname := obj.Name() + "." + m.Name()
+					f := p.getOrSetFunc(mpkg, mname)
+					f.AssociatedStruct = p.getOrSetStruct(mpkg, obj.Name())
+					f.IsMethod = true
 
+					if strings.HasPrefix(mpkg, p.modName) {
+						// internal pkg
+						methodCalls[funcName] = f
+					} else {
+						// external pkg
+						thirdPartyMethodCalls[funcName] = &ThirdPartyIdentity{mpkg, mname}
+					}
+				}
 				return true
 			case *ast.Ident:
 				funcName = expr.Name
@@ -227,6 +274,22 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	return f, true
 }
 
+func getTypeNamed(typ types.Type) types.Object {
+	if pt, ok := typ.(*types.Pointer); ok {
+		typ = pt.Elem()
+	}
+	name, ok := typ.(*types.Named)
+	if ok {
+		return name.Obj()
+	}
+	return nil
+}
+
+func (ctx *fileContext) IsSysImport(alias string) bool {
+	_, ok := ctx.sysImports[alias]
+	return ok
+}
+
 // Struct holds the information about a struct
 type Struct struct {
 	Name     string // Name of the struct
@@ -257,6 +320,7 @@ type fileContext struct {
 	sysImports        map[string]string
 	projectImports    map[string]string
 	thirdPartyImports map[string]string
+	pkgTypeInfo       *types.Info
 }
 
 // parse a ast.StructType node and renturn allocated *Struct
@@ -287,7 +351,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 		}
 
 		types := []ThirdPartyIdentity{}
-		isFunc := getTypeName(ctx.bs, fieldDecl.Type, &types)
+		isFunc := getTypeName(ctx.fset, ctx.bs, fieldDecl.Type, &types)
 
 		for _, ty := range types {
 			if isFunc {
@@ -328,7 +392,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 
 // handle typ expr and return not-builtin type identity and return if the type if a func signature.
 // ret is used to store results.
-func getTypeName(file []byte, typ ast.Expr, ret *[]ThirdPartyIdentity) bool {
+func getTypeName(fset *token.FileSet, file []byte, typ ast.Expr, ret *[]ThirdPartyIdentity) bool {
 	switch ty := typ.(type) {
 	case *ast.Ident:
 		if !isGoBuiltinFunc(ty.Name) {
@@ -336,15 +400,15 @@ func getTypeName(file []byte, typ ast.Expr, ret *[]ThirdPartyIdentity) bool {
 		}
 		return false
 	case *ast.StarExpr:
-		return getTypeName(file, ty.X, ret)
+		return getTypeName(fset, file, ty.X, ret)
 	case *ast.ArrayType:
-		return getTypeName(file, ty.Elt, ret)
+		return getTypeName(fset, file, ty.Elt, ret)
 	case *ast.MapType:
-		a := getTypeName(file, ty.Key, ret)
-		b := getTypeName(file, ty.Value, ret)
+		a := getTypeName(fset, file, ty.Key, ret)
+		b := getTypeName(fset, file, ty.Value, ret)
 		return a || b
 	case *ast.ChanType:
-		return getTypeName(file, ty.Value, ret)
+		return getTypeName(fset, file, ty.Value, ret)
 	case *ast.SelectorExpr:
 		pkg, ok := ty.X.(*ast.Ident)
 		if ok {
@@ -352,11 +416,11 @@ func getTypeName(file []byte, typ ast.Expr, ret *[]ThirdPartyIdentity) bool {
 		}
 		return false
 	case *ast.FuncType:
-		name := string(file[ty.Func:typ.End()])
+		name := string(file[fset.Position(ty.Func).Offset:fset.Position(typ.End()).Offset])
 		*ret = append(*ret, ThirdPartyIdentity{Identity: name})
 		return true
 	case *ast.InterfaceType:
-		name := string(file[ty.Interface:typ.End()])
+		name := string(file[fset.Position(ty.Interface).Offset:fset.Position(typ.End()).Offset])
 		*ret = append(*ret, ThirdPartyIdentity{Identity: name})
 		return false
 	}

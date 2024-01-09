@@ -38,6 +38,7 @@ type Struct struct {
 	Field1 string
 	Field2 pkg.StructA
 	Field3 sonic.Config
+	Field4 func(in []byte)
 }
 
 func (s *Struct) InternalMethod(in []byte) {
