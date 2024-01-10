@@ -38,7 +38,7 @@ type Function struct {
 	IsMethod         bool    // If the function is a method
 	Name             string  // Name of the function
 	PkgPath                  // import path to the package where the function is defined
-	FilePath         string  // File where the function is defined, empty if the function declaration is not scanned
+	FilePath         string  `json:"-"` // File where the function is defined, empty if the function declaration is not scanned
 	Content          string  // Content of the function, including functiion signature and body
 	AssociatedStruct *Struct // Method receiver
 
@@ -302,7 +302,7 @@ type Struct struct {
 	IsInterface bool   //maybe a interface type decl
 	Name        string // Name of the struct
 	PkgPath            // Path to the package where the struct is defined
-	FilePath    string // File where the struct is defined
+	FilePath    string `json:"-"` // File where the struct is defined
 	Content     string // struct declaration content
 
 	// related local structs in fields, key is {{pkgName.typName}} or {{typeName}}, val is declaration of the struct

@@ -142,40 +142,14 @@ type MainStream struct {
 	RelatedStruct []SingleStruct
 }
 
-func (m *MainStream) Dedup() {
-	fs := map[string]string{}
-	for _, f := range m.RelatedFunctions {
-		fs[f.CallName] = f.Content
-	}
-	m.RelatedFunctions = m.RelatedFunctions[:len(fs)]
-	i := 0
-	for k, v := range fs {
-		m.RelatedFunctions[i].CallName = k
-		m.RelatedFunctions[i].Content = v
-		i++
-	}
-
-	fs = map[string]string{}
-	for _, f := range m.RelatedStruct {
-		fs[f.Name] = f.Content
-	}
-	m.RelatedStruct = m.RelatedStruct[:len(fs)]
-	i = 0
-	for k, v := range fs {
-		m.RelatedStruct[i].Name = k
-		m.RelatedStruct[i].Content = v
-		i++
-	}
-}
-
 type SingleFunction struct {
 	CallName string
 	Content  string
 }
 
 type SingleStruct struct {
-	Name    string
-	Content string
+	CallName string
+	Content  string
 }
 
 func (p *goParser) getMain(depth int) (*MainStream, *Function) {
@@ -194,61 +168,70 @@ func (p *goParser) getMain(depth int) (*MainStream, *Function) {
 			}
 		}
 	}
-	visited := map[string]map[string]bool{}
+	visited := cache(map[interface{}]bool{})
 	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited)
 	return m, mainFunc
 }
 
-func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited map[string]map[string]bool) {
+func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache) {
 	if depth == 0 {
 		return
 	}
-	if f == nil || (visited[f.PkgPath] != nil && visited[f.PkgPath][f.Name]) {
+	if f == nil {
 		return
-	} else {
-		if visited[f.PkgPath] == nil {
-			visited[f.PkgPath] = map[string]bool{}
-		}
-		visited[f.PkgPath][f.Name] = true
-	}
-	for call, ff := range f.InternalFunctionCalls {
-		s := SingleFunction{
-			CallName: call,
-			Content:  ff.Content,
-		}
-		*fl = append(*fl, s)
-		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
 	}
 
-	for call, ff := range f.InternalMethodCalls {
+	//BFS
+	var next []Function
+
+	for call, v := range f.InternalFunctionCalls {
+		if visited.Visited(v) {
+			continue
+		}
+		ff := *v
+		s := SingleFunction{
+			CallName: call,
+			// Name:     ff.PkgPath + "." + ff.Name,
+			Content: ff.Content,
+		}
+		*fl = append(*fl, s)
+		next = append(next, ff)
+	}
+
+	for call, v := range f.InternalMethodCalls {
+		if visited.Visited(v) {
+			continue
+		}
+		ff := *v
 		content := ff.Content
 		if ff.AssociatedStruct != nil && ff.AssociatedStruct.IsInterface {
 			content = ff.AssociatedStruct.Content
 		}
 		s := SingleFunction{
 			CallName: call,
-			Content:  content,
+			// Name:     ff.PkgPath + "." + ff.Name,
+			Content: content,
 		}
 		*fl = append(*fl, s)
-		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
+		next = append(next, ff)
 
 		// for method which has been associated with struct, push the struct
 		if ff.AssociatedStruct != nil && ff.AssociatedStruct.Content != "" {
 			st := ff.AssociatedStruct
-			if visited[st.PkgPath] != nil && visited[st.PkgPath][st.Name] {
+			if visited.Visited(st) {
 				continue
-			} else if visited[st.PkgPath] == nil {
-				visited[st.PkgPath] = map[string]bool{}
 			}
-			visited[st.PkgPath][st.Name] = true
 			ss := SingleStruct{
-				Name:    ff.PkgPath + "." + st.Name,
+				CallName: call,
+				// Name:     (*st).PkgPath + "." + st.Name,
 				Content: st.Content,
 			}
 			*sl = append(*sl, ss)
 		}
+	}
 
-		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
+	for _, ff := range next {
+		p.fillRelatedContent(depth-1, &ff, fl, sl, visited)
 	}
 }
 
@@ -294,8 +277,7 @@ func main() {
 	}
 
 	// p.generateStruct()
-	m, _ := p.getMain(100)
-	m.Dedup()
+	m, _ := p.getMain(-1)
 
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)

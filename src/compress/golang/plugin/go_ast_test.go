@@ -40,11 +40,17 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 			if fun.Name != "main" {
 				t.Fail()
 			}
-			out.Dedup()
-			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
+			fun.RemoveCycle()
+			if out, err := json.Marshal(fun); err != nil {
+				t.Fatal(err)
+			} else {
+				println("func size:", len(out), string(out))
+			}
+			if out, err := json.Marshal(out); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {
-				println("size:", len(out))
+				println("stream size:", len(out))
+				println(string(out))
 			}
 		})
 	}
