@@ -97,7 +97,7 @@ async fn llm_compress(func: &mut Function) {
 pub async fn _ollama_compress(func: String, ctx: HashMap<String, String>) -> String {
     let request_url = format!("http://localhost:11434/api/generate");
 
-    let mut prompt = r#"You are an engineer who is proficient in Golang. You are responsible for summarizing the functions/methods given by the user. The summary needs to include input parameters, output parameters, and function/method behavior (including side effects).DO NOT show any codes in your answer. Function/methods content is as follow:"#.to_string();
+    let mut prompt = r#"You are an engineer who is proficient in Golang. You are responsible for summarizing the functions/methods given by the user.Try to condense output into one sentence and retain key information as much as possible. DO NOT show any codes in your answer. Function/methods content is as follow:"#.to_string();
 
     prompt.push_str("\n");
     prompt.push_str(func.as_str());
