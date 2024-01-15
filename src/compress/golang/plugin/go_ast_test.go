@@ -40,17 +40,57 @@ func Test_goParser_ParseTilTheEnd(t *testing.T) {
 			if fun.Name != "main" {
 				t.Fail()
 			}
-			fun.RemoveCycle()
-			if out, err := json.Marshal(fun); err != nil {
+			if out, err := json.MarshalIndent(fun, "", "  "); err != nil {
 				t.Fatal(err)
 			} else {
 				println("func size:", len(out), string(out))
 			}
-			if out, err := json.Marshal(out); err != nil {
+			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {
-				println("stream size:", len(out))
-				println(string(out))
+				println("size:", len(out), string(out))
+			}
+		})
+	}
+}
+
+func Test_goParser_ParseRepo(t *testing.T) {
+	type fields struct {
+		modName     string
+		homePageDir string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "test",
+			fields: fields{
+				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newGoParser(tt.fields.modName, tt.fields.homePageDir)
+			err := p.ParseRepo()
+			if err != nil {
+				t.Fatalf("goParser.ParseTilTheEnd() error = %v", err)
+			}
+			// spew.Dump(p)
+			out, fun := p.getMain(2)
+			if fun.Name != "main" {
+				t.Fail()
+			}
+			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
+				t.Fatalf("json.Marshal() error = %v", err)
+			} else {
+				println("size:", len(out), string(out))
+			}
+			if out, err := json.MarshalIndent(fun, "", "  "); err != nil {
+				t.Fatalf("json.Marshal() error = %v", err)
+			} else {
+				println("size:", len(out), string(out))
 			}
 		})
 	}

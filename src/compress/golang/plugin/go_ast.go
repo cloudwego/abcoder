@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,11 +15,10 @@ import (
 
 // golang parser, used parse multle packages from the entire project
 type goParser struct {
-	modName               string
-	homePageDir           string
-	visited               map[string]bool
-	processedPkgFunctions map[PkgPath]map[string]*Function
-	processedPkgStruct    map[PkgPath]map[string]*Struct
+	modName     string
+	homePageDir string
+	visited     map[string]bool
+	repo        Repository
 }
 
 // newGoParser
@@ -29,21 +28,53 @@ func newGoParser(modName, homePageDir string) *goParser {
 		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
 	}
 
-	p := &goParser{
-		modName:               modName,
-		homePageDir:           abs,
-		processedPkgFunctions: map[PkgPath]map[string]*Function{},
-		processedPkgStruct:    map[PkgPath]map[string]*Struct{},
-		visited:               map[string]bool{},
-	}
-	if p.modName == "" {
+	if modName == "" {
 		var err error
-		p.modName, err = getModuleName(p.homePageDir + "/go.mod")
+		modName, err = getModuleName(homePageDir + "/go.mod")
 		if err != nil {
 			panic(err.Error())
 		}
 	}
+
+	p := &goParser{
+		modName:     modName,
+		homePageDir: abs,
+		visited:     map[string]bool{},
+		repo:        NewRepository(modName),
+	}
 	return p
+}
+
+// ParseRepo parse the entiry repo from homePageDir recursively until end
+func (p *goParser) ParseRepo() error {
+	err := filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || !info.IsDir() || shouldIgnore(path) {
+			return nil
+		}
+
+		if err := p.ParseDir(path); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	p.associateStructWithMethods()
+	return nil
+}
+
+// GetRepo return currently parsed golang AST
+// Notice: To get completely parsed repo, you'd better call goParser.ParseRepo() before this
+func (p *goParser) GetRepo() Repository {
+	if len(p.repo.Packages) == 0 {
+		_ = p.ParseRepo()
+	}
+	return p.repo
+}
+
+func shouldIgnore(path string) bool {
+	return strings.Contains(path, ".git")
 }
 
 // ToABS converts a local package path to absolute path
@@ -58,39 +89,23 @@ func (p *goParser) pkgPathToABS(path PkgPath) string {
 
 // FromABS converts an absolute path to local mod path
 func (p *goParser) pkgPathFromABS(path string) PkgPath {
-	if rel, _ := filepath.Rel(p.homePageDir, path); rel == "" {
-		return ""
-	} else {
-		return filepath.Join(p.modName, rel)
+	if rel, _ := filepath.Rel(p.homePageDir, path); rel != "" {
+		path = rel
 	}
-}
-
-func getGoFilesInDir(dir string) []string {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		fmt.Println(err.Error())
-		return nil
-	}
-
-	goFiles := make([]string, 0)
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".go") {
-			goFiles = append(goFiles, filepath.Join(dir, file.Name()))
-		}
-	}
-	return goFiles
+	return filepath.Join(p.modName, path)
 }
 
 func (p *goParser) associateStructWithMethods() {
-	for _, fs := range p.processedPkgFunctions {
-		for _, f := range fs {
+	for _, fs := range p.repo.Packages {
+		for _, f := range fs.Functions {
 			if f.IsMethod && f.AssociatedStruct != nil {
+				def := p.repo.GetType(*f.AssociatedStruct)
 				// entrue the Struct has been visted
-				if f.AssociatedStruct.FilePath != "" {
-					if f.AssociatedStruct.Methods == nil {
-						f.AssociatedStruct.Methods = map[string]*Function{}
+				if def != nil && def.FilePath != "" {
+					if def.Methods == nil {
+						def.Methods = map[string]Identity{}
 					}
-					f.AssociatedStruct.Methods[f.Name] = f
+					def.Methods[strings.Split(f.Name, ".")[1]] = Identity{f.PkgPath, f.Name}
 				}
 			}
 		}
@@ -104,12 +119,12 @@ func (p *goParser) ParseTilTheEnd(startDir string) error {
 	if err := p.ParseDir(startDir); err != nil {
 		return err
 	}
-	for path, pkg := range p.processedPkgFunctions {
+	for path, pkg := range p.repo.Packages {
 		// ignore third-party packages
 		if !strings.Contains(path, p.modName) {
 			continue
 		}
-		for _, f := range pkg {
+		for _, f := range pkg.Functions {
 			// Notice: local funcs has been parsed in ParseDir
 			for _, fc := range f.InternalFunctionCalls {
 				if p.visited[fc.PkgPath] {
@@ -152,6 +167,16 @@ type SingleStruct struct {
 	Content  string
 }
 
+type cache map[interface{}]bool
+
+func (c cache) Visited(val interface{}) bool {
+	ok := c[val]
+	if !ok {
+		c[val] = true
+	}
+	return ok
+}
+
 func (p *goParser) getMain(depth int) (*MainStream, *Function) {
 	m := &MainStream{
 		RelatedFunctions: make([]SingleFunction, 0),
@@ -159,8 +184,8 @@ func (p *goParser) getMain(depth int) (*MainStream, *Function) {
 
 	var mainFunc *Function
 
-	for _, v := range p.processedPkgFunctions {
-		for _, vv := range v {
+	for _, v := range p.repo.Packages {
+		for _, vv := range v.Functions {
 			if vv.Name == "main" {
 				mainFunc = vv
 				m.MainFunc = vv.Content
@@ -181,57 +206,64 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 		return
 	}
 
-	//BFS
-	var next []Function
-
-	for call, v := range f.InternalFunctionCalls {
-		if visited.Visited(v) {
+	var next []*Function
+	for call, ff := range f.InternalFunctionCalls {
+		if visited.Visited(ff) {
 			continue
 		}
-		ff := *v
+		def := p.repo.GetFunction(ff)
+		if def == nil {
+			// continue // TODO: fixme
+			panic("undefiend function: " + ff.String())
+		}
 		s := SingleFunction{
 			CallName: call,
-			// Name:     ff.PkgPath + "." + ff.Name,
-			Content: ff.Content,
+			Content:  def.Content,
 		}
 		*fl = append(*fl, s)
-		next = append(next, ff)
+		next = append(next, def)
 	}
 
-	for call, v := range f.InternalMethodCalls {
-		if visited.Visited(v) {
+	for call, ff := range f.InternalMethodCalls {
+		if visited.Visited(ff) {
 			continue
 		}
-		ff := *v
-		content := ff.Content
-		if ff.AssociatedStruct != nil && ff.AssociatedStruct.IsInterface {
-			content = ff.AssociatedStruct.Content
+		def := p.repo.GetFunction(ff)
+		if def == nil {
+			// continue
+			// TODO: fixme
+			panic("undefiend function: " + ff.String())
+		}
+		content := def.Content
+		var st *Struct
+		if def.AssociatedStruct != nil {
+			st = p.repo.GetType(Identity{def.AssociatedStruct.PkgPath, def.AssociatedStruct.Name})
+		}
+		if st != nil && st.TypeKind != TypeKindStruct {
+			content = st.Content
 		}
 		s := SingleFunction{
 			CallName: call,
-			// Name:     ff.PkgPath + "." + ff.Name,
-			Content: content,
+			Content:  content,
 		}
 		*fl = append(*fl, s)
-		next = append(next, ff)
+		next = append(next, def)
 
 		// for method which has been associated with struct, push the struct
-		if ff.AssociatedStruct != nil && ff.AssociatedStruct.Content != "" {
-			st := ff.AssociatedStruct
+		if st != nil && st.Content != "" {
 			if visited.Visited(st) {
 				continue
 			}
 			ss := SingleStruct{
 				CallName: call,
-				// Name:     (*st).PkgPath + "." + st.Name,
-				Content: st.Content,
+				Content:  st.Content,
 			}
 			*sl = append(*sl, ss)
 		}
 	}
 
 	for _, ff := range next {
-		p.fillRelatedContent(depth-1, &ff, fl, sl, visited)
+		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
 	}
 }
 

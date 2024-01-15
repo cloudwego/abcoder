@@ -25,6 +25,71 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// Repository
+type Repository struct {
+	ModName  string               // go module name
+	Packages map[PkgPath]*Package // pkage import path => Package
+}
+
+func NewRepository(mod string) Repository {
+	return Repository{ModName: mod, Packages: map[PkgPath]*Package{}}
+}
+
+// Package
+type Package struct {
+	Functions map[string]*Function // Function name (may be {{func}} or {{struct.method}}) => Function
+	Types     map[string]*Struct   // type name => type define
+}
+
+// GetFunction the function identified by id.
+// if id indicates a method, it will try traceinto inlined sub structs to get the named method
+func (p Repository) GetFunction(id Identity) *Function {
+	if pkg, ok := p.Packages[id.PkgPath]; ok {
+		if f := pkg.Functions[id.Name]; f != nil {
+			return f
+		}
+	}
+	return nil
+}
+
+func (p *Repository) SetFunction(id Identity, f *Function) {
+	pp, ok := p.Packages[id.PkgPath]
+	if !ok {
+		pp = &Package{
+			Functions: map[string]*Function{},
+			Types:     map[string]*Struct{},
+		}
+		p.Packages[id.PkgPath] = pp
+	}
+	if pp.Functions[id.Name] != nil {
+		// FIXME
+		panic("duplicated function:" + id.String())
+	}
+	pp.Functions[id.Name] = f
+}
+
+func (p Repository) GetType(id Identity) *Struct {
+	if pkg, ok := p.Packages[id.PkgPath]; ok {
+		return pkg.Types[id.Name]
+	}
+	return nil
+}
+
+func (p *Repository) SetType(id Identity, f *Struct) {
+	pp, ok := p.Packages[id.PkgPath]
+	if !ok {
+		pp = &Package{
+			Functions: map[string]*Function{},
+			Types:     map[string]*Struct{},
+		}
+		p.Packages[id.PkgPath] = pp
+	}
+	if pp.Types[id.PkgPath] != nil {
+		panic("duplicated type:" + id.String())
+	}
+	pp.Types[id.Name] = f
+}
+
 func (p *goParser) ParseDir(dir string) (err error) {
 	if !strings.HasPrefix(dir, "/") {
 		dir = filepath.Join(p.homePageDir, dir)
