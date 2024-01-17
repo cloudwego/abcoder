@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func Test_goParser_ParseTilTheEnd(t *testing.T) {
@@ -66,7 +68,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
+				homePageDir: "/Users/admin/GOPATH/work/hertz",
 			},
 		},
 	}
@@ -77,7 +79,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("goParser.ParseTilTheEnd() error = %v", err)
 			}
-			// spew.Dump(p)
+			spew.Dump(p)
 			out, fun := p.getMain(2)
 			if fun.Name != "main" {
 				t.Fail()

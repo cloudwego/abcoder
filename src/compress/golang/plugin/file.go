@@ -184,13 +184,13 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	if funcDecl.Body == nil {
 		goto set_func
 	}
+
 	ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if ok {
 			var funcName string
 			switch expr := call.Fun.(type) {
 			case *ast.SelectorExpr:
-				funcName := ""
 				// TODO: not the best but works, optimize it later.
 				x := expr.X
 				for {
@@ -204,28 +204,12 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					}
 					break
 				}
-				// fixme: in closure like func(importName StructX) { ... }, importName is not in projectImports
 				funcName = x.(*ast.Ident).Name + "." + expr.Sel.Name
-				// internal function calls
-				if impt, ok := ctx.projectImports[x.(*ast.Ident).Name]; ok {
-					functionCalls[funcName] = Identity{impt, expr.Sel.Name}
-					return true
-				}
-				// third-party function calls
-				if impt, ok := ctx.thirdPartyImports[x.(*ast.Ident).Name]; ok {
-					thirdPartyFunctionCalls[funcName] = Identity{PkgPath: impt, Name: expr.Sel.Name}
-					return true
-				}
-				// NOTICE: skip sys imports?
-				if ctx.IsSysImport(x.(*ast.Ident).Name) {
-					return true
-				}
 				// check if it's method calls
-				sel, ok := ctx.pkgTypeInfo.Selections[expr]
-				if ok && (sel.Kind() == types.MethodExpr || sel.Kind() == types.MethodVal) {
+				if sel, ok := ctx.pkgTypeInfo.Selections[expr]; ok && (sel.Kind() == types.MethodExpr || sel.Kind() == types.MethodVal) {
 					// builtin or std libs, just ignore
-					m := sel.Obj().(*types.Func)
-					if m == nil || m.Pkg() == nil || ctx.IsSysImport(m.Pkg().Name()) {
+					m, ok := sel.Obj().(*types.Func)
+					if !ok || m.Pkg() == nil || ctx.IsSysImport(m.Pkg().Name()) {
 						return true
 					}
 					sig := m.Type().(*types.Signature)
@@ -244,13 +228,61 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 						// external pkg
 						thirdPartyMethodCalls[funcName] = Identity{mpkg, mname}
 					}
+					return true
 				}
-				return true
+				// check if it's a package reference
+				if use, ok := ctx.pkgTypeInfo.Uses[x.(*ast.Ident)]; ok {
+					pkg, ok := use.(*types.PkgName)
+					if !ok || pkg.Imported() == nil {
+						return true
+					}
+					// NOTICE: skip sys imports?
+					if ctx.IsSysImport(pkg.Imported().Name()) {
+						return true
+					}
+					typ, ok := ctx.pkgTypeInfo.Types[expr]
+					if !ok {
+						return true
+					}
+					// expr type must be func signature
+					if _, ok := typ.Type.(*types.Signature); !ok {
+						return true
+					}
+					// internal function calls
+					if impt, ok := ctx.projectImports[pkg.Imported().Name()]; ok {
+						functionCalls[funcName] = Identity{impt, expr.Sel.Name}
+						return true
+					}
+					// third-party function calls
+					if impt, ok := ctx.thirdPartyImports[pkg.Imported().Name()]; ok {
+						thirdPartyFunctionCalls[funcName] = Identity{PkgPath: impt, Name: expr.Sel.Name}
+						return true
+					}
+					return true
+				}
 			case *ast.Ident:
 				funcName = expr.Name
-				if !isGoBuiltinFunc(funcName) {
-					functionCalls[funcName] = Identity{ctx.pkgPath, funcName}
+				if isGoBuiltinFunc(funcName) {
+					return true
 				}
+				typ, ok := ctx.pkgTypeInfo.Types[expr]
+				if !ok {
+					return true
+				}
+				// TODO: we can't handle variant func (closure) at present
+				obj := ctx.pkgTypeInfo.Defs[expr]
+				if _, isVar := obj.(*types.Var); isVar {
+					return true
+				}
+				obj = ctx.pkgTypeInfo.Uses[expr]
+				if _, isVar := obj.(*types.Var); isVar {
+					return true
+				}
+				// expr type must be func signature
+				if _, ok := typ.Type.(*types.Signature); !ok {
+					return true
+				}
+				functionCalls[funcName] = Identity{ctx.pkgPath, funcName}
 				return true
 			}
 		}
@@ -359,7 +391,6 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 			fieldname = fieldDecl.Names[0].Name
 		}
 		p.collectTypes(ctx, fieldname, fieldDecl.Type, st, inlined)
-
 		return true
 	})
 	return st, true
@@ -370,8 +401,17 @@ func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st
 	isFunc := getTypeName(ctx.fset, ctx.bs, typ, &types)
 
 	for _, ty := range types {
+		// regard func-typed field as a method on the struct
 		if isFunc {
-			mname := st.Name + "." + field
+			// Fix: multiple types use the same mname
+			// ex:  type FuncMap  map[func()]func()
+			if len(types) > 1 {
+				continue
+			}
+			mname := st.Name
+			if field != "" {
+				mname += "." + field
+			}
 			f := p.newFunc(ctx.pkgPath, mname)
 			f.AssociatedStruct = &Identity{ctx.pkgPath, st.Name}
 			f.IsMethod = true
@@ -424,36 +464,21 @@ func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.Inter
 	st.TypeKind = TypeKindInterface
 	st.Content = string(ctx.GetRawContent(decl))
 
-	methods := map[string]Identity{}
 	ast.Inspect(decl.Methods, func(n ast.Node) bool {
 		fieldDecl, ok := n.(*ast.Field)
 		if !ok {
 			return true
 		}
-		fname := ""
-		if len(fieldDecl.Names) > 0 {
-			// TODO: combine all names
-			fname = fieldDecl.Names[0].String()
-		} else {
-			fname = string(ctx.GetRawContent(fieldDecl.Type))
+		inlined := len(fieldDecl.Names) == 0
+		fieldname := string(ctx.GetRawContent(fieldDecl.Type))
+		if !inlined {
+			// Fixme: join names?
+			fieldname = fieldDecl.Names[0].Name
 		}
-
-		types := []Identity{}
-		isFunc := getTypeName(ctx.fset, ctx.bs, fieldDecl.Type, &types)
-		if !isFunc {
-			return true
-		}
-
-		mname := name + "." + fname
-		f := p.newFunc(ctx.pkgPath, mname)
-		f.IsMethod = true
-		f.AssociatedStruct = &Identity{st.PkgPath, st.Name}
-		f.FilePath = ctx.filePath
-		methods[fname] = Identity{f.PkgPath, mname}
+		p.collectTypes(ctx, fieldname, fieldDecl.Type, st, inlined)
 		return true
 	})
 
-	st.Methods = methods
 	return st, true
 }
 
