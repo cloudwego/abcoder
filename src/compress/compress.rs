@@ -78,6 +78,23 @@ pub struct Identity {
     pub name: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct ToCompressFunc {
+    #[serde(rename = "Content")]
+    content: String,
+    #[serde(rename = "related_func")]
+    related_func: Option<Vec<CalledFunc>>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+struct CalledFunc {
+    #[serde(rename = "CallName")]
+    pub call_name: String,
+    #[serde(rename = "Description")]
+    pub description: String,
+}
+
 pub fn from_json(json: &str) -> Result<Repository, Box<dyn Error>> {
     let f: Repository = serde_json::from_str(json)?;
     Ok(f)
@@ -149,10 +166,20 @@ pub async fn cascade_compress_function(id: &Identity, repo: &mut Repository) {
         }
 
         println!("start to compress function: {}", func_opt.name);
-        llm_compress(func_opt.content.as_str(), map).await
+        if func_opt.content.is_empty() {
+            println!("content is empty skip it");
+            Some("".to_string())
+        } else {
+            llm_compress(func_opt.content.as_str(), map).await
+        }
     };
 
     let mut func_opt = repo.packages.get_mut(id.pkg_path.as_str()).unwrap().functions.get_mut(id.name.as_str()).unwrap();
+    if content.is_some() {
+        let content = content.unwrap().trim().to_string();
+        func_opt.compress_data = Some(content);
+        return;
+    }
     func_opt.compress_data = content;
 }
 
@@ -161,24 +188,25 @@ async fn llm_compress(func: &str, extra: HashMap<String, String>) -> Option<Stri
     Option::from(compress_data)
 }
 
+
 pub async fn _ollama_compress(func: String, ctx: HashMap<String, String>) -> String {
     let request_url = format!("http://localhost:11434/api/generate");
 
-    let mut prompt = r#"You are an engineer who is proficient in Golang. You are responsible for summarizing the functions/methods given by the user, DO NOT put anything that is not mentioned in the function.Try to condense output into one sentence and retain key information as much as possible. DO NOT show any codes in your answer. Function/methods content is as follow:"#.to_string();
-
-    prompt.push_str("\n```\n");
-    prompt.push_str(func.as_str());
-    prompt.push_str("\n```\n");
+    let mut compress_func = ToCompressFunc { content: func, related_func: None };
     if !ctx.is_empty() {
-        prompt.push_str("\nRelated function:\n");
+        let mut related_func = Vec::new();
         for (name, compressed_data) in ctx {
-            prompt.push_str(&*(name + ": " + &*compressed_data + "\n"));
+            let re = CalledFunc { call_name: name, description: compressed_data };
+            related_func.push(re);
         }
+        compress_func.related_func = Some(related_func);
     }
 
+    let to_compress_func = serde_json::to_string(&compress_func).unwrap();
 
-    println!("use prompt:\n{}", prompt);
-    let req_body: ollama_req = ollama_req { model: "codellama".to_string(), prompt };
+
+    println!("use prompt:\n{}", to_compress_func);
+    let req_body: ollama_req = ollama_req { model: "codellama-private".to_string(), prompt: to_compress_func };
     let client = reqwest::Client::new();
     let mut response = client
         .post(&request_url)
