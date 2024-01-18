@@ -112,43 +112,6 @@ func (p *goParser) associateStructWithMethods() {
 	}
 }
 
-// TODO: Parallel transformation
-// ParseTilTheEnd parse the all go files from the starDir,
-// and their related go files in the project recursively
-func (p *goParser) ParseTilTheEnd(startDir string) error {
-	if err := p.ParseDir(startDir); err != nil {
-		return err
-	}
-	for path, pkg := range p.repo.Packages {
-		// ignore third-party packages
-		if !strings.Contains(path, p.modName) {
-			continue
-		}
-		for _, f := range pkg.Functions {
-			// Notice: local funcs has been parsed in ParseDir
-			for _, fc := range f.InternalFunctionCalls {
-				if p.visited[fc.PkgPath] {
-					continue
-				}
-				if err := p.ParseTilTheEnd(p.pkgPathToABS(fc.PkgPath)); err != nil {
-					return err
-				}
-			}
-			for _, fc := range f.InternalMethodCalls {
-				if p.visited[fc.PkgPath] {
-					continue
-				}
-				if err := p.ParseTilTheEnd(p.pkgPathToABS(fc.PkgPath)); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	p.associateStructWithMethods()
-	return nil
-}
-
 type MainStream struct {
 	MainFunc string
 
@@ -303,7 +266,7 @@ func main() {
 	homeDir := os.Args[1]
 
 	p := newGoParser("", homeDir)
-	if err := p.ParseTilTheEnd(p.homePageDir); err != nil {
+	if err := p.ParseRepo(); err != nil {
 		fmt.Println("Error parsing go files:", err)
 		os.Exit(1)
 	}
