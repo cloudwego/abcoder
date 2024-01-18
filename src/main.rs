@@ -1,9 +1,11 @@
 use std::arch::asm;
+use std::cell::RefCell;
 use std::net::SocketAddr;
 // Import necessary types from the standard library
 use std::path::{Path, PathBuf};
 use std::ptr::addr_of_mut;
-use std::sync::Arc;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -17,6 +19,7 @@ use tokio::runtime::Runtime;
 // use crate::llm::llm;
 use utils::llm::count_tokens_rough;
 
+use crate::compress::compress::Identity;
 use crate::compress::golang;
 use crate::compress::parser::LanguageParser;
 use crate::utils::cmd;
@@ -130,6 +133,27 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     }).boxed()
 }
 
+// repo_compress handler
+fn repo_compress(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
+    let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
+    let repo = parsed.get("repo").unwrap().clone();
+    (async move {
+        let repo_dir = check_repo_exist(&repo);
+
+        if let Ok(output) = cmd::run_command("./go_ast", vec![repo_dir.as_str()]) {
+            let mut repo = compress::compress::from_json(output.as_str()).unwrap();
+            compress::compress::compress_all(&mut repo).await;
+            let compress = serde_json::to_string(&repo).unwrap();
+            println!("compressed repo:\n{}", compress);
+
+            *ctx.resp.body_mut() = Body::from(compress);
+            return;
+        }
+
+        *ctx.resp.body_mut() = Body::from("analyze failed.");
+    }).boxed()
+}
+
 // issue_trace handler
 fn issue_trace(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let parsed: std::collections::HashMap<String, String> = serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
@@ -181,6 +205,8 @@ async fn main() {
     h.get("/issue_trace", Arc::new(issue_trace)).await;
     h.get("/repo_structure", Arc::new(tree_structure)).await;
     h.get("/code_analyze", Arc::new(code_analyze)).await;
+
+    h.get("/repo_compress", Arc::new(repo_compress)).await;
 
 
     h.spin(SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 0], 8888))).await.expect("TODO: panic message");

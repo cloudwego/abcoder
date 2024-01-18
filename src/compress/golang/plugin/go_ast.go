@@ -271,13 +271,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// p.generateStruct()
-	m, _ := p.getMain(-1)
+	//p.generateStruct()
+	//m, _ := p.getMain(-1)
 
 	out := bytes.NewBuffer(nil)
 	encoder := json.NewEncoder(out)
 	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(m)
+	err := encoder.Encode(p.repo)
 	if err != nil {
 		fmt.Println("Error marshalling functions to JSON:", err)
 		os.Exit(1)
