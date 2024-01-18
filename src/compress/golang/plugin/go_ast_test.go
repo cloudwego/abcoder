@@ -68,7 +68,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "/Users/admin/GOPATH/work/hertz",
+				homePageDir: "../../../../testdata/golang",
 			},
 		},
 	}
@@ -80,6 +80,8 @@ func Test_goParser_ParseRepo(t *testing.T) {
 				t.Fatalf("goParser.ParseTilTheEnd() error = %v", err)
 			}
 			spew.Dump(p)
+			x := p.repo.GetType(Identity{"a.b/c/pkg/entity", "MyStruct"})
+			spew.Dump(x.InlineStruct, x.SubStruct)
 			out, fun := p.getMain(2)
 			if fun.Name != "main" {
 				t.Fail()

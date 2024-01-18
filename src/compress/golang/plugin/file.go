@@ -40,7 +40,10 @@ func (i Identity) String() string {
 
 // return packagename.name
 func (i Identity) CallName() string {
-	return filepath.Base(i.PkgPath) + "." + i.Name
+	if i.PkgPath != "" {
+		return filepath.Base(i.PkgPath) + "." + i.Name
+	}
+	return i.Name
 }
 
 // Function holds the information about a function
@@ -423,7 +426,7 @@ func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st
 			}
 			st.Methods[field] = Identity{ctx.pkgPath, mname}
 		} else {
-			var impt string
+			impt := ctx.pkgPath
 			if ty.PkgPath != "" {
 				if _, ok := ctx.sysImports[ty.PkgPath]; ok {
 					continue
