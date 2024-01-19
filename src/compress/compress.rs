@@ -6,112 +6,13 @@ use async_recursion::async_recursion;
 // Add these imports at the beginning of your file
 use serde::{Deserialize, Serialize};
 
+use llm::ollama::ollama_compress;
+use types::types::{CalledType, Identity, KeyValueType, Repository, ToCompressFunc, ToCompressType};
+
 use crate::compress::compress;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Repository {
-    #[serde(rename = "ModName")]
-    mod_name: String,
-    #[serde(rename = "Packages")]
-    pub packages: HashMap<String, Package>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Package {
-    #[serde(rename = "Functions")]
-    pub functions: HashMap<String, Function>,
-    #[serde(rename = "Types")]
-    types: HashMap<String, Struct>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Function {
-    #[serde(rename = "IsMethod")]
-    is_method: bool,
-    #[serde(rename = "PkgPath")]
-    pkg_path: String,
-    #[serde(rename = "Name")]
-    name: String,
-    #[serde(rename = "Content")]
-    content: String,
-    #[serde(rename = "AssociatedStruct")]
-    associated_struct: Option<Identity>,
-    #[serde(rename = "InternalFunctionCalls")]
-    internal_function_calls: Option<HashMap<String, Identity>>,
-    #[serde(rename = "ThirdPartyFunctionCalls")]
-    third_party_function_calls: Option<HashMap<String, Identity>>,
-    #[serde(rename = "InternalMethodCalls")]
-    internal_method_calls: Option<HashMap<String, Identity>>,
-    #[serde(rename = "ThirdPartyMethodCalls")]
-    third_party_method_calls: Option<HashMap<String, Identity>>,
-
-    // compress_data
-    compress_data: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Struct {
-    #[serde(rename = "TypeKind")]
-    type_kind: u8,
-    #[serde(rename = "PkgPath")]
-    pkg_path: String,
-    #[serde(rename = "Name")]
-    name: String,
-    #[serde(rename = "Content")]
-    content: String,
-    #[serde(rename = "SubStruct")]
-    sub_struct: Option<HashMap<String, Identity>>,
-    #[serde(rename = "InlineStruct")]
-    inline_struct: Option<HashMap<String, Identity>>,
-    #[serde(rename = "Methods")]
-    methods: Option<HashMap<String, Identity>>,
-
-    // compress_data
-    compress_data: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Identity {
-    #[serde(rename = "PkgPath")]
-    pub pkg_path: String,
-    #[serde(rename = "Name")]
-    pub name: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ToCompressFunc {
-    #[serde(rename = "Content")]
-    content: String,
-    #[serde(rename = "Related_func")]
-    related_func: Option<Vec<CalledType>>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ToCompressType {
-    #[serde(rename = "Content")]
-    content: String,
-    #[serde(rename = "Related_methods")]
-    related_methods: Option<Vec<KeyValueType>>,
-    #[serde(rename = "Related_types")]
-    related_types: Option<Vec<KeyValueType>>,
-}
-
-
-#[derive(Serialize, Deserialize, Debug)]
-struct CalledType {
-    #[serde(rename = "CallName")]
-    pub call_name: String,
-    #[serde(rename = "Description")]
-    pub description: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct KeyValueType {
-    #[serde(rename = "Name")]
-    pub name: String,
-    #[serde(rename = "Description")]
-    pub description: String,
-}
+use crate::compress::llm;
+use crate::compress::llm::coze::coze_compress;
+use crate::compress::types;
 
 pub fn from_json(json: &str) -> Result<Repository, Box<dyn Error>> {
     let f: Repository = serde_json::from_str(json)?;
@@ -332,7 +233,7 @@ async fn llm_compress_func(func: &str, extra: HashMap<String, String>) -> Option
     }
     let to_compress_str = serde_json::to_string(&compress_func).unwrap();
     let compress_func_enum = ToCompress::ToCompressFunc(to_compress_str);
-    let compress_data = _ollama_compress(compress_func_enum).await;
+    let compress_data = coze_compress(compress_func_enum).await;
     Option::from(compress_data)
 }
 
@@ -360,66 +261,6 @@ async fn llm_compress_type(func: &str, extra_type: HashMap<String, String>, rela
 
     let to_compress_str = serde_json::to_string(&compress_type).unwrap();
     let compress_type_enum = ToCompress::ToCompressType(to_compress_str);
-    let compress_data = _ollama_compress(compress_type_enum).await;
+    let compress_data = coze_compress(compress_type_enum).await;
     Option::from(compress_data)
-}
-
-
-pub async fn _ollama_compress(to_compress: ToCompress) -> String {
-    let request_url = format!("http://localhost:11434/api/generate");
-    let mut model_name = "codellama-private";
-    let mut to_compress_str = String::new();
-    match to_compress {
-        ToCompress::ToCompressType(t) => {
-            model_name = "codellama-private-type";
-            to_compress_str = t;
-        }
-        ToCompress::ToCompressFunc(f) => {
-            to_compress_str = f;
-        }
-    }
-
-    println!("use prompt:\n{}", to_compress_str);
-    let req_body: OllamaReq = OllamaReq { model: model_name.to_string(), prompt: to_compress_str };
-    let client = reqwest::Client::new();
-    let mut response = client
-        .post(&request_url)
-        .json(&req_body)
-        .send()
-        .await.unwrap();
-
-
-    let mut output = String::new();
-    while let Ok(Some(chunk)) = response.chunk().await {
-        let result = serde_json::from_slice(&chunk);
-        if result.is_err() {
-            break;
-        }
-
-        let value: OllamaResp = result.unwrap();
-
-        if !value.response.is_empty() {
-            output.push_str(value.response.as_str());
-        }
-
-        if value.done {
-            break;
-        }
-    }
-
-    output
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OllamaReq {
-    model: String,
-    prompt: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OllamaResp {
-    model: String,
-    created_at: String,
-    response: String,
-    done: bool,
 }
