@@ -2,12 +2,22 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::storage::cache::get_cache;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Repository {
+    pub id: Option<String>,
     #[serde(rename = "ModName")]
     pub(crate) mod_name: String,
     #[serde(rename = "Packages")]
     pub packages: HashMap<String, Package>,
+}
+
+impl Repository {
+    pub fn save_to_cache(&self) {
+        let repo = serde_json::to_string(&self).expect("marshal struct error");
+        get_cache().put(self.id.as_ref().unwrap(), Vec::from(repo)).expect("save to cache failed");
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -79,8 +79,11 @@ pub async fn coze_compress(to_compress: ToCompress) -> String {
         .await
         .unwrap();
 
+    let status = res.status();
+
     let res_text = res.text().await.unwrap();
-    let response: Response = from_str(&res_text).unwrap();
+
+    let response: Response = from_str(&res_text).expect(format!("{} not a valid response, status code: {}",res_text,status.as_str()).as_str());
 
     let mut output = String::new();
 

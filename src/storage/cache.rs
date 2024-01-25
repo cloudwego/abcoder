@@ -41,3 +41,11 @@ impl<C: StorageEngine, B: StorageEngine> StorageEngine for CachingStorageEngine<
         self.backend.put(key, value)
     }
 }
+
+pub fn get_cache() -> Box<dyn StorageEngine> {
+    let mem = MemoryCache::new(12);
+    let fs = FileStorage::new(Path::new("./tmp_compress")).unwrap();
+
+    let mut cache = CachingStorageEngine::new(mem, fs);
+    return Box::new(cache);
+}

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::hash::Hash;
 use std::ops::Add;
 
 use async_recursion::async_recursion;
@@ -37,22 +38,25 @@ pub async fn compress_all(repo: &mut Repository) {
     }
 
     for id in to_compress_func {
-        cascade_compress_function(&id, repo).await;
+        let mut m:HashMap<String, bool> = HashMap::new();
+        cascade_compress_function(&id, repo, &mut m).await;
     }
 
     for id in to_compress_type {
-        cascade_compress_struct(&id, repo).await;
+        let mut m:HashMap<String, bool> = HashMap::new();
+        cascade_compress_struct(&id, repo, &mut m).await;
     }
 }
 
 #[async_recursion]
-pub async fn cascade_compress_function(id: &Identity, repo: &mut Repository) {
+pub async fn cascade_compress_function(id: &Identity, repo: &mut Repository, m: &mut HashMap<String,bool>) {
     let mut to_compress = Vec::new();
 
     {
         let func_opt = repo.packages.get(id.pkg_path.as_str()).unwrap().functions.get(id.name.as_str());
         if func_opt.is_none() {
             println!("not found function, id {:?}", id);
+            return;
         }
         let func_opt = func_opt.unwrap();
         if func_opt.compress_data.is_some() {
@@ -61,21 +65,41 @@ pub async fn cascade_compress_function(id: &Identity, repo: &mut Repository) {
         }
         if let Some(calls) = &func_opt.internal_function_calls {
             for (_, f) in calls {
+                if f.name == id.name && f.pkg_path == id.pkg_path{
+                    println!("find a recursive function: {}",f.name);
+                    continue;
+                }
+                let compress_key = f.pkg_path.clone().add(&f.name);
+                if m.get(&compress_key).is_some(){
+                    println!("find a calling cycle: {}",compress_key);
+                    continue;
+                }
                 let id = Identity { pkg_path: f.pkg_path.clone(), name: f.name.clone() };
+                m.insert(compress_key,true);
                 to_compress.push(id);
             }
         }
 
         if let Some(calls) = &func_opt.internal_method_calls {
             for (_, f) in calls {
+                if f.name == id.name && f.pkg_path == id.pkg_path{
+                    println!("find a recursive method: {}",f.name);
+                    continue;
+                }
+                let compress_key = f.pkg_path.clone().add(&f.name);
+                if m.get(&compress_key).is_some(){
+                    println!("find a calling cycle: {}",compress_key);
+                    continue;
+                }
                 let id = Identity { pkg_path: f.pkg_path.clone(), name: f.name.clone() };
+                m.insert(compress_key,true);
                 to_compress.push(id);
             }
         }
     }
 
     for f_id in to_compress {
-        cascade_compress_function(&f_id, repo).await;
+        cascade_compress_function(&f_id, repo, m).await;
     }
 
     let mut map = HashMap::new();
@@ -83,15 +107,38 @@ pub async fn cascade_compress_function(id: &Identity, repo: &mut Repository) {
         let func_opt = repo.packages.get(id.pkg_path.as_str()).unwrap().functions.get(id.name.as_str()).unwrap();
         if let Some(calls) = &func_opt.internal_function_calls {
             for (k, f) in calls {
-                let sub_function = repo.packages.get(f.pkg_path.as_str()).unwrap().functions.get(f.name.as_str()).unwrap();
+                if f.name == id.name && f.pkg_path == id.pkg_path{
+                    println!("find a recursive function: {}",f.name);
+                    continue;
+                }
+
+                let sub_function = repo.packages.get(f.pkg_path.as_str()).unwrap().functions.get(f.name.as_str());
+                if sub_function.is_none(){
+                    println!("not found function, id {:?}", id);
+                    continue;
+                }
+                let sub_function = sub_function.unwrap();
                 map.insert(k.clone(), sub_function.compress_data.clone().unwrap());
             }
         }
 
         if let Some(calls) = &func_opt.internal_method_calls {
             for (k, f) in calls {
-                let sub_function = repo.packages.get(f.pkg_path.as_str()).unwrap().functions.get(f.name.as_str()).unwrap();
-                map.insert(k.clone(), sub_function.compress_data.clone().unwrap());
+                if f.name == id.name && f.pkg_path == id.pkg_path{
+                    println!("find a recursive method: {}",f.name);
+                    continue;
+                }
+
+                let sub_function = repo.packages.get(f.pkg_path.as_str()).unwrap().functions.get(f.name.as_str());
+                if sub_function.is_none(){
+                    println!("not found function, id {:?}", id);
+                    continue;
+                }
+                let sub_function = sub_function.unwrap();
+                let value = sub_function.compress_data.clone();
+                if value.is_some(){
+                    map.insert(k.clone(),value.unwrap());
+                }
             }
         }
 
@@ -108,19 +155,22 @@ pub async fn cascade_compress_function(id: &Identity, repo: &mut Repository) {
     if content.is_some() {
         let content = content.unwrap().trim().to_string();
         func_opt.compress_data = Some(content);
+        repo.save_to_cache();
         return;
     }
     func_opt.compress_data = content;
+    repo.save_to_cache();
 }
 
 #[async_recursion]
-pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository) {
+pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository, m: &mut HashMap<String,bool>) {
     let mut to_compress = Vec::new();
 
     {
         let struct_opt = repo.packages.get(id.pkg_path.as_str()).unwrap().types.get(id.name.as_str());
         if struct_opt.is_none() {
             println!("not found struct, id {:?}", id);
+            return;
         }
         let stru = struct_opt.unwrap();
         if stru.compress_data.is_some() {
@@ -133,8 +183,15 @@ pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository) {
                     continue;
                 }
 
+                let compress_key = f.pkg_path.clone().add(&f.name);
+                if m.get(&compress_key).is_some(){
+                    println!("find a struct embeding cycle: {}",compress_key);
+                    continue;
+                }
+
                 let id = Identity { pkg_path: f.pkg_path.clone(), name: f.name.clone() };
                 to_compress.push(id);
+                m.insert(compress_key, true);
             }
         }
 
@@ -144,14 +201,21 @@ pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository) {
                     continue;
                 }
 
+                let compress_key = f.pkg_path.clone().add(&f.name);
+                if m.get(&compress_key).is_some(){
+                    println!("find a struct embeding cycle: {}",compress_key);
+                    continue;
+                }
+
                 let id = Identity { pkg_path: f.pkg_path.clone(), name: f.name.clone() };
                 to_compress.push(id);
+                m.insert(compress_key, true);
             }
         }
     }
 
     for f_id in to_compress {
-        cascade_compress_struct(&f_id, repo).await;
+        cascade_compress_struct(&f_id, repo, m).await;
     }
 
     let mut type_map = HashMap::new();
@@ -167,7 +231,15 @@ pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository) {
                     continue;
                 }
                 let sub = pkg.unwrap().types.get(f.name.as_str());
-                type_map.insert(k.clone(), sub.unwrap().compress_data.clone().unwrap());
+                if sub.is_none(){
+                    eprintln!("do not get tye type in the pkg: {:?}",f);
+                    continue;
+                }
+                let compress_data = sub.unwrap().compress_data.clone();
+                if compress_data.is_none(){
+                    continue;
+                }
+                type_map.insert(k.clone(),compress_data.unwrap());
             }
         }
 
@@ -180,8 +252,15 @@ pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository) {
                     continue;
                 }
                 let inline = repo.packages.get(f.pkg_path.as_str()).unwrap().types.get(f.name.as_str());
-
-                type_map.insert(k.clone(), inline.unwrap().compress_data.clone().unwrap());
+                if inline.is_none(){
+                    eprintln!("do not get tye type in the pkg: {:?}",f);
+                    continue;
+                }
+                let compress_data =  inline.unwrap().compress_data.clone();
+                if compress_data.is_none(){
+                    continue;
+                }
+                type_map.insert(k.clone(), compress_data.unwrap());
             }
         }
 
@@ -210,9 +289,11 @@ pub async fn cascade_compress_struct(id: &Identity, repo: &mut Repository) {
     if content.is_some() {
         let content = content.unwrap().trim().to_string();
         type_opt.compress_data = Some(content);
+        repo.save_to_cache();
         return;
     }
     type_opt.compress_data = content;
+    repo.save_to_cache();
 }
 
 

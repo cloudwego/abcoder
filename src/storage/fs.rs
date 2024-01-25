@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::ops::Add;
 use std::path::{Path, PathBuf};
 
 use crate::storage::cache::StorageEngine;
@@ -22,7 +23,9 @@ impl FileStorage {
 impl StorageEngine for FileStorage {
     fn get(&mut self, key: &str) -> Option<Vec<u8>> {
         let mut path = self.base_dir.clone();
-        path.push(key);
+        let safe_key = key.replace("/", "_");
+        let json_key = safe_key.add(".json");
+        path.push(json_key);
         let mut file = match File::open(path) {
             Ok(file) => file,
             Err(_) => return None,
@@ -36,7 +39,9 @@ impl StorageEngine for FileStorage {
 
     fn put(&mut self, key: &str, value: Vec<u8>) -> Result<(), Box<dyn Error>> {
         let mut path = self.base_dir.clone();
-        path.push(key);
+        let safe_key = key.replace("/", "_");
+        let json_key = safe_key.add(".json");
+        path.push(json_key);
         let mut file = File::create(path)?;
         file.write_all(&value)?;
         Ok(())
