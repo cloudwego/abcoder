@@ -101,11 +101,16 @@ func (p *goParser) associateStructWithMethods() {
 			if f.IsMethod && f.AssociatedStruct != nil {
 				def := p.repo.GetType(*f.AssociatedStruct)
 				// entrue the Struct has been visted
-				if def != nil && def.FilePath != "" {
+				if def != nil {
 					if def.Methods == nil {
 						def.Methods = map[string]Identity{}
 					}
-					def.Methods[strings.Split(f.Name, ".")[1]] = Identity{f.PkgPath, f.Name}
+					names := strings.Split(f.Name, ".")
+					var name = names[0]
+					if len(names) > 1 {
+						name = names[1]
+					}
+					def.Methods[name] = Identity{f.PkgPath, f.Name}
 				}
 			}
 		}
