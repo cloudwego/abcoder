@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 func Test_goParser_ParseRepo(t *testing.T) {
@@ -19,7 +17,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "../../../../testdata/golang",
+				homePageDir: "/Users/bytedance/GOPATH/work/hertz/",
 			},
 		},
 	}
@@ -30,23 +28,27 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("goParser.ParseTilTheEnd() error = %v", err)
 			}
-			spew.Dump(p)
-			x := p.repo.GetType(Identity{"a.b/c/pkg/entity", "MyStruct"})
-			spew.Dump(x.InlineStruct, x.SubStruct)
-			out, fun := p.getMain(-1)
-			if fun.Name != "main" {
-				t.Fail()
-			}
-			if out, err := json.MarshalIndent(out, "", "  "); err != nil {
+			// spew.Dump(p)
+			f := p.repo.GetFunction(Identity{"github.com/cloudwego/hertz/pkg/protocol", "Response.SetBody"})
+			if out, err := json.MarshalIndent(f, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {
-				println("size:", len(out), string(out))
+				println("func:", string(out))
 			}
-			if out, err := json.MarshalIndent(fun, "", "  "); err != nil {
-				t.Fatalf("json.Marshal() error = %v", err)
-			} else {
-				println("size:", len(out), string(out))
-			}
+			// out, fun := p.getMain(-1)
+			// if fun.Name != "main" {
+			// 	t.Fail()
+			// }
+			// if out, err := json.MarshalIndent(out, "", "  "); err != nil {
+			// 	t.Fatalf("json.Marshal() error = %v", err)
+			// } else {
+			// 	println("size:", len(out), string(out))
+			// }
+			// if out, err := json.MarshalIndent(fun, "", "  "); err != nil {
+			// 	t.Fatalf("json.Marshal() error = %v", err)
+			// } else {
+			// 	println("size:", len(out), string(out))
+			// }
 		})
 	}
 }

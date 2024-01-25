@@ -221,6 +221,10 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					if recv != nil {
 						rname = recv.Name()
 					}
+					if rname == "" || strings.ContainsAny(rname, "{(") {
+						// must be a local declaration, ignore it
+						return true
+					}
 					mpkg := m.Pkg().Path()
 					//NOTICE: use {structName.methodName} as method key
 					mname := rname + "." + m.Name()
