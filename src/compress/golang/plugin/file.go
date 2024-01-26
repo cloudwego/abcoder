@@ -21,6 +21,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -301,6 +302,11 @@ set_func:
 	if isMethod {
 		name = associatedStruct.Name + "." + name
 	}
+	if name == "init" && p.repo.GetFunction(Identity{ctx.pkgPath, name}) != nil {
+		// according to https://go.dev/ref/spec#Program_initialization_and_execution,
+		// duplicated init() is allowed and never be referenced, thus add a subfix
+		name += "_" + strconv.Itoa(int(funcDecl.Pos()))
+	}
 	// update detailed function call info
 	f := p.newFunc(ctx.pkgPath, name)
 	*f = Function{
@@ -386,11 +392,11 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 	end := ctx.fset.PositionFor(struDecl.End(), false).Offset
 	st.Content = string(ctx.bs[pos:end])
 
-	ast.Inspect(struDecl.Fields, func(n ast.Node) bool {
-		fieldDecl, ok := n.(*ast.Field)
-		if !ok {
-			return true
-		}
+	if struDecl.Fields == nil {
+		return st, true
+	}
+
+	for _, fieldDecl := range struDecl.Fields.List {
 		inlined := len(fieldDecl.Names) == 0
 		fieldname := string(ctx.GetRawContent(fieldDecl.Type))
 		if !inlined {
@@ -398,8 +404,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 			fieldname = fieldDecl.Names[0].Name
 		}
 		p.collectTypes(ctx, fieldname, fieldDecl.Type, st, inlined)
-		return true
-	})
+	}
 	return st, true
 }
 
@@ -462,7 +467,7 @@ func (ctx *fileContext) GetRawContent(node ast.Node) []byte {
 }
 
 func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.InterfaceType) (*Struct, bool) {
-	if decl == nil || decl.Incomplete {
+	if decl == nil || decl.Incomplete || decl.Methods == nil {
 		return nil, true
 	}
 
@@ -471,11 +476,7 @@ func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.Inter
 	st.TypeKind = TypeKindInterface
 	st.Content = string(ctx.GetRawContent(decl))
 
-	ast.Inspect(decl.Methods, func(n ast.Node) bool {
-		fieldDecl, ok := n.(*ast.Field)
-		if !ok {
-			return true
-		}
+	for _, fieldDecl := range decl.Methods.List {
 		inlined := len(fieldDecl.Names) == 0
 		fieldname := string(ctx.GetRawContent(fieldDecl.Type))
 		if !inlined {
@@ -483,8 +484,7 @@ func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.Inter
 			fieldname = fieldDecl.Names[0].Name
 		}
 		p.collectTypes(ctx, fieldname, fieldDecl.Type, st, inlined)
-		return true
-	})
+	}
 
 	return st, true
 }
