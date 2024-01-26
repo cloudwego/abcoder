@@ -1,11 +1,12 @@
-use std::collections::HashMap;
 use std::error::Error;
 use std::path::Path;
 
+use crate::compress::compress;
+use crate::compress::types::types::Repository;
 use crate::storage::fs::FileStorage;
 use crate::storage::memory::MemoryCache;
 
-pub trait StorageEngine {
+pub trait StorageEngine: Send {
     fn get(&mut self, key: &str) -> Option<Vec<u8>>;
     fn put(&mut self, key: &str, value: Vec<u8>) -> Result<(), Box<dyn Error>>;
 }
@@ -20,7 +21,6 @@ impl<C: StorageEngine, B: StorageEngine> CachingStorageEngine<C, B> {
         CachingStorageEngine { cache, backend }
     }
 }
-
 
 impl<C: StorageEngine, B: StorageEngine> StorageEngine for CachingStorageEngine<C, B> {
     fn get(&mut self, key: &str) -> Option<Vec<u8>> {
@@ -48,4 +48,17 @@ pub fn get_cache() -> Box<dyn StorageEngine> {
 
     let mut cache = CachingStorageEngine::new(mem, fs);
     return Box::new(cache);
+}
+
+pub fn load_repo(cache: &mut Box<dyn StorageEngine>, repo_name: &str) -> Option<Box<Repository>> {
+    if let Some(repo) = cache.get(repo_name) {
+        if let Ok(repo) = String::from_utf8(repo) {
+            if let Ok(repo) = compress::from_json(&repo) {
+                let repo = Box::new(repo);
+                return Some(repo);
+            }
+        }
+    }
+
+    None
 }

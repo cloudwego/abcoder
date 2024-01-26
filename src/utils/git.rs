@@ -36,13 +36,13 @@ pub fn git_clone(url: &str, directory: &Path) -> Result<(), Error> {
 
 // 以下代码用于描述返回的 json 数据结构
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Repository {
+pub struct RepositoryStat {
     stargazers_count: usize,
     forks: usize,
     open_issues: usize,
 }
 
-pub async fn get_repo_stats(repo: &str) -> Result<(Repository), Box<dyn std::error::Error>> {
+pub async fn get_repo_stats(repo: &str) -> Result<(RepositoryStat), Box<dyn std::error::Error>> {
     let request_url = format!("https://api.github.com/repos/{}", repo);
     let client = reqwest::Client::new();
     let response = client
@@ -62,7 +62,7 @@ pub async fn get_repo_stats(repo: &str) -> Result<(Repository), Box<dyn std::err
 
     // println!("{}",response.text().await?);
 
-    let resp: Repository = response.json().await?;
+    let resp: RepositoryStat = response.json().await?;
 
     println!("Stars: {}", resp.stargazers_count);
     println!("Forks: {}", resp.forks);

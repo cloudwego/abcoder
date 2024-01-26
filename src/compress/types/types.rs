@@ -16,7 +16,27 @@ pub struct Repository {
 impl Repository {
     pub fn save_to_cache(&self) {
         let repo = serde_json::to_string(&self).expect("marshal struct error");
-        get_cache().put(self.id.as_ref().unwrap(), Vec::from(repo)).expect("save to cache failed");
+        get_cache()
+            .put(self.id.as_ref().unwrap(), Vec::from(repo))
+            .expect("save to cache failed");
+    }
+
+    pub fn get_func(&self, id: &Identity) -> Option<&Function> {
+        if let Some(pkg) = self.packages.get(&id.pkg_path) {
+            if let Some(f) = pkg.functions.get(&id.name) {
+                return Some(f);
+            }
+        }
+        None
+    }
+
+    pub fn get_type(&self, id: &Identity) -> Option<&Struct> {
+        if let Some(pkg) = self.packages.get(&id.pkg_path) {
+            if let Some(f) = pkg.types.get(&id.name) {
+                return Some(f);
+            }
+        }
+        None
     }
 }
 
@@ -43,11 +63,11 @@ pub struct Function {
     #[serde(rename = "InternalFunctionCalls")]
     pub internal_function_calls: Option<HashMap<String, Identity>>,
     #[serde(rename = "ThirdPartyFunctionCalls")]
-    third_party_function_calls: Option<HashMap<String, Identity>>,
+    pub third_party_function_calls: Option<HashMap<String, Identity>>,
     #[serde(rename = "InternalMethodCalls")]
     pub internal_method_calls: Option<HashMap<String, Identity>>,
     #[serde(rename = "ThirdPartyMethodCalls")]
-    third_party_method_calls: Option<HashMap<String, Identity>>,
+    pub third_party_method_calls: Option<HashMap<String, Identity>>,
 
     // compress_data
     pub compress_data: Option<String>,
@@ -99,7 +119,6 @@ pub(crate) struct ToCompressType {
     #[serde(rename = "Related_types")]
     pub(crate) related_types: Option<Vec<KeyValueType>>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct CalledType {

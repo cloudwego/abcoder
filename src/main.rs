@@ -31,7 +31,7 @@ use crate::utils::cmd;
 use crate::utils::files;
 // Import the git module
 use crate::utils::git;
-use crate::utils::git::Repository;
+use crate::utils::git::RepositoryStat;
 use crate::utils::markdown;
 
 mod compress;
@@ -41,7 +41,7 @@ mod utils;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BasicInfo {
     readme: String,
-    repo_stats: Repository,
+    repo_stats: RepositoryStat,
 }
 
 // basic_info handler
@@ -169,7 +169,7 @@ fn repo_compress(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
                     let mut rep = from_json(output.as_str()).unwrap();
                     rep.id = Some(repo.to_string());
 
-                    let repo_str = serde_json::to_string(&rep).unwrap();
+                    repo_str = serde_json::to_string(&rep).unwrap();
                     get_cache()
                         .put(repo.as_str(), Vec::from(repo_str.clone()))
                         .unwrap();
@@ -182,6 +182,7 @@ fn repo_compress(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
         }
 
         if !repo_str.is_empty() {
+            println!("start to compress repo: {}", repo);
             let mut repo = compress::compress::from_json(repo_str.as_str()).unwrap();
             compress::compress::compress_all(&mut repo).await;
             let compress = serde_json::to_string(&repo).unwrap();
