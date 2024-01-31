@@ -106,7 +106,7 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 				// typedef, ex: type Str StructA
 				st := p.newStruct(ctx.pkgPath, name)
 				st.TypeKind = TypeKindNamed
-				st.Content = string(ctx.GetRawContent(typDecl))
+				st.Content = string(ctx.GetRaw(typDecl.Name.End(), typDecl.End()))
 				p.collectTypes(ctx, "", typDecl.Type, st, typDecl.Assign.IsValid())
 				ct = true
 			}
@@ -178,9 +178,7 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 		associatedStruct = &Identity{ctx.pkgPath, structName}
 	}
 
-	pos := ctx.fset.PositionFor(funcDecl.Pos(), false).Offset
-	end := ctx.fset.PositionFor(funcDecl.End(), false).Offset
-	content := string(ctx.bs[pos:end])
+	content := string(ctx.GetRaw(funcDecl.Name.End(), funcDecl.End()))
 
 	var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]Identity{}, map[string]Identity{}
 	var functionCalls, methodCalls = map[string]Identity{}, map[string]Identity{}
@@ -387,10 +385,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 	st := p.newStruct(ctx.pkgPath, struName)
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindStruct
-
-	pos := ctx.fset.PositionFor(struDecl.Pos(), false).Offset
-	end := ctx.fset.PositionFor(struDecl.End(), false).Offset
-	st.Content = string(ctx.bs[pos:end])
+	st.Content = string(ctx.GetRaw(struDecl.Struct, struDecl.End()))
 
 	if struDecl.Fields == nil {
 		return st, true
@@ -466,6 +461,10 @@ func (ctx *fileContext) GetRawContent(node ast.Node) []byte {
 	return ctx.bs[ctx.fset.Position(node.Pos()).Offset:ctx.fset.Position(node.End()).Offset]
 }
 
+func (ctx *fileContext) GetRaw(from token.Pos, to token.Pos) []byte {
+	return ctx.bs[ctx.fset.Position(from).Offset:ctx.fset.Position(to).Offset]
+}
+
 func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.InterfaceType) (*Struct, bool) {
 	if decl == nil || decl.Incomplete || decl.Methods == nil {
 		return nil, true
@@ -474,7 +473,7 @@ func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.Inter
 	st := p.newStruct(ctx.pkgPath, name)
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindInterface
-	st.Content = string(ctx.GetRawContent(decl))
+	st.Content = string(ctx.GetRaw(decl.Interface, decl.End()))
 
 	for _, fieldDecl := range decl.Methods.List {
 		inlined := len(fieldDecl.Names) == 0

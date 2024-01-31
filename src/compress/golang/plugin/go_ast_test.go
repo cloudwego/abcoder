@@ -19,7 +19,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
+				homePageDir: "/Users/bytedance/GOPATH/work/hertz/cmd/hz",
 			},
 		},
 	}
