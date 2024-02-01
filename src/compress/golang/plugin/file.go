@@ -106,7 +106,7 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 				// typedef, ex: type Str StructA
 				st := p.newStruct(ctx.pkgPath, name)
 				st.TypeKind = TypeKindNamed
-				st.Content = string(ctx.GetRaw(typDecl.Name.End(), typDecl.End()))
+				st.Content = "type " + string(ctx.GetRaw(typDecl.Name.Pos(), typDecl.End()))
 				p.collectTypes(ctx, "", typDecl.Type, st, typDecl.Assign.IsValid())
 				ct = true
 			}
@@ -178,7 +178,7 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 		associatedStruct = &Identity{ctx.pkgPath, structName}
 	}
 
-	content := string(ctx.GetRaw(funcDecl.Name.End(), funcDecl.End()))
+	content := string(ctx.GetRawContent(funcDecl))
 
 	var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]Identity{}, map[string]Identity{}
 	var functionCalls, methodCalls = map[string]Identity{}, map[string]Identity{}
@@ -385,7 +385,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 	st := p.newStruct(ctx.pkgPath, struName)
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindStruct
-	st.Content = string(ctx.GetRaw(struDecl.Struct, struDecl.End()))
+	st.Content = "type " + st.Name + " " + string(ctx.GetRaw(struDecl.Struct, struDecl.End()))
 
 	if struDecl.Fields == nil {
 		return st, true
@@ -424,7 +424,7 @@ func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st
 			f.IsMethod = true
 			f.FilePath = ctx.filePath
 			// NOTICE: content is only func signature
-			f.Content = ty.Name
+			f.Content = "func " + field + ty.Name
 			if st.Methods == nil {
 				st.Methods = map[string]Identity{}
 			}
@@ -473,7 +473,7 @@ func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.Inter
 	st := p.newStruct(ctx.pkgPath, name)
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindInterface
-	st.Content = string(ctx.GetRaw(decl.Interface, decl.End()))
+	st.Content = "type " + st.Name + " " + string(ctx.GetRaw(decl.Interface, decl.End()))
 
 	for _, fieldDecl := range decl.Methods.List {
 		inlined := len(fieldDecl.Names) == 0
@@ -514,7 +514,11 @@ func getTypeName(fset *token.FileSet, file []byte, typ ast.Expr, ret *[]Identity
 		}
 		return false
 	case *ast.FuncType:
-		name := string(file[fset.Position(ty.Func).Offset:fset.Position(typ.End()).Offset])
+		start := ty.Params.Pos()
+		if ty.TypeParams != nil {
+			start = ty.TypeParams.Pos()
+		}
+		name := string(file[fset.Position(start).Offset:fset.Position(typ.End()).Offset])
 		*ret = append(*ret, Identity{Name: name})
 		return true
 	case *ast.InterfaceType:
