@@ -20,10 +20,10 @@ struct Message {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Response {
-    messages: Vec<Message>,
+    message: Message,
     conversation_id: String,
-    code: i32,
-    msg: String,
+    index: i32,
+    is_finish: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -68,10 +68,10 @@ pub async fn coze_compress(to_compress: ToCompress) -> String {
         bot_id: bot_id.to_string(),
         user: "welkey".to_string(),
         query: to_compress_str.to_string(),
-        stream: false,
+        stream: true,
     };
 
-    let res = client
+    let mut res = client
         .post(GLOBAL_COZE_API_URL.unwrap())
         .headers(headers)
         .json(&bot_query)
@@ -80,17 +80,37 @@ pub async fn coze_compress(to_compress: ToCompress) -> String {
         .unwrap();
 
     let status = res.status();
+    if status != 200 {
+        panic!(
+            "status code is {}, body is {}",
+            status,
+            res.text().await.unwrap()
+        );
+    }
 
-    let res_text = res.text().await.unwrap();
+    let mut output: String = String::new();
 
-    let response: Response = from_str(&res_text).expect(format!("{} not a valid response, status code: {}",res_text,status.as_str()).as_str());
+    'outer: while let Some(chunk) = res.chunk().await.unwrap() {
+        let sse_body = String::from_utf8(chunk.to_vec()).unwrap();
+        // FIXME: the last chunk may be incompleted.
+        let data = sse_body.split("event:message\ndata:").into_iter();
 
-    let mut output = String::new();
+        for d in data {
+            if d.trim().len() == 0 {
+                continue;
+            }
+            let response: Response =
+                from_str(d).expect(format!("{} is not a valid chunk", d).as_str());
 
-    for message in response.messages {
-        if message.role == "assistant" && message.r#type == "answer" {
-            output = message.content.to_string();
-            break;
+            if response.is_finish {
+                break 'outer;
+            }
+
+            if &response.message.r#type != "answer" {
+                continue;
+            }
+
+            output += &response.message.content;
         }
     }
 
