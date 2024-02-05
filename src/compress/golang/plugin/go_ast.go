@@ -48,7 +48,7 @@ func newGoParser(modName, homePageDir string) *goParser {
 // ParseRepo parse the entiry repo from homePageDir recursively until end
 func (p *goParser) ParseRepo() error {
 	err := filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil || !info.IsDir() || shouldIgnore(path) {
+		if err != nil || !info.IsDir() || shouldIgnoreDir(path) {
 			return nil
 		}
 
@@ -73,8 +73,12 @@ func (p *goParser) GetRepo() Repository {
 	return p.repo
 }
 
-func shouldIgnore(path string) bool {
+func shouldIgnoreDir(path string) bool {
 	return strings.Contains(path, ".git")
+}
+
+func shouldIgnoreFile(path string) bool {
+	return !strings.Contains(path, ".go") || strings.Contains(path, "_test.go")
 }
 
 // ToABS converts a local package path to absolute path
@@ -145,28 +149,74 @@ func (c cache) Visited(val interface{}) bool {
 	return ok
 }
 
-func (p *goParser) getMain(depth int) (*MainStream, *Function) {
-	m := &MainStream{
-		RelatedFunctions: make([]SingleFunction, 0),
-	}
+func (p *goParser) GetMainOnAll(depth int) (*MainStream, *Function) {
+	_ = p.GetRepo()
+	var m = &MainStream{}
+	var mainFunc = getMainFromAst(p.repo)
+	visited := cache(map[interface{}]bool{})
+	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, nil)
+	return m, mainFunc
+}
 
+func getMainFromAst(repo Repository) *Function {
 	var mainFunc *Function
-
-	for _, v := range p.repo.Packages {
+	for _, v := range repo.Packages {
 		for _, vv := range v.Functions {
 			if vv.Name == "main" {
 				mainFunc = vv
-				m.MainFunc = vv.Content
 				break
 			}
 		}
 	}
+	return mainFunc
+}
+
+func (p *goParser) GetMainOnDemands(depth int) (*MainStream, *Function) {
+	var errStop error
+	var mainFile string
+	err := filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || info.IsDir() || shouldIgnoreFile(path) {
+			return nil
+		}
+		file, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if hasMain(file) {
+			mainFile = path
+			return errStop
+		}
+		return nil
+	})
+	if err != nil && err != errStop {
+		return nil, nil
+	}
+
+	// parse current dir
+	mainDir := filepath.Dir(mainFile)
+	if err := p.ParseDir(mainDir); err != nil {
+		return nil, nil
+	}
+
+	var mainFunc = getMainFromAst(p.repo)
+	var m = &MainStream{}
 	visited := cache(map[interface{}]bool{})
-	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited)
+	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, nil)
 	return m, mainFunc
 }
 
-func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache) {
+func hasMain(file []byte) bool {
+	if bytes.Contains(file, []byte("package main")) {
+		if bytes.Contains(file, []byte("func main()")) {
+			return true
+		}
+	}
+	return false
+}
+
+// trace depends from bottom to top
+// Notice: an AST node may be undefined on parse ondemands
+func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache, traceUndefined func(id Identity) (*Function, *Struct)) {
 	if depth == 0 {
 		return
 	}
@@ -182,7 +232,15 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 		def := p.repo.GetFunction(ff)
 		if def == nil {
 			// continue // TODO: fixme
-			panic("undefiend function: " + ff.String())
+			if traceUndefined == nil {
+				panic("undefiend function: " + ff.String())
+			} else {
+				nf, _ := traceUndefined(ff)
+				if nf == nil {
+					panic("undefiend function: " + ff.String())
+				}
+				def = nf
+			}
 		}
 		s := SingleFunction{
 			CallName: call,
@@ -200,38 +258,55 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 		if def == nil {
 			// continue
 			// TODO: fixme
-			panic("undefiend function: " + ff.String())
+			if traceUndefined == nil {
+				panic("undefiend function: " + ff.String())
+			} else {
+				nf, _ := traceUndefined(ff)
+				if nf == nil {
+					panic("undefiend function: " + ff.String())
+				}
+				def = nf
+			}
 		}
 		content := def.Content
+
 		var st *Struct
 		if def.AssociatedStruct != nil {
-			st = p.repo.GetType(Identity{def.AssociatedStruct.PkgPath, def.AssociatedStruct.Name})
+			st = p.repo.GetType(*def.AssociatedStruct)
+			if st == nil {
+				if traceUndefined == nil {
+					panic("undefiend type: " + def.AssociatedStruct.String())
+				} else {
+					_, ns := traceUndefined(ff)
+					if ns == nil {
+						panic("undefiend type: " + def.AssociatedStruct.String())
+					}
+					st = ns
+				}
+			}
+			// for method which has been associated with struct, push the struct
+			if st.Content != "" {
+				if visited.Visited(st) {
+					continue
+				}
+				ss := SingleStruct{
+					CallName: call,
+					Content:  st.Content,
+				}
+				*sl = append(*sl, ss)
+			}
 		}
-		if st != nil && st.TypeKind != TypeKindStruct {
-			content = st.Content
-		}
+
 		s := SingleFunction{
 			CallName: call,
 			Content:  content,
 		}
 		*fl = append(*fl, s)
 		next = append(next, def)
-
-		// for method which has been associated with struct, push the struct
-		if st != nil && st.Content != "" {
-			if visited.Visited(st) {
-				continue
-			}
-			ss := SingleStruct{
-				CallName: call,
-				Content:  st.Content,
-			}
-			*sl = append(*sl, ss)
-		}
 	}
 
 	for _, ff := range next {
-		p.fillRelatedContent(depth-1, ff, fl, sl, visited)
+		p.fillRelatedContent(depth-1, ff, fl, sl, visited, traceUndefined)
 	}
 }
 
