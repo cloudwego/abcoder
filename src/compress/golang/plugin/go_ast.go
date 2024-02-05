@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -73,14 +73,6 @@ func (p *goParser) GetRepo() Repository {
 	return p.repo
 }
 
-func shouldIgnoreDir(path string) bool {
-	return strings.Contains(path, ".git")
-}
-
-func shouldIgnoreFile(path string) bool {
-	return !strings.Contains(path, ".go") || strings.Contains(path, "_test.go")
-}
-
 // ToABS converts a local package path to absolute path
 // If the path is not a local package, return empty string
 func (p *goParser) pkgPathToABS(path PkgPath) string {
@@ -139,40 +131,37 @@ type SingleStruct struct {
 	Content  string
 }
 
-type cache map[interface{}]bool
-
-func (c cache) Visited(val interface{}) bool {
-	ok := c[val]
-	if !ok {
-		c[val] = true
+// GetNode get a AST node from cache if parsed, or parse corresponding package and get the node
+func (p *goParser) GetNode(id Identity) (*Function, *Struct) {
+	if def := p.repo.GetFunction(id); def != nil {
+		return def, nil
 	}
-	return ok
-}
-
-func (p *goParser) GetMainOnAll(depth int) (*MainStream, *Function) {
-	_ = p.GetRepo()
-	var m = &MainStream{}
-	var mainFunc = getMainFromAst(p.repo)
-	visited := cache(map[interface{}]bool{})
-	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, nil)
-	return m, mainFunc
-}
-
-func getMainFromAst(repo Repository) *Function {
-	var mainFunc *Function
-	for _, v := range repo.Packages {
-		for _, vv := range v.Functions {
-			if vv.Name == "main" {
-				mainFunc = vv
-				break
-			}
+	if def := p.repo.GetType(id); def != nil {
+		return nil, def
+	}
+	dir := p.pkgPathToABS(id.PkgPath)
+	println(dir)
+	if err := p.ParseDir(dir); err != nil {
+		return nil, nil
+	}
+	pkg := p.repo.Packages[id.PkgPath]
+	for _, v := range pkg.Functions {
+		if v.Name == id.Name {
+			return v, nil
 		}
 	}
-	return mainFunc
+	for _, v := range pkg.Types {
+		if v.Name == id.Name {
+			return nil, v
+		}
+	}
+	return nil, nil
 }
 
-func (p *goParser) GetMainOnDemands(depth int) (*MainStream, *Function) {
-	var errStop error
+var errStop = errors.New("")
+
+// GetMain get main func on demands
+func (p *goParser) GetMain(depth int) (*MainStream, *Function) {
 	var mainFile string
 	err := filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() || shouldIgnoreFile(path) {
@@ -188,30 +177,29 @@ func (p *goParser) GetMainOnDemands(depth int) (*MainStream, *Function) {
 		}
 		return nil
 	})
-	if err != nil && err != errStop {
+	if err != errStop {
 		return nil, nil
 	}
 
-	// parse current dir
+	// parse main dir and get root
 	mainDir := filepath.Dir(mainFile)
 	if err := p.ParseDir(mainDir); err != nil {
 		return nil, nil
 	}
-
-	var mainFunc = getMainFromAst(p.repo)
-	var m = &MainStream{}
-	visited := cache(map[interface{}]bool{})
-	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, nil)
-	return m, mainFunc
-}
-
-func hasMain(file []byte) bool {
-	if bytes.Contains(file, []byte("package main")) {
-		if bytes.Contains(file, []byte("func main()")) {
-			return true
+	pkg := p.repo.Packages[p.pkgPathFromABS(mainDir)]
+	var mainFunc *Function
+	for _, v := range pkg.Functions {
+		if v.Name == "main" {
+			mainFunc = v
+			break
 		}
 	}
-	return false
+
+	// trace from root
+	var m = &MainStream{}
+	visited := cache(map[interface{}]bool{})
+	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, p.GetNode)
+	return m, mainFunc
 }
 
 // trace depends from bottom to top
@@ -308,32 +296,6 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 	for _, ff := range next {
 		p.fillRelatedContent(depth-1, ff, fl, sl, visited, traceUndefined)
 	}
-}
-
-func getModuleName(modFilePath string) (string, error) {
-	file, err := os.Open(modFilePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open file: %v", err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "module") {
-			// Assuming 'module' keyword is followed by module name
-			parts := strings.Split(line, " ")
-			if len(parts) > 1 {
-				return parts[1], nil
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("failed to scan file: %v", err)
-	}
-
-	return "", nil
 }
 
 func main() {

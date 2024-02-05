@@ -16,9 +16,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"go/token"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -140,4 +142,30 @@ func (p *goParser) ParseDir(dir string) (err error) {
 		}
 	}
 	return
+}
+
+func getModuleName(modFilePath string) (string, error) {
+	file, err := os.Open(modFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "module") {
+			// Assuming 'module' keyword is followed by module name
+			parts := strings.Split(line, " ")
+			if len(parts) > 1 {
+				return parts[1], nil
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to scan file: %v", err)
+	}
+
+	return "", nil
 }
