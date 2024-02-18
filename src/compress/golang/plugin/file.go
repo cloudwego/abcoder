@@ -146,8 +146,7 @@ func (p *goParser) seprateImports(impts []*ast.ImportSpec) (map[string]string, m
 		}
 
 		// Fix: module name may also be like this?
-		isSysPkg := !strings.Contains(strings.Split(importPath, "/")[0], ".")
-		if isSysPkg {
+		if isSysPkg(importPath) {
 			// Ignoring golang standard libraries（like net/http）
 			sysImports[importAlias] = importPath
 		} else {
@@ -225,6 +224,10 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 						return true
 					}
 					mpkg := m.Pkg().Path()
+					// NOTICE: skip sys imports?
+					if isSysPkg(mpkg) {
+						return true
+					}
 					//NOTICE: use {structName.methodName} as method key
 					mname := rname + "." + m.Name()
 					if strings.HasPrefix(mpkg, p.modName) {
@@ -236,7 +239,7 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					}
 					return true
 				}
-				// check if it's a package reference
+				// check if it's a function calls
 				if use, ok := ctx.pkgTypeInfo.Uses[x.(*ast.Ident)]; ok {
 					pkg, ok := use.(*types.PkgName)
 					if !ok || pkg.Imported() == nil {

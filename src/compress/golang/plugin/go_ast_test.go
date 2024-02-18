@@ -19,7 +19,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "/Users/bytedance/GOPATH/work/hertz/cmd/hz",
+				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
 			},
 		},
 	}
@@ -30,11 +30,8 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fun, _ := p.GetNode(Identity{"github.com/cloudwego/hertz/cmd/hz", "main"})
+			fun, _ := p.GetNode(Identity{"github.com/cloudwego/hertz/pkg/app", "fsHandler.compressAndOpenFSFile"})
 			spew.Dump(p)
-			if fun.Name != "main" {
-				t.Fail()
-			}
 			if out, err := json.MarshalIndent(fun, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {

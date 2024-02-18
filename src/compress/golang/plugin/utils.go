@@ -63,3 +63,7 @@ func hasMain(file []byte) bool {
 	}
 	return false
 }
+
+func isSysPkg(importPath string) bool {
+	return !strings.Contains(strings.Split(importPath, "/")[0], ".")
+}
