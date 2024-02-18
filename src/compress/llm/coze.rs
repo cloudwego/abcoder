@@ -54,11 +54,11 @@ pub async fn coze_compress(to_compress: ToCompress) -> String {
 
     match to_compress {
         ToCompress::ToCompressType(t) => {
-            bot_id = "7325045807814852617";
+            bot_id = "7332383249320214535";
             to_compress_str = t;
         }
         ToCompress::ToCompressFunc(f) => {
-            bot_id = "7325049392581525554";
+            bot_id = "7332383185508188178";
             to_compress_str = f;
         }
     }
