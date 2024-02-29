@@ -61,6 +61,10 @@ pub async fn coze_compress(to_compress: ToCompress) -> String {
             bot_id = "7332383185508188178";
             to_compress_str = f;
         }
+        ToCompress::ToCompressPkg(p) => {
+            bot_id = "7340548153864847367";
+            to_compress_str = p;
+        }
     }
 
     let bot_query = BotQuery {
@@ -71,13 +75,12 @@ pub async fn coze_compress(to_compress: ToCompress) -> String {
         stream: true,
     };
 
-    let mut res = client
+    let rb = client
         .post(GLOBAL_COZE_API_URL.unwrap())
         .headers(headers)
-        .json(&bot_query)
-        .send()
-        .await
-        .unwrap();
+        .json(&bot_query);
+
+    let mut res = rb.send().await.unwrap();
 
     let status = res.status();
     if status != 200 {

@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 func Test_goParser_ParseRepo(t *testing.T) {
@@ -19,7 +17,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
+				homePageDir: "/data00/home/duanyi.aster/Rust/ABCoder/target/debug/tmp/cloudwego/localsession",
 			},
 		},
 	}
@@ -30,8 +28,13 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fun, _ := p.GetNode(Identity{"github.com/cloudwego/hertz/pkg/app", "fsHandler.compressAndOpenFSFile"})
-			spew.Dump(p)
+			pj, err := json.MarshalIndent(p.repo, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			println(string(pj))
+			fun, _ := p.GetNode(Identity{"github.com/cloudwego/localsession", "CurSession"})
+			// spew.Dump(p)
 			if out, err := json.MarshalIndent(fun, "", "  "); err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			} else {
@@ -53,7 +56,7 @@ func Test_goParser_GeMainOnDepends(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				homePageDir: "/Users/bytedance/GOPATH/work/hertz",
+				homePageDir: "/data00/home/duanyi.aster/Rust/ABCoder/tmp/cloudwego/kitex",
 			},
 		},
 	}

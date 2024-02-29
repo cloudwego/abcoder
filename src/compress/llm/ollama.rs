@@ -14,17 +14,23 @@ pub async fn ollama_compress(to_compress: ToCompress) -> String {
         ToCompress::ToCompressFunc(f) => {
             to_compress_str = f;
         }
+        ToCompress::ToCompressPkg(f) => {
+            to_compress_str = f;
+        }
     }
 
     println!("use prompt:\n{}", to_compress_str);
-    let req_body: OllamaReq = OllamaReq { model: model_name.to_string(), prompt: to_compress_str };
+    let req_body: OllamaReq = OllamaReq {
+        model: model_name.to_string(),
+        prompt: to_compress_str,
+    };
     let client = reqwest::Client::new();
     let mut response = client
         .post(&request_url)
         .json(&req_body)
         .send()
-        .await.unwrap();
-
+        .await
+        .unwrap();
 
     let mut output = String::new();
     while let Ok(Some(chunk)) = response.chunk().await {

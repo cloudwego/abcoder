@@ -1,7 +1,10 @@
 use std::arch::asm;
 use std::cell::RefCell;
 use std::error::Error;
+use std::fs::File;
+use std::io::{Stderr, Write};
 use std::net::SocketAddr;
+use std::os;
 // Import necessary types from the standard library
 use std::path::{Path, PathBuf};
 use std::ptr::addr_of_mut;
@@ -11,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::body::HttpBody;
-use hyper::Body;
+use hyper::{Body, StatusCode};
 use reqwest::Url;
 use ryze::hertz::{Hertz, RequestContext};
 use serde::{Deserialize, Serialize};
@@ -148,37 +151,105 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     .boxed()
 }
 
+// convert repo to csv handler
+fn repo_to_csv(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
+    let parsed: std::collections::HashMap<String, String> =
+        serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
+    let repo = parsed.get("repo").unwrap().clone();
+    (async move {
+        match check_repo_compress(&repo) {
+            Some(re) => {
+                println!("start to convert repo: {}", repo);
+                let repo =
+                    compress::compress::from_json(String::from_utf8(re).unwrap().as_str()).unwrap();
+                // write summary to csv
+                let csv_sum = repo.to_csv_summary();
+                let path_sum = format!(
+                    "./tmp_compress/{}_summary.csv",
+                    repo.id.as_ref().unwrap().replace("/", "_")
+                );
+                println!("convert repo to csv: {}", path_sum);
+                let mut file = File::create(&path_sum).unwrap();
+                file.write_all(csv_sum.as_bytes()).unwrap();
+
+                // write summary to csv
+                let csv_decl = repo.to_csv_decl();
+                let path_decl = format!(
+                    "./tmp_compress/{}_decl.csv",
+                    repo.id.as_ref().unwrap().replace("/", "_")
+                );
+                println!("convert repo to csv: {}", path_sum);
+                let mut file = File::create(&path_decl).unwrap();
+                file.write_all(csv_decl.as_bytes()).unwrap();
+
+                // write package to csv
+                let csv_pkg = repo.to_csv_pkgs();
+                let path_pkg = format!(
+                    "./tmp_compress/{}_pkg.csv",
+                    repo.id.as_ref().unwrap().replace("/", "_")
+                );
+                println!("convert repo to csv: {}", path_sum);
+                let mut file = File::create(&path_pkg).unwrap();
+                file.write_all(csv_pkg.as_bytes()).unwrap();
+
+                *ctx.resp.body_mut() = "success".into();
+                return;
+            }
+            _ => {
+                println!("no repo parsed");
+                *ctx.resp.body_mut() = Body::from("convert failed.");
+            }
+        }
+    })
+    .boxed()
+}
+
 // repo_compress handler
 fn repo_compress(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     let parsed: std::collections::HashMap<String, String> =
         serde_urlencoded::from_str(ctx.req.uri().query().unwrap()).unwrap();
     let repo = parsed.get("repo").unwrap().clone();
+    let update_ast = parsed.get("merge").is_some();
+    println!("update_ast: {}", update_ast);
     (async move {
         let repo_dir = check_repo_exist(&repo);
         let repo_c = check_repo_compress(&repo);
         let mut repo_str = String::new();
-        match repo_c {
-            Some(re) => {
-                println!("load compress repo from local:{}", repo.as_str());
-                repo_str = String::from_utf8(re).unwrap();
-            }
-
-            _ => {
-                if let Ok(output) = cmd::run_command("./go_ast", vec![repo_dir.as_str()]) {
+        if update_ast || repo_c.is_none() {
+            match cmd::run_command("./go_ast", vec![repo_dir.as_str()]) {
+                Ok(output) => {
                     println!("parse repo successfull");
+                    println!("output: {}", output);
                     let mut rep = from_json(output.as_str()).unwrap();
+                    println!("rep {:?}", rep);
                     rep.id = Some(repo.to_string());
-
+                    if repo_c.is_some() {
+                        println!("merging new AST with previous result...");
+                        let mut old =
+                            from_json(String::from_utf8(repo_c.unwrap()).unwrap().as_str())
+                                .unwrap();
+                        // merge with old
+                        old.merge_with(&rep);
+                        rep = old;
+                    }
                     repo_str = serde_json::to_string(&rep).unwrap();
                     get_cache()
                         .put(repo.as_str(), Vec::from(repo_str.clone()))
                         .unwrap();
-                } else {
-                    eprint!("plugin parse repo error");
-                    *ctx.resp.body_mut() = Body::from("parse repo's ast failed");
+                }
+                Err(err) => {
+                    eprint!(
+                        "plugin parse repo {} error: {}",
+                        repo_dir.as_str(),
+                        err.to_string()
+                    );
+                    *ctx.resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                     return;
                 }
             }
+        } else {
+            println!("load compress repo from local:{}", repo.as_str());
+            repo_str = String::from_utf8(repo_c.unwrap().clone()).unwrap();
         }
 
         if !repo_str.is_empty() {
@@ -263,6 +334,7 @@ fn main() {
         h.get("/code_analyze", Arc::new(code_analyze)).await;
 
         h.get("/repo_compress", Arc::new(repo_compress)).await;
+        h.get("/repo_to_csv", Arc::new(repo_to_csv)).await;
 
         h.spin(SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 0], 8888)))
             .await

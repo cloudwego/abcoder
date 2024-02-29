@@ -56,6 +56,28 @@ pub async fn compress_all(repo: &mut Repository) {
         let mut m: HashMap<String, bool> = HashMap::new();
         cascade_compress_struct(&id, repo, &mut m).await;
     }
+
+    for (id, pkg) in repo.packages.clone().iter() {
+        if pkg.compress_data.is_none() {
+            compress_package(id, repo).await;
+        } else {
+            println!("package {} is already compressed, skip it.", id);
+        }
+    }
+}
+
+pub async fn compress_package(id: &str, repo: &mut Repository) {
+    println!("start to compress package: {}", id);
+    let source = repo.packages.get(id).unwrap().export_api().to_string();
+    let compress_data = llm_compress_package(source.as_str()).await;
+    if compress_data.is_none() {
+        return;
+    }
+    let compress_data = compress_data.unwrap();
+    let pkg = repo.packages.get_mut(id).unwrap();
+    pkg.compress_data = Some(compress_data);
+    repo.save_to_cache();
+    println!("finish to compress package: {}", id);
 }
 
 #[async_recursion]
@@ -81,7 +103,7 @@ pub async fn cascade_compress_function(
 
         // Already compress path
         if func_opt.compress_data.is_some() {
-            println!("{} is already compressed, skip it.", func_opt.name);
+            println!("func {} is already compressed, skip it.", func_opt.name);
             return;
         }
 
@@ -162,6 +184,13 @@ pub async fn cascade_compress_function(
                     continue;
                 }
                 let sub_function = sub_function.unwrap();
+                if sub_function.compress_data.is_none() {
+                    println!(
+                        "sub function {}/{} is not compressed!!!",
+                        sub_function.pkg_path, sub_function.name
+                    );
+                    continue;
+                }
                 map.insert(k.clone(), sub_function.compress_data.clone().unwrap());
             }
         }
@@ -298,7 +327,7 @@ pub async fn cascade_compress_struct(
 
         // Already compress path
         if stru.compress_data.is_some() {
-            println!("{} is already compressed, skip it.", stru.name);
+            println!("type {} is already compressed, skip it.", stru.name);
             return;
         }
 
@@ -481,6 +510,13 @@ pub async fn cascade_compress_struct(
 pub enum ToCompress {
     ToCompressFunc(String),
     ToCompressType(String),
+    ToCompressPkg(String),
+}
+
+async fn llm_compress_package(pkg: &str) -> Option<String> {
+    let compress_pkg = ToCompress::ToCompressPkg(pkg.to_string());
+    let compress_data = coze_compress(compress_pkg).await;
+    Option::from(compress_data)
 }
 
 async fn llm_compress_func(func: &str, extra: HashMap<String, String>) -> Option<String> {

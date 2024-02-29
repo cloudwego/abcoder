@@ -49,6 +49,8 @@ func (i Identity) CallName() string {
 
 // Function holds the information about a function
 type Function struct {
+	Exported bool
+
 	IsMethod         bool      // If the function is a method
 	Identity                   // unique identity in a repo
 	FilePath         string    `json:"-"` // File where the function is defined, empty if the function declaration is not scanned
@@ -105,6 +107,7 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 			default:
 				// typedef, ex: type Str StructA
 				st := p.newStruct(ctx.pkgPath, name)
+				st.Exported = isUpperCase(name[0])
 				st.TypeKind = TypeKindNamed
 				st.Content = "type " + string(ctx.GetRaw(typDecl.Name.Pos(), typDecl.End()))
 				p.collectTypes(ctx, "", typDecl.Type, st, typDecl.Assign.IsValid())
@@ -300,6 +303,7 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 
 set_func:
 	name := funcDecl.Name.Name
+	exported := isUpperCase(name[0])
 	if isMethod {
 		name = associatedStruct.Name + "." + name
 	}
@@ -311,6 +315,7 @@ set_func:
 	// update detailed function call info
 	f := p.newFunc(ctx.pkgPath, name)
 	*f = Function{
+		Exported: exported,
 		Identity: Identity{
 			Name:    name,
 			PkgPath: ctx.pkgPath,
@@ -353,6 +358,8 @@ const (
 
 // Struct holds the information about a struct
 type Struct struct {
+	Exported bool // if the struct is exported
+
 	TypeKind        // type Kind: Struct / Interface / Typedef
 	Identity        // unique id in a repo
 	FilePath string `json:"-"` // File where the struct is defined
@@ -383,13 +390,17 @@ type fileContext struct {
 	pkgTypeInfo       *types.Info
 }
 
+func isUpperCase(c byte) bool {
+	return c >= 'A' && c <= 'Z'
+}
+
 // parse a ast.StructType node and renturn allocated *Struct
 func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.StructType) (*Struct, bool) {
 	st := p.newStruct(ctx.pkgPath, struName)
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindStruct
 	st.Content = "type " + st.Name + " " + string(ctx.GetRaw(struDecl.Struct, struDecl.End()))
-
+	st.Exported = isUpperCase(struName[0])
 	if struDecl.Fields == nil {
 		return st, true
 	}
@@ -474,6 +485,7 @@ func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.Inter
 	}
 
 	st := p.newStruct(ctx.pkgPath, name)
+	st.Exported = isUpperCase(name[0])
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindInterface
 	st.Content = "type " + st.Name + " " + string(ctx.GetRaw(decl.Interface, decl.End()))

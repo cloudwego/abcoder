@@ -39,8 +39,10 @@ func NewRepository(mod string) Repository {
 
 // Package
 type Package struct {
-	Functions map[string]*Function // Function name (may be {{func}} or {{struct.method}}) => Function
-	Types     map[string]*Struct   // type name => type define
+	PkgPath
+	Dependencies []PkgPath
+	Functions    map[string]*Function // Function name (may be {{func}} or {{struct.method}}) => Function
+	Types        map[string]*Struct   // type name => type define
 }
 
 // GetFunction the function identified by id.
@@ -139,6 +141,13 @@ func (p *goParser) ParseDir(dir string) (err error) {
 			if _, _, err := p.inspectFile(ctx, file); err != nil {
 				return err
 			}
+		}
+		if obj := p.repo.Packages[pkgPath]; obj != nil {
+			obj.Dependencies = make([]PkgPath, 0, len(pkg.Imports))
+			for _, imp := range pkg.Imports {
+				obj.Dependencies = append(obj.Dependencies, imp.ID)
+			}
+			obj.PkgPath = pkg.ID
 		}
 	}
 	return
