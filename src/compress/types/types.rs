@@ -4,7 +4,10 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::storage::cache::get_cache;
+use crate::{
+    compress::llm::split::{self, split_text},
+    storage::cache::get_cache,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Repository {
@@ -59,52 +62,32 @@ impl Repository {
         for (pname, pkg) in self.packages.iter() {
             for (name, f) in pkg.functions.iter() {
                 let tmp = &"".to_string();
-                let summary = f.compress_data.as_ref().unwrap_or(tmp);
                 // split content, 1024B for each
-                let mut start = 0;
-                let mut end = 1024;
-                while start < summary.len() {
-                    if end > summary.len() {
-                        end = summary.len();
-                    }
-                    if start >= 1024 {
-                        start -= 100;
-                    }
+                let sums = split_text(f.compress_data.as_ref().unwrap_or(tmp), 924);
+                for sum in sums {
                     w.write_record(&[
                         pname,
                         name,
                         "Function",
                         f.content.split_once('\n').unwrap_or((&f.content, "")).0,
-                        &summary[start..end],
+                        &format!("{}: {}", name, sum),
                     ])
                     .unwrap();
-                    start = end;
-                    end += 924;
                 }
             }
             for (name, t) in pkg.types.iter() {
                 let tmp = &"".to_string();
-                let summary = t.compress_data.as_ref().unwrap_or(tmp);
                 // split content, 1024B for each
-                let mut start = 0;
-                let mut end = 1024;
-                while start < summary.len() {
-                    if end > summary.len() {
-                        end = summary.len();
-                    }
-                    if start >= 1024 {
-                        start -= 100;
-                    }
+                let sums = split_text(t.compress_data.as_ref().unwrap_or(tmp), 924);
+                for sum in sums {
                     w.write_record(&[
                         pname,
                         name,
                         "Type",
                         t.content.split_once('\n').unwrap_or((&t.content, "")).0,
-                        &summary[start..end],
+                        &format!("{}: {}", name, sum),
                     ])
                     .unwrap();
-                    start = end;
-                    end += 924;
                 }
             }
         }
@@ -165,14 +148,15 @@ impl Repository {
     pub fn to_csv_pkgs(&self) -> String {
         let mut w = Writer::from_writer(Vec::new());
         // add header
-        w.write_record(&["Name", "Summary", "Content"]).unwrap();
+        w.write_record(&["Name", "Summary"]).unwrap();
         for (pname, pkg) in self.packages.iter() {
-            w.write_record(&[
-                &format!("{}", pname),
-                pkg.compress_data.as_ref().unwrap_or(&"".to_string()),
-                &pkg.export_api(),
-            ])
-            .unwrap();
+            // split comress_data into chunks
+            let empty = &"".to_string();
+            let sums = split_text(pkg.compress_data.as_ref().unwrap_or(empty), 924);
+            for sum in sums {
+                w.write_record(&[&format!("{}", pname), &format!("{}: {}", pname, sum)])
+                    .unwrap();
+            }
         }
         w.flush().unwrap();
         String::from_utf8(w.into_inner().unwrap()).unwrap()
