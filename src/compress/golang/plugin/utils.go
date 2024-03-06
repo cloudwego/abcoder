@@ -21,11 +21,13 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path"
+	"regexp"
 	"strings"
 )
 
 func shouldIgnoreDir(path string) bool {
-	return strings.Contains(path, ".git")
+	return strings.Contains(path, ".git") || strings.Contains(path, "vendor/")
 }
 
 func shouldIgnoreFile(path string) bool {
@@ -66,4 +68,23 @@ func hasMain(file []byte) bool {
 
 func isSysPkg(importPath string) bool {
 	return !strings.Contains(strings.Split(importPath, "/")[0], ".")
+}
+
+var (
+	verReg = regexp.MustCompile(`/v\d+$`)
+	litReg = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+)
+
+func getPackageAlias(importPath string) string {
+	// Remove the version suffix if present (e.g., "/v2" or "/v10")
+
+	basePath := verReg.ReplaceAllString(importPath, "")
+
+	// Get the base name of the package
+	baseName := path.Base(basePath)
+
+	// Replace any non-valid identifier characters with underscores
+	alias := litReg.ReplaceAllString(baseName, "_")
+
+	return alias
 }

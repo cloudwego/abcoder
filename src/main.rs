@@ -142,11 +142,21 @@ fn code_analyze(ctx: &mut RequestContext) -> BoxFuture<'_, ()> {
     (async move {
         let repo_dir = check_repo_exist(&repo);
 
-        if let Ok(output) = cmd::run_command("./go_ast", vec![repo_dir.as_str()]) {
-            *ctx.resp.body_mut() = Body::from(output);
-            return;
+        match cmd::run_command("./go_ast", vec![repo_dir.as_str()]) {
+            Ok(output) => {
+                *ctx.resp.body_mut() = Body::from(output);
+                return;
+            }
+            Err(err) => {
+                eprint!(
+                    "plugin parse repo {} error: {}",
+                    repo_dir.as_str(),
+                    err.to_string()
+                );
+                *ctx.resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                return;
+            }
         }
-        *ctx.resp.body_mut() = Body::from("analyze failed.");
     })
     .boxed()
 }

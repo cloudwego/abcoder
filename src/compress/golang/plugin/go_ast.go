@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
 	"strings"
 )
 
@@ -132,36 +133,37 @@ type SingleStruct struct {
 }
 
 // GetNode get a AST node from cache if parsed, or parse corresponding package and get the node
-func (p *goParser) GetNode(id Identity) (*Function, *Struct) {
+func (p *goParser) GetNode(id Identity) (*Function, *Struct, error) {
 	if def := p.repo.GetFunction(id); def != nil {
-		return def, nil
+		return def, nil, nil
 	}
 	if def := p.repo.GetType(id); def != nil {
-		return nil, def
+		return nil, def, nil
 	}
+
 	dir := p.pkgPathToABS(id.PkgPath)
-	println(dir)
 	if err := p.ParseDir(dir); err != nil {
-		return nil, nil
+		return nil, nil, err
 	}
+
 	pkg := p.repo.Packages[id.PkgPath]
 	for _, v := range pkg.Functions {
 		if v.Name == id.Name {
-			return v, nil
+			return v, nil, nil
 		}
 	}
 	for _, v := range pkg.Types {
 		if v.Name == id.Name {
-			return nil, v
+			return nil, v, nil
 		}
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 var errStop = errors.New("")
 
 // GetMain get main func on demands
-func (p *goParser) GetMain(depth int) (*MainStream, *Function) {
+func (p *goParser) GetMain(depth int) (*MainStream, *Function, error) {
 	var mainFile string
 	err := filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() || shouldIgnoreFile(path) {
@@ -178,38 +180,40 @@ func (p *goParser) GetMain(depth int) (*MainStream, *Function) {
 		return nil
 	})
 	if err != errStop {
-		return nil, nil
+		return nil, nil, err
 	}
 
 	// parse main dir and get root
 	mainDir := filepath.Dir(mainFile)
 	if err := p.ParseDir(mainDir); err != nil {
-		return nil, nil
+		return nil, nil, err
 	}
-	pkg := p.repo.Packages[p.pkgPathFromABS(mainDir)]
+
 	var mainFunc *Function
-	for _, v := range pkg.Functions {
-		if v.Name == "main" {
-			mainFunc = v
-			break
+	for _, pkg := range p.repo.Packages {
+		for _, v := range pkg.Functions {
+			if v.Name == "main" {
+				mainFunc = v
+				break
+			}
 		}
 	}
 
 	// trace from root
 	var m = &MainStream{}
 	visited := cache(map[interface{}]bool{})
-	p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, p.GetNode)
-	return m, mainFunc
+	err = p.fillRelatedContent(depth, mainFunc, &m.RelatedFunctions, &m.RelatedStruct, visited, p.GetNode)
+	return m, mainFunc, err
 }
 
 // trace depends from bottom to top
 // Notice: an AST node may be undefined on parse ondemands
-func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache, traceUndefined func(id Identity) (*Function, *Struct)) {
+func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache, traceUndefined func(id Identity) (*Function, *Struct, error)) error {
 	if depth == 0 {
-		return
+		return nil
 	}
 	if f == nil {
-		return
+		return nil
 	}
 
 	var next []*Function
@@ -221,11 +225,14 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 		if def == nil {
 			// continue // TODO: fixme
 			if traceUndefined == nil {
-				panic("undefiend function: " + ff.String())
+				return fmt.Errorf("undefiend InternalFunctionCalls %v for %v", ff.String(), f.Identity.String())
 			} else {
-				nf, _ := traceUndefined(ff)
+				nf, _, err := traceUndefined(ff)
 				if nf == nil {
-					panic("undefiend function: " + ff.String())
+					return fmt.Errorf("undefiend InternalFunctionCalls %v for %v", ff.String(), f.Identity.String())
+				}
+				if err != nil {
+					return err
 				}
 				def = nf
 			}
@@ -247,11 +254,14 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 			// continue
 			// TODO: fixme
 			if traceUndefined == nil {
-				panic("undefiend function: " + ff.String())
+				return fmt.Errorf("undefiend InternalMethodCalls: %v for %v", ff.String(), f.Identity.String())
 			} else {
-				nf, _ := traceUndefined(ff)
+				nf, _, err := traceUndefined(ff)
 				if nf == nil {
-					panic("undefiend function: " + ff.String())
+					return fmt.Errorf("undefiend InternalMethodCalls: %v for %v", ff.String(), f.Identity.String())
+				}
+				if err != nil {
+					return err
 				}
 				def = nf
 			}
@@ -263,11 +273,14 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 			st = p.repo.GetType(*def.AssociatedStruct)
 			if st == nil {
 				if traceUndefined == nil {
-					panic("undefiend type: " + def.AssociatedStruct.String())
+					return fmt.Errorf("undefiend AssociatedStruct: %v for %v", def.AssociatedStruct.String(), def.Identity.String())
 				} else {
-					_, ns := traceUndefined(ff)
+					_, ns, err := traceUndefined(ff)
 					if ns == nil {
-						panic("undefiend type: " + def.AssociatedStruct.String())
+						return fmt.Errorf("undefiend Associated Struct: %v for %v", def.AssociatedStruct.String(), def.Identity.String())
+					}
+					if err != nil {
+						return err
 					}
 					st = ns
 				}
@@ -296,34 +309,65 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 	for _, ff := range next {
 		p.fillRelatedContent(depth-1, ff, fl, sl, visited, traceUndefined)
 	}
+
+	return nil
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Missing home dir of the project to parse.")
+		fmt.Fprintln(os.Stderr, "Missing home dir of the project to parse.")
 		os.Exit(1)
 	}
-	//
 
 	homeDir := os.Args[1]
 
+	search := ""
+	if len(os.Args) >= 3 {
+		search = os.Args[2]
+	}
+
 	p := newGoParser("", homeDir)
-	if err := p.ParseRepo(); err != nil {
-		fmt.Println("Error parsing go files:", err)
-		os.Exit(1)
+	var out interface{}
+
+	if search == "" {
+		if err := p.ParseRepo(); err != nil {
+			fmt.Fprintln(os.Stderr, "Error parsing go files:", err)
+			os.Exit(1)
+		}
+		out = p.GetRepo()
+	} else {
+		// SPEC: seperate the packagepath and function name by #
+		ids := strings.Split(search, "#")
+		if len(ids) != 2 {
+			// if fail, just search main()
+			var err error
+			out, _, err = p.GetMain(-1)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error getting main:", err)
+				os.Exit(1)
+			}
+		} else {
+			f, s, err := p.GetNode(Identity{PkgPath: PkgPath(ids[0]), Name: ids[1]})
+			if err != nil {
+				os.Exit(1)
+				fmt.Fprintln(os.Stderr, "Error getting node:", err)
+			}
+			if f != nil {
+				out = f
+			} else {
+				out = s
+			}
+		}
 	}
 
-	//p.generateStruct()
-	//m, _ := p.getMain(-1)
-
-	out := bytes.NewBuffer(nil)
-	encoder := json.NewEncoder(out)
+	buf := bytes.NewBuffer(nil)
+	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(p.repo)
+	err := encoder.Encode(out)
 	if err != nil {
-		fmt.Println("Error marshalling functions to JSON:", err)
+		fmt.Fprintln(os.Stderr, "Error marshalling functions to JSON:", err)
 		os.Exit(1)
 	}
 
-	fmt.Println(out.String())
+	fmt.Println(buf.String())
 }

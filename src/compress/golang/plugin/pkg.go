@@ -98,12 +98,19 @@ func (p *goParser) ParseDir(dir string) (err error) {
 	if !strings.HasPrefix(dir, "/") {
 		dir = filepath.Join(p.homePageDir, dir)
 	}
+
 	// fast-path: check cache first
 	pkgPath := p.pkgPathFromABS(dir)
 	if p.visited[pkgPath] {
 		return nil
 	}
 	p.visited[pkgPath] = true
+
+	// use go.mod name as package name
+	modName, _ := getModuleName(dir + "/go.mod")
+	if modName != "" {
+		pkgPath = modName
+	}
 
 	// slow-path: load packages in the dir, including sub pakcages
 	fset := token.NewFileSet()
@@ -145,6 +152,9 @@ func (p *goParser) ParseDir(dir string) (err error) {
 		if obj := p.repo.Packages[pkgPath]; obj != nil {
 			obj.Dependencies = make([]PkgPath, 0, len(pkg.Imports))
 			for _, imp := range pkg.Imports {
+				if isSysPkg(imp.ID) {
+					continue
+				}
 				obj.Dependencies = append(obj.Dependencies, imp.ID)
 			}
 			obj.PkgPath = pkg.ID

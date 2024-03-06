@@ -17,9 +17,11 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -83,10 +85,17 @@ func isGoBuiltinFunc(name string) bool {
 }
 
 func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Function, map[string]*Struct, error) {
+
 	fileStructs := map[string]*Struct{}
 	fileFuncs := map[string]*Function{}
 	cont := true
 	ast.Inspect(f, func(node ast.Node) bool {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "panic: %v in %s:%d\n", r, ctx.filePath, ctx.fset.Position(node.Pos()).Line)
+				return
+			}
+		}()
 		if funcDecl, ok := node.(*ast.FuncDecl); ok {
 			// parse funcs
 			f, ct := p.parseFunc(ctx, funcDecl)
@@ -142,7 +151,7 @@ func (p *goParser) seprateImports(impts []*ast.ImportSpec) (map[string]string, m
 	sysImports := make(map[string]string)
 	for _, imp := range impts {
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
-		importAlias := filepath.Base(importPath)                // use the base name as alias by default
+		importAlias := getPackageAlias(importPath)
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
 			importAlias = imp.Name.Name // update the alias
@@ -169,15 +178,14 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	var associatedStruct *Identity
 	isMethod := funcDecl.Recv != nil
 	if isMethod {
-		var structName string
+		var structName []Identity
 		// TODO: reserve the pointer message?
-		switch x := funcDecl.Recv.List[0].Type.(type) {
-		case *ast.Ident:
-			structName = x.Name
-		case *ast.StarExpr:
-			structName = x.X.(*ast.Ident).Name
+		_ = getTypeName(ctx.fset, ctx.bs, funcDecl.Recv.List[0].Type, &structName)
+		if len(structName) == 0 {
+			panic("cannot get receiver's type:" + string(ctx.GetRawContent(funcDecl.Recv.List[0].Type)))
 		}
-		associatedStruct = &Identity{ctx.pkgPath, structName}
+		associatedStruct = &structName[0]
+		associatedStruct.PkgPath = ctx.pkgPath
 	}
 
 	content := string(ctx.GetRawContent(funcDecl))
@@ -453,7 +461,7 @@ func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st
 				} else if im, ok := ctx.thirdPartyImports[ty.PkgPath]; ok {
 					impt = im
 				} else {
-					panic("not found pkg: " + impt)
+					panic("not found pkg: " + ty.PkgPath)
 				}
 			}
 			if inlined {
@@ -512,6 +520,10 @@ func getTypeName(fset *token.FileSet, file []byte, typ ast.Expr, ret *[]Identity
 			*ret = append(*ret, Identity{Name: ty.Name})
 		}
 		return false
+	case *ast.IndexExpr: // generic type parameter
+		*ret = append(*ret, Identity{Name: ty.X.(*ast.Ident).Name})
+	case *ast.IndexListExpr: // generic type parameter
+		*ret = append(*ret, Identity{Name: ty.X.(*ast.Ident).Name})
 	case *ast.StarExpr:
 		return getTypeName(fset, file, ty.X, ret)
 	case *ast.ArrayType:
