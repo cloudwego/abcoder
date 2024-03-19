@@ -88,3 +88,11 @@ func getPackageAlias(importPath string) string {
 
 	return alias
 }
+
+func splitVersion(module string) (string, string) {
+	if strings.Contains(module, "@") {
+		parts := strings.Split(module, "@")
+		return parts[0], parts[1]
+	}
+	return module, ""
+}

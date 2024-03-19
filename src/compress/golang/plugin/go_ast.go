@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
-
+	"sort"
 	"strings"
 )
 
@@ -16,51 +19,86 @@ import (
 
 // golang parser, used parse multle packages from the entire project
 type goParser struct {
-	modName     string
-	homePageDir string
-	visited     map[string]bool
+	homePageDir string           // absolute path to the home page of the repo
+	visited     map[PkgPath]bool // visited packages
+	modules     [][2]string      //  [name, abs-path] of modules, sorted by path length in descending order
 	repo        Repository
 }
 
 // newGoParser
-func newGoParser(modName, homePageDir string) *goParser {
+func newGoParser(name string, homePageDir string) *goParser {
 	abs, err := filepath.Abs(homePageDir)
 	if err != nil {
 		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
 	}
 
-	if modName == "" {
-		var err error
-		modName, err = getModuleName(homePageDir + "/go.mod")
-		if err != nil {
-			panic(err.Error())
-		}
-	}
-
 	p := &goParser{
-		modName:     modName,
 		homePageDir: abs,
 		visited:     map[string]bool{},
-		repo:        NewRepository(modName),
+		repo:        NewRepository(name),
+	}
+
+	if err := p.collectGoMods(p.homePageDir); err != nil {
+		panic(err)
 	}
 	return p
 }
 
-// ParseRepo parse the entiry repo from homePageDir recursively until end
-func (p *goParser) ParseRepo() error {
-	err := filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil || !info.IsDir() || shouldIgnoreDir(path) {
+func (p *goParser) collectGoMods(startDir string) error {
+	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
 		}
-
-		if err := p.ParseDir(path); err != nil {
+		name, content, err := getModuleName(path)
+		if err != nil {
 			return err
+		}
+		rel, err := filepath.Rel(p.homePageDir, filepath.Dir(path))
+		if err != nil {
+			return fmt.Errorf("module path %v is not in the repo", path)
+		}
+		p.repo.Modules[name] = NewModule(name, rel)
+		deps, err := parseModuleFile(content)
+		if err != nil {
+			return err
+		}
+		for k, v := range deps {
+			p.repo.Modules[name].Dependencies[k] = v
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
+
+	var libs [][2]string
+	for _, v := range p.repo.Modules {
+		libs = append(libs, [2]string{v.Name, filepath.Join(p.homePageDir, v.Dir)})
+	}
+	// sort by dir in descending order
+	sort.SliceStable(libs, func(i, j int) bool {
+		return len(libs[i][1]) >= len(libs[j][1])
+	})
+	p.modules = libs
+	return nil
+}
+
+// ParseRepo parse the entiry repo from homePageDir recursively until end
+func (p *goParser) ParseRepo() error {
+	for _, lib := range p.repo.Modules {
+		startDir := filepath.Join(p.homePageDir, lib.Dir)
+		filepath.WalkDir(startDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || !d.IsDir() || shouldIgnoreDir(path) {
+				return nil
+			}
+			pkgPath := p.pkgPathFromABS(path)
+			if err := p.ParsePackage(pkgPath); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+
 	p.associateStructWithMethods()
 	return nil
 }
@@ -68,46 +106,51 @@ func (p *goParser) ParseRepo() error {
 // GetRepo return currently parsed golang AST
 // Notice: To get completely parsed repo, you'd better call goParser.ParseRepo() before this
 func (p *goParser) GetRepo() Repository {
-	if len(p.repo.Packages) == 0 {
-		_ = p.ParseRepo()
-	}
 	return p.repo
+}
+
+func (p *Module) GetDependency(mod string) string {
+	// // search internal library first
+	// if lib := p.Libraries[mod]; lib != nil {
+	// 	return lib
+	// }
+	// match the prefix of name for each repo.Dependencies
+	for k, v := range p.Dependencies {
+		if strings.HasPrefix(mod, k) {
+			return v
+		}
+	}
+	return ""
 }
 
 // ToABS converts a local package path to absolute path
 // If the path is not a local package, return empty string
-func (p *goParser) pkgPathToABS(path PkgPath) string {
-	if !strings.HasPrefix(string(path), p.modName) {
-		return ""
-	} else {
-		return filepath.Join(p.homePageDir, strings.TrimPrefix(string(path), p.modName))
-	}
-}
-
-// FromABS converts an absolute path to local mod path
-func (p *goParser) pkgPathFromABS(path string) PkgPath {
-	if rel, _ := filepath.Rel(p.homePageDir, path); rel != "" {
-		path = rel
-	}
-	return filepath.Join(p.modName, path)
-}
+// func (p *goParser) pkgPathToABS(path PkgPath) string {
+// 	if !strings.HasPrefix(string(path), p.curMod) {
+// 		return ""
+// 	} else {
+// 		return filepath.Join(p.homePageDir, strings.TrimPrefix(string(path), p.modName))
+// 	}
+// }
 
 func (p *goParser) associateStructWithMethods() {
-	for _, fs := range p.repo.Packages {
-		for _, f := range fs.Functions {
-			if f.IsMethod && f.AssociatedStruct != nil {
-				def := p.repo.GetType(*f.AssociatedStruct)
-				// entrue the Struct has been visted
-				if def != nil {
-					if def.Methods == nil {
-						def.Methods = map[string]Identity{}
+	for _, lib := range p.repo.Modules {
+		for _, fs := range lib.Packages {
+			for _, f := range fs.Functions {
+				if f.IsMethod && f.AssociatedStruct != nil {
+					def := p.repo.GetType(*f.AssociatedStruct)
+					// entrue the Struct has been visted
+					if def != nil {
+						if def.Methods == nil {
+							def.Methods = map[string]Identity{}
+						}
+						names := strings.Split(f.Name, ".")
+						var name = names[0]
+						if len(names) > 1 {
+							name = names[1]
+						}
+						def.Methods[name] = f.Identity
 					}
-					names := strings.Split(f.Name, ".")
-					var name = names[0]
-					if len(names) > 1 {
-						name = names[1]
-					}
-					def.Methods[name] = Identity{f.PkgPath, f.Name}
 				}
 			}
 		}
@@ -133,7 +176,7 @@ type SingleStruct struct {
 }
 
 // GetNode get a AST node from cache if parsed, or parse corresponding package and get the node
-func (p *goParser) GetNode(id Identity) (*Function, *Struct, error) {
+func (p *goParser) GetNode(id Identity) (*Function, *Type, error) {
 	if def := p.repo.GetFunction(id); def != nil {
 		return def, nil, nil
 	}
@@ -141,12 +184,18 @@ func (p *goParser) GetNode(id Identity) (*Function, *Struct, error) {
 		return nil, def, nil
 	}
 
-	dir := p.pkgPathToABS(id.PkgPath)
-	if err := p.ParseDir(dir); err != nil {
+	lib := p.repo.Modules[id.ModPath]
+	if lib == nil {
+		return nil, nil, fmt.Errorf("library not defined: %v", id.ModPath)
+	}
+	if err := p.ParsePackage(id.PkgPath); err != nil {
 		return nil, nil, err
 	}
 
-	pkg := p.repo.Packages[id.PkgPath]
+	pkg := lib.Packages[id.PkgPath]
+	if pkg == nil {
+		return nil, nil, fmt.Errorf("package not defined: %v", id.PkgPath)
+	}
 	for _, v := range pkg.Functions {
 		if v.Name == id.Name {
 			return v, nil, nil
@@ -161,6 +210,79 @@ func (p *goParser) GetNode(id Identity) (*Function, *Struct, error) {
 }
 
 var errStop = errors.New("")
+
+type EntityKind int
+
+const (
+	EKindError EntityKind = iota
+	EKindFunc
+	EKindType
+	EKindConst
+	EKindVar
+)
+
+type IE struct {
+	Identity
+	Kind EntityKind
+}
+
+func (p *goParser) SearchName(name string) (ids []Identity, err error) {
+	filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, e error) error {
+		if e != nil || info.IsDir() || shouldIgnoreFile(path) || shouldIgnoreDir(filepath.Dir(path)) || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		// go AST parse file
+		fset := token.NewFileSet()
+		fcontent, e := os.ReadFile(path)
+		if e != nil {
+			err = e
+			return nil
+		}
+		f, e := parser.ParseFile(fset, path, fcontent, parser.SkipObjectResolution)
+		if e != nil {
+			err = e
+			return nil
+		}
+		mod, _ := p.getModuleFromPath(filepath.Dir(path))
+		pkg := p.pkgPathFromABS(filepath.Dir(path))
+		// fmt.Printf("mod:%v, pkg:%v\n", mod, pkg)
+		// match name
+		for _, decl := range f.Decls {
+			switch decl := decl.(type) {
+			case *ast.FuncDecl:
+				dname := decl.Name.Name
+				if decl.Recv != nil {
+					var tys []Identity
+					getTypeName(fset, fcontent, decl.Recv.List[0].Type, &tys)
+					if len(tys) > 0 {
+						dname = fmt.Sprintf("%v.%v", tys[0].Name, dname)
+					}
+				}
+				if dname == name {
+					ids = append(ids, NewIdentity(mod, pkg, name))
+				}
+			case *ast.GenDecl:
+				for _, spec := range decl.Specs {
+					switch spec := spec.(type) {
+					case *ast.TypeSpec:
+						if spec.Name.Name == name {
+							ids = append(ids, NewIdentity(mod, pkg, name))
+						}
+					case *ast.ValueSpec:
+						for _, n := range spec.Names {
+							if n.Name == name {
+								ids = append(ids, NewIdentity(mod, pkg, name))
+							}
+						}
+
+					}
+				}
+			}
+		}
+		return nil
+	})
+	return
+}
 
 // GetMain get main func on demands
 func (p *goParser) GetMain(depth int) (*MainStream, *Function, error) {
@@ -184,17 +306,19 @@ func (p *goParser) GetMain(depth int) (*MainStream, *Function, error) {
 	}
 
 	// parse main dir and get root
-	mainDir := filepath.Dir(mainFile)
-	if err := p.ParseDir(mainDir); err != nil {
+	pkgPath := p.pkgPathFromABS(filepath.Dir(mainFile))
+	if err := p.ParsePackage(pkgPath); err != nil {
 		return nil, nil, err
 	}
 
 	var mainFunc *Function
-	for _, pkg := range p.repo.Packages {
-		for _, v := range pkg.Functions {
-			if v.Name == "main" {
-				mainFunc = v
-				break
+	for _, lib := range p.repo.Modules {
+		for _, pkg := range lib.Packages {
+			for _, v := range pkg.Functions {
+				if v.Name == "main" {
+					mainFunc = v
+					break
+				}
 			}
 		}
 	}
@@ -208,7 +332,7 @@ func (p *goParser) GetMain(depth int) (*MainStream, *Function, error) {
 
 // trace depends from bottom to top
 // Notice: an AST node may be undefined on parse ondemands
-func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache, traceUndefined func(id Identity) (*Function, *Struct, error)) error {
+func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFunction, sl *[]SingleStruct, visited cache, traceUndefined func(id Identity) (*Function, *Type, error)) error {
 	if depth == 0 {
 		return nil
 	}
@@ -217,13 +341,15 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 	}
 
 	var next []*Function
-	for call, ff := range f.InternalFunctionCalls {
+	for call, ff := range f.FunctionCalls {
 		if visited.Visited(ff) {
+			continue
+		}
+		if ff.ModPath != "" {
 			continue
 		}
 		def := p.repo.GetFunction(ff)
 		if def == nil {
-			// continue // TODO: fixme
 			if traceUndefined == nil {
 				return fmt.Errorf("undefiend InternalFunctionCalls %v for %v", ff.String(), f.Identity.String())
 			} else {
@@ -245,14 +371,15 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 		next = append(next, def)
 	}
 
-	for call, ff := range f.InternalMethodCalls {
+	for call, ff := range f.MethodCalls {
 		if visited.Visited(ff) {
+			continue
+		}
+		if ff.ModPath != "" {
 			continue
 		}
 		def := p.repo.GetFunction(ff)
 		if def == nil {
-			// continue
-			// TODO: fixme
 			if traceUndefined == nil {
 				return fmt.Errorf("undefiend InternalMethodCalls: %v for %v", ff.String(), f.Identity.String())
 			} else {
@@ -268,7 +395,7 @@ func (p *goParser) fillRelatedContent(depth int, f *Function, fl *[]SingleFuncti
 		}
 		content := def.Content
 
-		var st *Struct
+		var st *Type
 		if def.AssociatedStruct != nil {
 			st = p.repo.GetType(*def.AssociatedStruct)
 			if st == nil {
@@ -326,36 +453,43 @@ func main() {
 		search = os.Args[2]
 	}
 
-	p := newGoParser("", homeDir)
-	var out interface{}
+	p := newGoParser(homeDir, homeDir)
+	var out = NewRepository(homeDir)
 
 	if search == "" {
+		// parse whole repo
 		if err := p.ParseRepo(); err != nil {
-			fmt.Fprintln(os.Stderr, "Error parsing go files:", err)
+			fmt.Fprintf(os.Stderr, "Error parsing repo: %v", err)
 			os.Exit(1)
 		}
 		out = p.GetRepo()
 	} else {
-		// SPEC: seperate the packagepath and function name by #
+		// SPEC: seperate the packagepath and entity name by #
 		ids := strings.Split(search, "#")
-		if len(ids) != 2 {
-			// if fail, just search main()
-			var err error
-			out, _, err = p.GetMain(-1)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error getting main:", err)
+
+		if len(ids) == 1 {
+			// parse pacakge
+			pkgPath := ids[0]
+			if err := p.ParsePackage(pkgPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing package %v: %v", pkgPath, err)
 				os.Exit(1)
 			}
-		} else {
-			f, s, err := p.GetNode(Identity{PkgPath: PkgPath(ids[0]), Name: ids[1]})
-			if err != nil {
-				os.Exit(1)
-				fmt.Fprintln(os.Stderr, "Error getting node:", err)
-			}
-			if f != nil {
-				out = f
+			repo := p.GetRepo()
+			k, _ := p.getModuleFromPkg(pkgPath)
+			out.Modules[k] = NewModule(repo.Modules[k].Name, repo.Modules[k].Dir)
+			out.Modules[k].Packages[pkgPath] = repo.Modules[k].Packages[pkgPath]
+		} else if len(ids) == 2 {
+			if ids[0] == "" {
+				//search mode
+				idss, err := p.SearchName(ids[1])
+				fmt.Fprintf(os.Stderr, "Error search %v:%v", ids[1], err)
+				for _, id := range idss {
+					loadNode(p, id.PkgPath, id.Name, &out)
+				}
 			} else {
-				out = s
+				// parse entity
+				pkgPath, name := ids[0], ids[1]
+				loadNode(p, pkgPath, name, &out)
 			}
 		}
 	}
@@ -370,4 +504,26 @@ func main() {
 	}
 
 	fmt.Println(buf.String())
+}
+
+func loadNode(p *goParser, pkgPath string, name string, out *Repository) {
+	mod, _ := p.getModuleFromPkg(pkgPath)
+	fp, sp, err := p.GetNode(NewIdentity(mod, PkgPath(pkgPath), name))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting node: %v", err)
+		os.Exit(1)
+	}
+	repo := p.GetRepo()
+	if out.Modules[mod] == nil {
+		out.Modules[mod] = NewModule(repo.Modules[mod].Name, repo.Modules[mod].Dir)
+	}
+	if out.Modules[mod].Packages[pkgPath] == nil {
+		out.Modules[mod].Packages[pkgPath] = NewPacakge(pkgPath)
+	}
+	if fp != nil {
+		out.Modules[mod].Packages[pkgPath].Functions[name] = fp
+	}
+	if sp != nil {
+		out.Modules[mod].Packages[pkgPath].Types[name] = sp
+	}
 }

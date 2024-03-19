@@ -32,13 +32,21 @@ type PkgPath = string
 
 // Identity holds identity information about a third party declaration
 type Identity struct {
+	ModPath string // ModPath is the module which the package belongs to
 	PkgPath        // Import Path of the third party package
 	Name    string // Unique Name of declaration (FunctionName, StructName.MethodName, or StructName)
 }
 
+func NewIdentity(mod, pkg, name string) Identity {
+	if mod == "" {
+		panic("module name cannot be empty: " + pkg + "." + name)
+	}
+	return Identity{ModPath: mod, PkgPath: pkg, Name: name}
+}
+
 // return full packagepath.name
 func (i Identity) String() string {
-	return i.PkgPath + "." + i.Name
+	return i.PkgPath + "#" + i.Name
 }
 
 // return packagename.name
@@ -47,6 +55,10 @@ func (i Identity) CallName() string {
 		return filepath.Base(i.PkgPath) + "." + i.Name
 	}
 	return i.Name
+}
+
+func (i Identity) Full() string {
+	return i.ModPath + "?" + i.PkgPath + "#" + i.Name
 }
 
 // Function holds the information about a function
@@ -60,17 +72,10 @@ type Function struct {
 	AssociatedStruct *Identity // Method receiver
 
 	// call to in-the-project functions, key is {{pkgAlias.funcName}} or {{funcName}}
-	InternalFunctionCalls map[string]Identity
-
-	// call to third-party function calls, key is the {{pkgAlias.funcName}}
-	// ex: http.Get() -> {"http.Get":{PkgDir: "net/http", Name: "Get"}}
-	ThirdPartyFunctionCalls map[string]Identity
+	FunctionCalls map[string]Identity
 
 	// call to internal methods, key is the {{object.funcName}}
-	InternalMethodCalls map[string]Identity
-
-	// call to thrid-party methods, key is the {{object.funcName}}
-	ThirdPartyMethodCalls map[string]Identity
+	MethodCalls map[string]Identity
 }
 
 func isGoBuiltinFunc(name string) bool {
@@ -84,9 +89,9 @@ func isGoBuiltinFunc(name string) bool {
 	}
 }
 
-func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Function, map[string]*Struct, error) {
+func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Function, map[string]*Type, error) {
 
-	fileStructs := map[string]*Struct{}
+	fileStructs := map[string]*Type{}
 	fileFuncs := map[string]*Function{}
 	cont := true
 	ast.Inspect(f, func(node ast.Node) bool {
@@ -103,7 +108,7 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 			cont = ct
 		} else if typDecl, ok := node.(*ast.TypeSpec); ok {
 			name := typDecl.Name.Name
-			var st *Struct
+			var st *Type
 			var ct bool
 
 			switch ty := typDecl.Type.(type) {
@@ -115,7 +120,7 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 				st, ct = p.parseInterface(ctx, name, ty)
 			default:
 				// typedef, ex: type Str StructA
-				st := p.newStruct(ctx.pkgPath, name)
+				st := p.newStruct(ctx.module.Name, ctx.pkgPath, name)
 				st.Exported = isUpperCase(name[0])
 				st.TypeKind = TypeKindNamed
 				st.Content = "type " + string(ctx.GetRaw(typDecl.Name.Pos(), typDecl.End()))
@@ -132,21 +137,21 @@ func (p *goParser) inspectFile(ctx *fileContext, f *ast.File) (map[string]*Funct
 }
 
 // newFunc allocate a function in the repo
-func (p *goParser) newFunc(pkg, name string) *Function {
-	ret := &Function{Identity: Identity{pkg, name}}
+func (p *goParser) newFunc(mod, pkg, name string) *Function {
+	ret := &Function{Identity: NewIdentity(mod, pkg, name)}
 	p.repo.SetFunction(ret.Identity, ret)
 	return ret
 }
 
 // newStruct allocate a struct in the repo
-func (p *goParser) newStruct(pkg, name string) *Struct {
-	ret := &Struct{Identity: Identity{pkg, name}}
+func (p *goParser) newStruct(mod, pkg, name string) *Type {
+	ret := &Type{Identity: NewIdentity(mod, pkg, name)}
 	p.repo.SetType(ret.Identity, ret)
 	return ret
 }
 
-func (p *goParser) seprateImports(impts []*ast.ImportSpec) (map[string]string, map[string]string, map[string]string) {
-	thirdPartyImports := make(map[string]string)
+func (p *goParser) seprateImports(mod *Module, impts []*ast.ImportSpec) (map[string]string, map[string]string, map[string][2]string, error) {
+	thirdPartyImports := make(map[string][2]string)
 	projectImports := make(map[string]string)
 	sysImports := make(map[string]string)
 	for _, imp := range impts {
@@ -163,14 +168,18 @@ func (p *goParser) seprateImports(impts []*ast.ImportSpec) (map[string]string, m
 			sysImports[importAlias] = importPath
 		} else {
 			// Distinguish between project packages and third party packages
-			if strings.HasPrefix(importPath, p.modName) {
+			if strings.HasPrefix(importPath, mod.Name) {
 				projectImports[importAlias] = importPath
 			} else {
-				thirdPartyImports[importAlias] = importPath
+				mod := mod.GetDependency(importPath)
+				if mod == "" {
+					return nil, nil, nil, fmt.Errorf("unknown third party package: " + importPath)
+				}
+				thirdPartyImports[importAlias] = [2]string{mod, importPath}
 			}
 		}
 	}
-	return sysImports, projectImports, thirdPartyImports
+	return sysImports, projectImports, thirdPartyImports, nil
 }
 
 // parseFunc parses all function declaration in one file
@@ -184,13 +193,12 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 		if len(structName) == 0 {
 			panic("cannot get receiver's type:" + string(ctx.GetRawContent(funcDecl.Recv.List[0].Type)))
 		}
-		associatedStruct = &structName[0]
-		associatedStruct.PkgPath = ctx.pkgPath
+		tm := NewIdentity(ctx.module.Name, ctx.pkgPath, structName[0].Name)
+		associatedStruct = &tm
 	}
 
 	content := string(ctx.GetRawContent(funcDecl))
 
-	var thirdPartyMethodCalls, thirdPartyFunctionCalls = map[string]Identity{}, map[string]Identity{}
 	var functionCalls, methodCalls = map[string]Identity{}, map[string]Identity{}
 
 	if funcDecl.Body == nil {
@@ -241,23 +249,22 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					}
 					//NOTICE: use {structName.methodName} as method key
 					mname := rname + "." + m.Name()
-					if strings.HasPrefix(mpkg, p.modName) {
-						// internal pkg
-						methodCalls[funcName] = Identity{mpkg, mname}
-					} else {
+					mod := ctx.module.Name
+					if !strings.HasPrefix(mpkg, ctx.module.Name) {
 						// external pkg
-						thirdPartyMethodCalls[funcName] = Identity{mpkg, mname}
+						mod = ctx.module.GetDependency(mpkg)
+						if mod == "" {
+							fmt.Fprintf(os.Stderr, "cannot find module for %s.%s in %s\n", mpkg, mname, ctx.filePath)
+							return true
+						}
 					}
+					methodCalls[funcName] = NewIdentity(mod, mpkg, mname)
 					return true
 				}
 				// check if it's a function calls
 				if use, ok := ctx.pkgTypeInfo.Uses[x.(*ast.Ident)]; ok {
 					pkg, ok := use.(*types.PkgName)
 					if !ok || pkg.Imported() == nil {
-						return true
-					}
-					// NOTICE: skip sys imports?
-					if ctx.IsSysImport(pkg.Imported().Name()) {
 						return true
 					}
 					typ, ok := ctx.pkgTypeInfo.Types[expr]
@@ -268,17 +275,19 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					if _, ok := typ.Type.(*types.Signature); !ok {
 						return true
 					}
-					// internal function calls
-					if impt, ok := ctx.projectImports[pkg.Imported().Name()]; ok {
-						functionCalls[funcName] = Identity{impt, expr.Sel.Name}
+					path := pkg.Imported().Path()
+					mod := ctx.module.Name
+					if isSysPkg(path) {
 						return true
+					} else if !strings.HasPrefix(path, ctx.module.Name) {
+						// external
+						mod = ctx.module.GetDependency(path)
+						if mod == "" {
+							fmt.Fprintf(os.Stderr, "cannot find module for %s.%s in %s\n", path, expr.Sel.Name, ctx.filePath)
+							return true
+						}
 					}
-					// third-party function calls
-					if impt, ok := ctx.thirdPartyImports[pkg.Imported().Name()]; ok {
-						thirdPartyFunctionCalls[funcName] = Identity{PkgPath: impt, Name: expr.Sel.Name}
-						return true
-					}
-					return true
+					functionCalls[funcName] = NewIdentity(mod, path, expr.Sel.Name)
 				}
 			case *ast.Ident:
 				funcName = expr.Name
@@ -302,7 +311,7 @@ func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 				if _, ok := typ.Type.(*types.Signature); !ok {
 					return true
 				}
-				functionCalls[funcName] = Identity{ctx.pkgPath, funcName}
+				functionCalls[funcName] = NewIdentity(ctx.module.Name, ctx.pkgPath, funcName)
 				return true
 			}
 		}
@@ -315,28 +324,20 @@ set_func:
 	if isMethod {
 		name = associatedStruct.Name + "." + name
 	}
-	if name == "init" && p.repo.GetFunction(Identity{ctx.pkgPath, name}) != nil {
+	if name == "init" && p.repo.GetFunction(NewIdentity(ctx.module.Name, ctx.pkgPath, name)) != nil {
 		// according to https://go.dev/ref/spec#Program_initialization_and_execution,
 		// duplicated init() is allowed and never be referenced, thus add a subfix
 		name += "_" + strconv.Itoa(int(funcDecl.Pos()))
 	}
 	// update detailed function call info
-	f := p.newFunc(ctx.pkgPath, name)
-	*f = Function{
-		Exported: exported,
-		Identity: Identity{
-			Name:    name,
-			PkgPath: ctx.pkgPath,
-		},
-		FilePath:                ctx.filePath,
-		IsMethod:                isMethod,
-		AssociatedStruct:        associatedStruct,
-		Content:                 content,
-		InternalFunctionCalls:   functionCalls,
-		ThirdPartyFunctionCalls: thirdPartyFunctionCalls,
-		InternalMethodCalls:     methodCalls,
-		ThirdPartyMethodCalls:   thirdPartyMethodCalls,
-	}
+	f := p.newFunc(ctx.module.Name, ctx.pkgPath, name)
+	f.Exported = exported
+	f.FilePath = ctx.filePath
+	f.Content = content
+	f.FunctionCalls = functionCalls
+	f.MethodCalls = methodCalls
+	f.IsMethod = isMethod
+	f.AssociatedStruct = associatedStruct
 	return f, true
 }
 
@@ -364,8 +365,8 @@ const (
 	TypeKindNamed     = 2 // type NamedXXX other..
 )
 
-// Struct holds the information about a struct
-type Struct struct {
+// Type holds the information about a struct
+type Type struct {
 	Exported bool // if the struct is exported
 
 	TypeKind        // type Kind: Struct / Interface / Typedef
@@ -389,12 +390,13 @@ type Struct struct {
 // The go file's context. Used to pass information between ast node handlers
 type fileContext struct {
 	filePath          string
+	module            *Module
 	pkgPath           PkgPath
 	bs                []byte
 	fset              *token.FileSet
 	sysImports        map[string]string
 	projectImports    map[string]string
-	thirdPartyImports map[string]string
+	thirdPartyImports map[string][2]string
 	pkgTypeInfo       *types.Info
 }
 
@@ -403,8 +405,8 @@ func isUpperCase(c byte) bool {
 }
 
 // parse a ast.StructType node and renturn allocated *Struct
-func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.StructType) (*Struct, bool) {
-	st := p.newStruct(ctx.pkgPath, struName)
+func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.StructType) (*Type, bool) {
+	st := p.newStruct(ctx.module.Name, ctx.pkgPath, struName)
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindStruct
 	st.Content = "type " + st.Name + " " + string(ctx.GetRaw(struDecl.Struct, struDecl.End()))
@@ -425,7 +427,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, struDecl *ast.
 	return st, true
 }
 
-func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st *Struct, inlined bool) {
+func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st *Type, inlined bool) {
 	types := []Identity{}
 	isFunc := getTypeName(ctx.fset, ctx.bs, typ, &types)
 
@@ -441,8 +443,9 @@ func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st
 			if field != "" {
 				mname += "." + field
 			}
-			f := p.newFunc(ctx.pkgPath, mname)
-			f.AssociatedStruct = &Identity{ctx.pkgPath, st.Name}
+			f := p.newFunc(ctx.module.Name, ctx.pkgPath, mname)
+			id := NewIdentity(ctx.module.Name, ctx.pkgPath, st.Name)
+			f.AssociatedStruct = &id
 			f.IsMethod = true
 			f.FilePath = ctx.filePath
 			// NOTICE: content is only func signature
@@ -450,32 +453,45 @@ func (p *goParser) collectTypes(ctx *fileContext, field string, typ ast.Expr, st
 			if st.Methods == nil {
 				st.Methods = map[string]Identity{}
 			}
-			st.Methods[field] = Identity{ctx.pkgPath, mname}
+			st.Methods[field] = NewIdentity(ctx.module.Name, ctx.pkgPath, mname)
 		} else {
 			impt := ctx.pkgPath
+			mod := ctx.module.Name
 			if ty.PkgPath != "" {
-				if _, ok := ctx.sysImports[ty.PkgPath]; ok {
+				var err error
+				impt, mod, err = ctx.GetImportPath(ty.PkgPath)
+				if err == errSysImport {
 					continue
-				} else if im, ok := ctx.projectImports[ty.PkgPath]; ok {
-					impt = im
-				} else if im, ok := ctx.thirdPartyImports[ty.PkgPath]; ok {
-					impt = im
-				} else {
-					panic("not found pkg: " + ty.PkgPath)
+				} else if err != nil {
+					panic(err)
 				}
 			}
 			if inlined {
 				if st.InlineStruct == nil {
 					st.InlineStruct = map[string]Identity{}
 				}
-				st.InlineStruct[ty.CallName()] = Identity{impt, ty.Name}
+				st.InlineStruct[ty.CallName()] = NewIdentity(mod, impt, ty.Name)
 			} else {
 				if st.SubStruct == nil {
 					st.SubStruct = map[string]Identity{}
 				}
-				st.SubStruct[ty.CallName()] = Identity{impt, ty.Name}
+				st.SubStruct[ty.CallName()] = NewIdentity(mod, impt, ty.Name)
 			}
 		}
+	}
+}
+
+var errSysImport = fmt.Errorf("sys import")
+
+func (ctx *fileContext) GetImportPath(alias string) (string, string, error) {
+	if _, ok := ctx.sysImports[alias]; ok {
+		return "", "", errSysImport
+	} else if im, ok := ctx.projectImports[alias]; ok {
+		return im, ctx.module.Name, nil
+	} else if ims, ok := ctx.thirdPartyImports[alias]; ok {
+		return ims[1], ims[0], nil
+	} else {
+		return "", "", fmt.Errorf("not found pkg: %s", alias)
 	}
 }
 
@@ -487,12 +503,12 @@ func (ctx *fileContext) GetRaw(from token.Pos, to token.Pos) []byte {
 	return ctx.bs[ctx.fset.Position(from).Offset:ctx.fset.Position(to).Offset]
 }
 
-func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.InterfaceType) (*Struct, bool) {
+func (p *goParser) parseInterface(ctx *fileContext, name string, decl *ast.InterfaceType) (*Type, bool) {
 	if decl == nil || decl.Incomplete || decl.Methods == nil {
 		return nil, true
 	}
 
-	st := p.newStruct(ctx.pkgPath, name)
+	st := p.newStruct(ctx.module.Name, ctx.pkgPath, name)
 	st.Exported = isUpperCase(name[0])
 	st.FilePath = ctx.filePath
 	st.TypeKind = TypeKindInterface

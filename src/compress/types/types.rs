@@ -1,6 +1,6 @@
 use csv::Writer;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::{clone, collections::HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,22 +9,43 @@ use crate::{
     storage::cache::get_cache,
 };
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Repository {
-    pub id: Option<String>,
-    #[serde(rename = "ModName")]
-    pub(crate) mod_name: String,
-    #[serde(rename = "Packages")]
-    pub packages: HashMap<String, Package>,
+    #[serde(default)]
+    pub id: String,
+    #[serde(rename = "Modules")]
+    pub modules: HashMap<String, Module>,
 }
 
 impl Repository {
+    pub fn contains(&self, id: &Identity) -> bool {
+        if let Some(m) = self.modules.get(&id.mod_path) {
+            if let Some(p) = m.packages.get(&id.pkg_path) {
+                if let Some(_) = p.functions.get(&id.name) {
+                    return true;
+                } else if let Some(_) = p.types.get(&id.name) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     pub fn merge_with(&mut self, other: &Repository) {
-        for (pkg_name, pkg) in other.packages.iter() {
-            if let Some(p) = self.packages.get_mut(pkg_name) {
-                p.merge_with(pkg);
+        for (mod_name, _mod) in other.modules.iter() {
+            if let Some(smod) = self.modules.get_mut(mod_name) {
+                for (pkg_name, pkg) in _mod.packages.iter() {
+                    if let Some(p) = smod.packages.get_mut(pkg_name) {
+                        p.merge_with(pkg);
+                    } else {
+                        smod.packages.insert(pkg_name.clone(), pkg.clone());
+                    }
+                    smod.name = _mod.name.clone();
+                    smod.dir = _mod.dir.clone();
+                    smod.dependencies = _mod.dependencies.clone();
+                }
             } else {
-                self.packages.insert(pkg_name.clone(), pkg.clone());
+                self.modules.insert(mod_name.clone(), _mod.clone());
             }
         }
     }
@@ -32,23 +53,27 @@ impl Repository {
     pub fn save_to_cache(&self) {
         let repo = serde_json::to_string(&self).expect("marshal struct error");
         get_cache()
-            .put(self.id.as_ref().unwrap(), Vec::from(repo))
+            .put(self.id.as_ref(), Vec::from(repo))
             .expect("save to cache failed");
     }
 
     pub fn get_func(&self, id: &Identity) -> Option<&Function> {
-        if let Some(pkg) = self.packages.get(&id.pkg_path) {
-            if let Some(f) = pkg.functions.get(&id.name) {
-                return Some(f);
+        if let Some(m) = self.modules.get(&id.name) {
+            if let Some(pkg) = m.packages.get(&id.pkg_path) {
+                if let Some(f) = pkg.functions.get(&id.name) {
+                    return Some(f);
+                }
             }
         }
         None
     }
 
     pub fn get_type(&self, id: &Identity) -> Option<&Struct> {
-        if let Some(pkg) = self.packages.get(&id.pkg_path) {
-            if let Some(f) = pkg.types.get(&id.name) {
-                return Some(f);
+        if let Some(m) = self.modules.get(&id.name) {
+            if let Some(pkg) = m.packages.get(&id.pkg_path) {
+                if let Some(f) = pkg.types.get(&id.name) {
+                    return Some(f);
+                }
             }
         }
         None
@@ -59,35 +84,38 @@ impl Repository {
         // add header
         w.write_record(&["Package", "Name", "Kind", "Signature", "Summary"])
             .unwrap();
-        for (pname, pkg) in self.packages.iter() {
-            for (name, f) in pkg.functions.iter() {
-                let tmp = &"".to_string();
-                // split content, 1024B for each
-                let sums = split_text(f.compress_data.as_ref().unwrap_or(tmp), 924);
-                for sum in sums {
-                    w.write_record(&[
-                        pname,
-                        name,
-                        "Function",
-                        f.content.split_once('\n').unwrap_or((&f.content, "")).0,
-                        &format!("{}: {}", name, sum),
-                    ])
-                    .unwrap();
+
+        for (mod_name, _mod) in self.modules.iter() {
+            for (pname, pkg) in _mod.packages.iter() {
+                for (name, f) in pkg.functions.iter() {
+                    let tmp = &"".to_string();
+                    // split content, 1024B for each
+                    let sums = split_text(f.compress_data.as_ref().unwrap_or(tmp), 924);
+                    for sum in sums {
+                        w.write_record(&[
+                            pname,
+                            name,
+                            "Function",
+                            f.content.split_once('\n').unwrap_or((&f.content, "")).0,
+                            &format!("{}: {}", name, sum),
+                        ])
+                        .unwrap();
+                    }
                 }
-            }
-            for (name, t) in pkg.types.iter() {
-                let tmp = &"".to_string();
-                // split content, 1024B for each
-                let sums = split_text(t.compress_data.as_ref().unwrap_or(tmp), 924);
-                for sum in sums {
-                    w.write_record(&[
-                        pname,
-                        name,
-                        "Type",
-                        t.content.split_once('\n').unwrap_or((&t.content, "")).0,
-                        &format!("{}: {}", name, sum),
-                    ])
-                    .unwrap();
+                for (name, t) in pkg.types.iter() {
+                    let tmp = &"".to_string();
+                    // split content, 1024B for each
+                    let sums = split_text(t.compress_data.as_ref().unwrap_or(tmp), 924);
+                    for sum in sums {
+                        w.write_record(&[
+                            pname,
+                            name,
+                            "Type",
+                            t.content.split_once('\n').unwrap_or((&t.content, "")).0,
+                            &format!("{}: {}", name, sum),
+                        ])
+                        .unwrap();
+                    }
                 }
             }
         }
@@ -99,45 +127,52 @@ impl Repository {
         let mut w = Writer::from_writer(Vec::new());
         // add header
         w.write_record(&["Identity", "Kind", "Definition"]).unwrap();
-        for (pname, pkg) in self.packages.iter() {
-            for (name, f) in pkg.functions.iter() {
-                let decl = f.content.as_str();
-                // split content, 1024B for each
-                let mut start = 0;
-                let mut end = 1024;
-                while start < decl.len() {
-                    if end > decl.len() {
-                        end = decl.len();
-                    }
-                    if start >= 1024 {
-                        start -= 100;
-                    }
-                    w.write_record(&[
-                        &format!("{}.{}", pname, name),
-                        "Function",
-                        &decl[start..end],
-                    ])
-                    .unwrap();
-                    start = end;
-                    end += 924;
-                }
-            }
-            for (name, t) in pkg.types.iter() {
-                let decl = t.content.as_str();
-                // split content, 1024B for each
-                let mut start = 0;
-                let mut end = 1024;
-                while start < decl.len() {
-                    if end > decl.len() {
-                        end = decl.len();
-                    }
-                    if start >= 1024 {
-                        start -= 100;
-                    }
-                    w.write_record(&[&format!("{}.{}", pname, name), "Type", &decl[start..end]])
+
+        for (mod_name, _mod) in self.modules.iter() {
+            for (pname, pkg) in _mod.packages.iter() {
+                for (name, f) in pkg.functions.iter() {
+                    let decl = f.content.as_str();
+                    // split content, 1024B for each
+                    let mut start = 0;
+                    let mut end = 1024;
+                    while start < decl.len() {
+                        if end > decl.len() {
+                            end = decl.len();
+                        }
+                        if start >= 1024 {
+                            start -= 100;
+                        }
+                        w.write_record(&[
+                            &format!("{}.{}", pname, name),
+                            "Function",
+                            &decl[start..end],
+                        ])
                         .unwrap();
-                    start = end;
-                    end += 924;
+                        start = end;
+                        end += 924;
+                    }
+                }
+                for (name, t) in pkg.types.iter() {
+                    let decl = t.content.as_str();
+                    // split content, 1024B for each
+                    let mut start = 0;
+                    let mut end = 1024;
+                    while start < decl.len() {
+                        if end > decl.len() {
+                            end = decl.len();
+                        }
+                        if start >= 1024 {
+                            start -= 100;
+                        }
+                        w.write_record(&[
+                            &format!("{}.{}", pname, name),
+                            "Type",
+                            &decl[start..end],
+                        ])
+                        .unwrap();
+                        start = end;
+                        end += 924;
+                    }
                 }
             }
         }
@@ -149,18 +184,33 @@ impl Repository {
         let mut w = Writer::from_writer(Vec::new());
         // add header
         w.write_record(&["Name", "Summary"]).unwrap();
-        for (pname, pkg) in self.packages.iter() {
-            // split comress_data into chunks
-            let empty = &"".to_string();
-            let sums = split_text(pkg.compress_data.as_ref().unwrap_or(empty), 924);
-            for sum in sums {
-                w.write_record(&[&format!("{}", pname), &format!("{}: {}", pname, sum)])
-                    .unwrap();
+
+        for (mod_name, _mod) in self.modules.iter() {
+            for (pname, pkg) in _mod.packages.iter() {
+                // split comress_data into chunks
+                let empty = &"".to_string();
+                let sums = split_text(pkg.compress_data.as_ref().unwrap_or(empty), 924);
+                for sum in sums {
+                    w.write_record(&[&format!("{}", pname), &format!("{}: {}", pname, sum)])
+                        .unwrap();
+                }
             }
         }
         w.flush().unwrap();
         String::from_utf8(w.into_inner().unwrap()).unwrap()
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Module {
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Dir")]
+    pub dir: String,
+    #[serde(rename = "Dependencies")]
+    pub dependencies: HashMap<String, String>,
+    #[serde(rename = "Packages")]
+    pub packages: HashMap<String, Package>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -179,12 +229,7 @@ pub struct Package {
 
 impl Package {
     pub fn merge_with(&mut self, other: &Package) {
-        if self.id != other.id {
-            self.id = other.id.clone();
-        }
-        // if self.dependencies.is_empty() && !other.dependencies.is_empty() {
-        //     self.dependencies = other.dependencies.clone();
-        // }
+        self.id = other.id.clone();
         for (name, f) in other.functions.iter() {
             if let Some(func) = self.functions.get_mut(name) {
                 func.merge_with(f);
@@ -244,79 +289,57 @@ impl Package {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Function {
-    #[serde(rename = "Exported", default)]
-    pub is_exported: bool,
-    #[serde(rename = "IsMethod")]
-    is_method: bool,
+    #[serde(rename = "ModPath")]
+    pub mod_path: String,
     #[serde(rename = "PkgPath")]
     pub pkg_path: String,
     #[serde(rename = "Name")]
     pub name: String,
+    #[serde(rename = "Exported", default)]
+    pub is_exported: bool,
+    #[serde(rename = "IsMethod")]
+    is_method: bool,
     #[serde(rename = "Content")]
     pub content: String,
     #[serde(rename = "AssociatedStruct")]
     associated_struct: Option<Identity>,
-    #[serde(rename = "InternalFunctionCalls")]
-    pub internal_function_calls: Option<HashMap<String, Identity>>,
-    #[serde(rename = "ThirdPartyFunctionCalls")]
-    pub third_party_function_calls: Option<HashMap<String, Identity>>,
-    #[serde(rename = "InternalMethodCalls")]
-    pub internal_method_calls: Option<HashMap<String, Identity>>,
-    #[serde(rename = "ThirdPartyMethodCalls")]
-    pub third_party_method_calls: Option<HashMap<String, Identity>>,
+    #[serde(rename = "FunctionCalls")]
+    pub function_calls: Option<HashMap<String, Identity>>,
+    #[serde(rename = "MethodCalls")]
+    pub method_calls: Option<HashMap<String, Identity>>,
 
     // compress_data
     pub compress_data: Option<String>,
 }
 
 impl Function {
+    pub fn id(&self) -> Identity {
+        Identity {
+            mod_path: self.mod_path.clone(),
+            pkg_path: self.pkg_path.clone(),
+            name: self.name.clone(),
+        }
+    }
+
     pub fn merge_with(&mut self, other: &Function) {
-        if self.is_exported != other.is_exported {
-            self.is_exported = other.is_exported;
-        }
-        if self.is_method == false && other.is_method == true {
-            self.is_method = true;
-        }
-        if self.pkg_path.is_empty() && !other.pkg_path.is_empty() {
-            self.pkg_path = other.pkg_path.clone();
-        }
-        if self.name.is_empty() && !other.name.is_empty() {
-            self.name = other.name.clone();
-        }
-        if self.content.is_empty() && !other.content.is_empty() {
-            self.content = other.content.clone();
-        }
-        if self.associated_struct.is_none() && other.associated_struct.is_some() {
-            self.associated_struct = other.associated_struct.clone();
-        }
-        if self.internal_function_calls.is_none() && other.internal_function_calls.is_some() {
-            self.internal_function_calls = other.internal_function_calls.clone();
-        }
-        if self.third_party_function_calls.is_none() && other.third_party_function_calls.is_some() {
-            self.third_party_function_calls = other.third_party_function_calls.clone();
-        }
-        if self.internal_method_calls.is_none() && other.internal_method_calls.is_some() {
-            self.internal_method_calls = other.internal_method_calls.clone();
-        }
-        if self.third_party_method_calls.is_none() && other.third_party_method_calls.is_some() {
-            self.third_party_method_calls = other.third_party_method_calls.clone();
-        }
-        if self.compress_data.is_none() && other.compress_data.is_some() {
-            self.compress_data = other.compress_data.clone();
-        }
+        let compress = self.compress_data.clone();
+        *self = other.clone();
+        self.compress_data = compress;
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Struct {
-    #[serde(rename = "Exported", default)]
-    pub is_exported: bool,
-    #[serde(rename = "TypeKind")]
-    type_kind: u8,
+    #[serde(rename = "ModPath")]
+    pub mod_path: String,
     #[serde(rename = "PkgPath")]
     pub(crate) pkg_path: String,
     #[serde(rename = "Name")]
     pub(crate) name: String,
+    #[serde(rename = "Exported", default)]
+    pub is_exported: bool,
+    #[serde(rename = "TypeKind")]
+    type_kind: u8,
     #[serde(rename = "Content")]
     pub(crate) content: String,
     #[serde(rename = "SubStruct")]
@@ -331,37 +354,24 @@ pub struct Struct {
 }
 
 impl Struct {
+    pub fn id(&self) -> Identity {
+        Identity {
+            mod_path: self.mod_path.clone(),
+            pkg_path: self.pkg_path.clone(),
+            name: self.name.clone(),
+        }
+    }
     pub fn merge_with(&mut self, other: &Struct) {
-        if self.is_exported != other.is_exported {
-            self.is_exported = other.is_exported;
-        }
-        self.type_kind = other.type_kind;
-        if self.pkg_path.is_empty() && !other.pkg_path.is_empty() {
-            self.pkg_path = other.pkg_path.clone();
-        }
-        if self.name.is_empty() && !other.name.is_empty() {
-            self.name = other.name.clone();
-        }
-        if self.content.is_empty() && !other.content.is_empty() {
-            self.content = other.content.clone();
-        }
-        if self.sub_struct.is_none() && other.sub_struct.is_some() {
-            self.sub_struct = other.sub_struct.clone();
-        }
-        if self.inline_struct.is_none() && other.inline_struct.is_some() {
-            self.inline_struct = other.inline_struct.clone();
-        }
-        if self.methods.is_none() && other.methods.is_some() {
-            self.methods = other.methods.clone();
-        }
-        if self.compress_data.is_none() && other.compress_data.is_some() {
-            self.compress_data = other.compress_data.clone();
-        }
+        let compress = self.compress_data.clone();
+        *self = other.clone();
+        self.compress_data = compress;
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Identity {
+    #[serde(rename = "ModPath")]
+    pub mod_path: String,
     #[serde(rename = "PkgPath")]
     pub pkg_path: String,
     #[serde(rename = "Name")]

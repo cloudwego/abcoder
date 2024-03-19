@@ -1,20 +1,14 @@
-use std::clone;
 use std::collections::HashMap;
 use std::error::Error;
-use std::hash::Hash;
 use std::ops::Add;
 
 use async_recursion::async_recursion;
 // Add these imports at the beginning of your file
-use serde::{Deserialize, Serialize};
 
-use llm::ollama::ollama_compress;
 use types::types::{
     CalledType, Identity, KeyValueType, Repository, ToCompressFunc, ToCompressType,
 };
 
-use crate::compress::compress;
-use crate::compress::llm;
 use crate::compress::llm::coze::coze_compress;
 use crate::compress::types;
 use crate::storage::cache::get_cache;
@@ -29,21 +23,17 @@ pub async fn compress_all(repo: &mut Repository) {
     let mut to_compress_func = Vec::new();
     let mut to_compress_type = Vec::new();
 
-    for (_, pkg) in &repo.packages {
-        for (_, func) in &pkg.functions {
-            let id = Identity {
-                pkg_path: func.pkg_path.clone(),
-                name: func.name.clone(),
-            };
-            to_compress_func.push(id)
-        }
+    for (_, _mod) in &repo.modules {
+        for (_, pkg) in &_mod.packages {
+            for (_, func) in &pkg.functions {
+                let id = func.id();
+                to_compress_func.push(id)
+            }
 
-        for (_, _type) in &pkg.types {
-            let id = Identity {
-                pkg_path: _type.pkg_path.clone(),
-                name: _type.name.clone(),
-            };
-            to_compress_type.push(id)
+            for (_, _type) in &pkg.types {
+                let id = _type.id();
+                to_compress_type.push(id)
+            }
         }
     }
 
@@ -57,24 +47,32 @@ pub async fn compress_all(repo: &mut Repository) {
         cascade_compress_struct(&id, repo, &mut m).await;
     }
 
-    for (id, pkg) in repo.packages.clone().iter() {
-        if pkg.compress_data.is_none() {
-            compress_package(id, repo).await;
-        } else {
-            println!("package {} is already compressed, skip it.", id);
+    for (mname, _mod) in &repo.clone().modules {
+        for (id, pkg) in &_mod.packages {
+            if pkg.compress_data.is_none() {
+                compress_package(&id, mname, repo).await;
+            } else {
+                println!("package {} is already compressed, skip it.", id);
+            }
         }
     }
 }
 
-pub async fn compress_package(id: &str, repo: &mut Repository) {
+pub async fn compress_package(id: &str, module: &str, repo: &mut Repository) {
     println!("start to compress package: {}", id);
-    let source = repo.packages.get(id).unwrap().export_api().to_string();
-    let compress_data = llm_compress_package(source.as_str()).await;
+    let pkg = repo
+        .modules
+        .get_mut(module)
+        .unwrap()
+        .packages
+        .get_mut(id)
+        .unwrap();
+
+    let compress_data = llm_compress_package(pkg.export_api().as_str()).await;
     if compress_data.is_none() {
         return;
     }
     let compress_data = compress_data.unwrap();
-    let pkg = repo.packages.get_mut(id).unwrap();
     pkg.compress_data = Some(compress_data);
     repo.save_to_cache();
     println!("finish to compress package: {}", id);
@@ -90,6 +88,9 @@ pub async fn cascade_compress_function(
 
     {
         let func_opt = repo
+            .modules
+            .get(&id.mod_path)
+            .unwrap()
             .packages
             .get(id.pkg_path.as_str())
             .unwrap()
@@ -108,7 +109,7 @@ pub async fn cascade_compress_function(
         }
 
         // Start to compress internal function callls
-        if let Some(calls) = &func_opt.internal_function_calls {
+        if let Some(calls) = &func_opt.function_calls {
             for (_, f) in calls {
                 if f.name == id.name && f.pkg_path == id.pkg_path {
                     println!("find a recursive function: {}", f.name);
@@ -119,17 +120,14 @@ pub async fn cascade_compress_function(
                     println!("find a calling cycle: {}", compress_key);
                     continue;
                 }
-                let id = Identity {
-                    pkg_path: f.pkg_path.clone(),
-                    name: f.name.clone(),
-                };
+                let id = f.clone();
                 m.insert(compress_key, true);
                 to_compress.push(id);
             }
         }
 
         // Start to compress internal method_calls
-        if let Some(calls) = &func_opt.internal_method_calls {
+        if let Some(calls) = &func_opt.method_calls {
             for (_, f) in calls {
                 if f.name == id.name && f.pkg_path == id.pkg_path {
                     println!("find a recursive method: {}", f.name);
@@ -140,10 +138,7 @@ pub async fn cascade_compress_function(
                     println!("find a calling cycle: {}", compress_key);
                     continue;
                 }
-                let id = Identity {
-                    pkg_path: f.pkg_path.clone(),
-                    name: f.name.clone(),
-                };
+                let id = f.clone();
                 m.insert(compress_key, true);
                 to_compress.push(id);
             }
@@ -158,6 +153,9 @@ pub async fn cascade_compress_function(
     let mut map = HashMap::new();
     let content = {
         let func_opt = repo
+            .modules
+            .get(&id.mod_path)
+            .unwrap()
             .packages
             .get(id.pkg_path.as_str())
             .unwrap()
@@ -166,14 +164,22 @@ pub async fn cascade_compress_function(
             .unwrap();
 
         // Add the compress data of internal function calls
-        if let Some(calls) = &func_opt.internal_function_calls {
+        if let Some(calls) = &func_opt.function_calls {
             for (k, f) in calls {
+                // TODO: compress extrenal symbol too
+                if !repo.contains(f) {
+                    continue;
+                }
+
                 if f.name == id.name && f.pkg_path == id.pkg_path {
                     println!("find a recursive function: {}", f.name);
                     continue;
                 }
 
                 let sub_function = repo
+                    .modules
+                    .get(&f.mod_path)
+                    .unwrap()
                     .packages
                     .get(f.pkg_path.as_str())
                     .unwrap()
@@ -196,14 +202,22 @@ pub async fn cascade_compress_function(
         }
 
         // Add the compress data of internal method calls
-        if let Some(calls) = &func_opt.internal_method_calls {
+        if let Some(calls) = &func_opt.method_calls {
             for (k, f) in calls {
+                // TODO: compress extrenal symbol too
+                if !repo.contains(f) {
+                    continue;
+                }
+
                 if f.name == id.name && f.pkg_path == id.pkg_path {
                     println!("find a recursive method: {}", f.name);
                     continue;
                 }
 
                 let sub_function = repo
+                    .modules
+                    .get(&f.mod_path)
+                    .unwrap()
                     .packages
                     .get(f.pkg_path.as_str())
                     .unwrap()
@@ -221,42 +235,6 @@ pub async fn cascade_compress_function(
             }
         }
 
-        // Add the compress data of third party functions/methods
-        let mut cache = get_cache();
-        if let Some(calls) = &func_opt.third_party_function_calls {
-            for (k, f) in calls {
-                if let Some(repo) = load_repo(&mut cache, &pkg_name_to_repo_name(&f.pkg_path)) {
-                    if let Some(f) = repo.get_func(f) {
-                        if let Some(compress_data) = f.compress_data.clone() {
-                            map.insert(k.clone(), compress_data.clone());
-                        }
-                    } else {
-                        eprintln!("do not find {} in repo: {}", &f.name, &f.pkg_path);
-                    }
-                } else {
-                    println!("meet a third party repo which we haven't compressed before.")
-                }
-            }
-        }
-        if let Some(calls) = &func_opt.third_party_method_calls {
-            for (k, f) in calls {
-                if let Some(repo) = load_repo(&mut cache, &pkg_name_to_repo_name(&f.pkg_path)) {
-                    if let Some(f) = repo.get_func(f) {
-                        if let Some(compress_data) = f.compress_data.clone() {
-                            map.insert(k.clone(), compress_data.clone());
-                        }
-                    } else {
-                        eprintln!("do not find {} in repo: {}", &f.name, &f.pkg_path);
-                    }
-                } else {
-                    println!(
-                        "meet a third party repo which we haven't compressed before: {}",
-                        &f.pkg_path
-                    );
-                }
-            }
-        }
-
         println!("start to compress function: {}", func_opt.name);
         if func_opt.content.is_empty() {
             println!("content is empty skip it");
@@ -267,6 +245,9 @@ pub async fn cascade_compress_function(
     };
 
     let func_opt = repo
+        .modules
+        .get_mut(&id.mod_path)
+        .unwrap()
         .packages
         .get_mut(id.pkg_path.as_str())
         .unwrap()
@@ -314,6 +295,9 @@ pub async fn cascade_compress_struct(
 
     {
         let struct_opt = repo
+            .modules
+            .get(&id.mod_path)
+            .unwrap()
             .packages
             .get(id.pkg_path.as_str())
             .unwrap()
@@ -334,7 +318,8 @@ pub async fn cascade_compress_struct(
         // Start to compress sub struct
         if let Some(sub) = &stru.sub_struct {
             for (_, f) in sub {
-                if !f.pkg_path.starts_with(&repo.mod_name) {
+                // TODO: compress extrenal symbol too
+                if !repo.contains(f) {
                     continue;
                 }
 
@@ -344,10 +329,7 @@ pub async fn cascade_compress_struct(
                     continue;
                 }
 
-                let id = Identity {
-                    pkg_path: f.pkg_path.clone(),
-                    name: f.name.clone(),
-                };
+                let id = f.clone();
                 to_compress.push(id);
                 m.insert(compress_key, true);
             }
@@ -356,7 +338,8 @@ pub async fn cascade_compress_struct(
         // Start to compress inline struct
         if let Some(inline) = &stru.inline_struct {
             for (_, f) in inline {
-                if !f.pkg_path.starts_with(&repo.mod_name) {
+                // TODO: compress extrenal symbol too
+                if !repo.contains(f) {
                     continue;
                 }
 
@@ -366,10 +349,7 @@ pub async fn cascade_compress_struct(
                     continue;
                 }
 
-                let id = Identity {
-                    pkg_path: f.pkg_path.clone(),
-                    name: f.name.clone(),
-                };
+                let id = f.clone();
                 to_compress.push(id);
                 m.insert(compress_key, true);
             }
@@ -386,6 +366,9 @@ pub async fn cascade_compress_struct(
     let mut method_map = HashMap::new();
     let content = {
         let _type = repo
+            .modules
+            .get(&id.mod_path)
+            .unwrap()
             .packages
             .get(id.pkg_path.as_str())
             .unwrap()
@@ -399,7 +382,12 @@ pub async fn cascade_compress_struct(
         // Add the compress data of sub struct
         if let Some(subs) = &_type.sub_struct {
             for (k, f) in subs {
-                let pkg = repo.packages.get(f.pkg_path.as_str());
+                let pkg = repo
+                    .modules
+                    .get(&f.mod_path)
+                    .unwrap()
+                    .packages
+                    .get(f.pkg_path.as_str());
                 if pkg.is_none() {
                     // try to load third party struct
                     if let Some(repo) = load_repo(&mut cache, &pkg_name_to_repo_name(&f.pkg_path)) {
@@ -430,7 +418,12 @@ pub async fn cascade_compress_struct(
         // Add the compress data of inline struct
         if let Some(inlines) = &_type.inline_struct {
             for (k, f) in inlines {
-                let pkg = repo.packages.get(f.pkg_path.as_str());
+                let pkg = repo
+                    .modules
+                    .get(&f.mod_path)
+                    .unwrap()
+                    .packages
+                    .get(f.pkg_path.as_str());
                 if pkg.is_none() {
                     // try to load third party struct
                     if let Some(repo) = load_repo(&mut cache, &pkg_name_to_repo_name(&f.pkg_path)) {
@@ -446,6 +439,9 @@ pub async fn cascade_compress_struct(
                     continue;
                 }
                 let inline = repo
+                    .modules
+                    .get(&f.mod_path)
+                    .unwrap()
                     .packages
                     .get(f.pkg_path.as_str())
                     .unwrap()
@@ -467,6 +463,9 @@ pub async fn cascade_compress_struct(
         if let Some(methods) = &_type.methods {
             for (k, f) in methods {
                 let func = repo
+                    .modules
+                    .get(&f.mod_path)
+                    .unwrap()
                     .packages
                     .get(f.pkg_path.as_str())
                     .unwrap()
@@ -491,6 +490,9 @@ pub async fn cascade_compress_struct(
     };
 
     let mut type_opt = repo
+        .modules
+        .get_mut(&id.mod_path)
+        .unwrap()
         .packages
         .get_mut(id.pkg_path.as_str())
         .unwrap()

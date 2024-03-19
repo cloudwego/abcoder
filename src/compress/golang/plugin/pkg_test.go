@@ -16,16 +16,15 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 func Test_goParser_ParseDirs(t *testing.T) {
 	type args struct {
 		modName     string
 		homePageDir string
-		dir         string
+		pkg         string
 	}
 	tests := []struct {
 		name    string
@@ -38,19 +37,24 @@ func Test_goParser_ParseDirs(t *testing.T) {
 			args: args{
 				homePageDir: "../../../../testdata/golang",
 				modName:     "a.b/c",
-				dir:         "./cmd",
+				pkg:         "a.b/c/cmd",
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := newGoParser(tt.args.modName, tt.args.homePageDir)
-			err := p.ParseDir(tt.args.dir)
+			err := p.ParseRepo()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("goParser.ParseDirs() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			spew.Dump(p)
+			out, err := json.MarshalIndent(p.repo, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = out
+			println(string(out))
 		})
 	}
 }
