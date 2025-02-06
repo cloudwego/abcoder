@@ -1,3 +1,19 @@
+<!--
+ Copyright 2025 CloudWeGo Authors
+ 
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ 
+     https://www.apache.org/licenses/LICENSE-2.0
+ 
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
 # ABCoder: AI-Based Coder(AKA: A Brand-new Coder)
 
 ![ABCoder](images/ABCoder.png)
@@ -6,7 +22,12 @@ ABCoder, an AI-powered tool, streamlines coding by keeping real-time status upda
 
 # Table of Contents
 
+- [ABCoder: AI-Based Coder(AKA: A Brand-new Coder)](#abcoder-ai-based-coderaka-a-brand-new-coder)
+- [Table of Contents](#table-of-contents)
 - [Overview](#overview)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Running through Coze OpenAPI](#running-through-coze-openapi)
 - [Status Update](#status-update)
 - [Lossless Compression](#lossless-compression)
 - [Development Guide](#development-guide)
@@ -20,6 +41,49 @@ ABCoder is a comprehensive open-source software development tool that aims to ut
 the process of coding. This project focuses on various aspects of software development ranging from repository analysis,
 issue and pull request tracking, to automated code compression, development guidance, testing enhancement, and
 refactoring guidance.
+
+# Quick Start
+
+## Prerequisites
+- install git and set your access token for github on cmd-line
+- install [rust-toolchain](https://www.rust-lang.org/tools/install) (stable)
+- (optional) install [ollama](https://github.com/ollama/ollama) and run your LLM
+- (optional) create a [Coze](https://www.coze.com/docs/developer_guides/coze_api_overview?_lang=en) agent and set its OpenAPI key
+
+## Running through Coze OpenAPI
+1. Set .env file for configuration on ABCoder's working directory. Taking Coze as an example:
+```
+REPO_DIR={YOU_REPO_PATH}
+CACHE_DIR={YOUR_CACHE_PATH}
+TOOLS_DIR={ABCODER_PATH}/toos
+EXCLUDE_DIRS=target,gen-codes
+
+# coze|ollama 
+API_TYPE=coze 
+
+# LLM's output language
+LANGUAGE=zh 
+
+# Coze options
+COZE_API_TOKEN="{YOUR_COZE_API_TOKEN}"
+COZE_BOT_ID={YOUR_COZE_BOT_ID}
+```
+
+2. compile the parsers
+```
+sh ./script/make_parser.sh
+```
+
+3. compile and run ABCoder
+```
+cargo run --bin cmd compress https://xxx.git
+```
+
+4. Once triggered, ABCoder will take three steps:
+   1. Download the repository in {REPO_DIR}
+   2. Parse the repository and store the AST in {CACHE_DIR}
+   3. Call the LLM to compress the repository codes, and refresh the AST for each call.
+You can stop the process at anytime after step 2. You can restart the compressing by running the same command.
 
 # Status Update
 

@@ -1,27 +1,31 @@
+// Copyright 2025 CloudWeGo Authors
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     https://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use serde::{Deserialize, Serialize};
 
-use crate::compress::compress::ToCompress;
+use crate::{compress::llm::prompts::make_compress_prompt, config::CONFIG};
+
+use super::ToCompress;
 
 pub async fn ollama_compress(to_compress: ToCompress) -> String {
     let request_url = format!("http://localhost:11434/api/generate");
-    let mut model_name = "codellama-private";
-    let mut to_compress_str = String::new();
-    match to_compress {
-        ToCompress::ToCompressType(t) => {
-            model_name = "codellama-private-type";
-            to_compress_str = t;
-        }
-        ToCompress::ToCompressFunc(f) => {
-            to_compress_str = f;
-        }
-        ToCompress::ToCompressPkg(f) => {
-            to_compress_str = f;
-        }
-    }
+    let to_compress_str = make_compress_prompt(&to_compress);
+    let model_name = CONFIG.ollama_model.as_ref().unwrap().clone();
 
     println!("use prompt:\n{}", to_compress_str);
     let req_body: OllamaReq = OllamaReq {
-        model: model_name.to_string(),
+        model: model_name,
         prompt: to_compress_str,
     };
     let client = reqwest::Client::new();

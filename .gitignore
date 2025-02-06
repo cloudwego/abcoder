@@ -57,3 +57,19 @@ Cargo.lock
 *.out
 
 env.sh
+
+.vscode
+
+__pycache__
+
+*.log
+.env
+
+rust-analyzer-x86_64-unknown-linux-gnu
+
+testdata/test
+
+src/lang/testdata
+*.json
+
+tools

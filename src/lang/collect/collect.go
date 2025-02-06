@@ -1,0 +1,626 @@
+// Copyright 2025 CloudWeGo Authors
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     https://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package collect
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"unicode"
+
+	"github.com/cloudwego/abcoder/src/lang/log"
+	"github.com/cloudwego/abcoder/src/lang/lsp"
+	. "github.com/cloudwego/abcoder/src/lang/lsp"
+	"github.com/cloudwego/abcoder/src/lang/rust"
+)
+
+type CollectOption struct {
+	LoadExternalSymbol bool
+	NeedStdSymbol      bool
+	Excludes           []string
+}
+
+type Collector struct {
+	cli  *LSPClient
+	spec LanguageSpec
+
+	repo string
+
+	syms map[Location]*DocumentSymbol
+
+	//  symbol => (receiver,impl,func)
+	funcs map[*DocumentSymbol]functionInfo
+
+	// 	symbol => [deps]
+	deps map[*DocumentSymbol][]dependency
+
+	// variable (or const) => type
+	vars map[*DocumentSymbol]dependency
+
+	modPatcher ModulePatcher
+
+	CollectOption
+}
+
+type dependency struct {
+	Location Location        `json:"location"`
+	Symbol   *DocumentSymbol `json:"symbol"`
+}
+
+type methodInfo struct {
+	Receiver  dependency  `json:"receiver"`
+	Interface *dependency `json:"implement,omitempty"` // which interface it implements
+	ImplHead  string      `json:"implHead,omitempty"`
+}
+
+type functionInfo struct {
+	Method           *methodInfo        `json:"method,omitempty"`
+	TypeParams       map[int]dependency `json:"typeParams,omitempty"`
+	TypeParamsSorted []dependency       `json:"-"`
+	Inputs           map[int]dependency `json:"inputs,omitempty"`
+	InputsSorted     []dependency       `json:"-"`
+	Outputs          map[int]dependency `json:"outputs,omitempty"`
+	OutputsSorted    []dependency       `json:"-"`
+}
+
+func switchSpec(l lsp.Language) lsp.LanguageSpec {
+	switch l {
+	case Rust:
+		return &rust.RustSpec{}
+	default:
+		panic(fmt.Sprintf("unsupported language %s", l))
+	}
+}
+
+func NewCollector(repo string, cli *LSPClient) *Collector {
+	ret := &Collector{
+		repo:  repo,
+		cli:   cli,
+		spec:  switchSpec(cli.ClientOptions.Language),
+		syms:  map[Location]*DocumentSymbol{},
+		funcs: map[*DocumentSymbol]functionInfo{},
+		deps:  map[*DocumentSymbol][]dependency{},
+		vars:  map[*DocumentSymbol]dependency{},
+	}
+	if cli.Language == Rust {
+		ret.modPatcher = &rust.RustModulePatcher{Root: repo}
+	}
+	return ret
+}
+
+func (c *Collector) Collect(ctx context.Context) error {
+	excludes := make([]string, len(c.Excludes))
+	for i, e := range c.Excludes {
+		if !filepath.IsAbs(e) {
+			excludes[i] = filepath.Join(c.repo, e)
+		} else {
+			excludes[i] = e
+		}
+	}
+
+	// scan all files
+	roots := make([]*DocumentSymbol, 0, 1024)
+	scanner := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		for _, e := range excludes {
+			if strings.HasPrefix(path, e) {
+				return nil
+			}
+		}
+		if c.spec.ShouldSkip(path) {
+			return nil
+		}
+
+		// collect symbols
+		uri := NewURI(path)
+		symbols, err := c.cli.DocumentSymbols(ctx, uri)
+		if err != nil {
+			return err
+		}
+		// file := filepath.Base(path)
+		for _, sym := range symbols {
+			// collect content
+			content, err := c.cli.Locate(sym.Location)
+			if err != nil {
+				return err
+			}
+			// collect tokens
+			tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+			if err != nil {
+				return err
+			}
+			sym.Text = content
+			sym.Tokens = tokens
+			c.syms[sym.Location] = sym
+			roots = append(roots, sym)
+		}
+
+		return nil
+	}
+	if err := filepath.Walk(c.repo, scanner); err != nil {
+		return err
+	}
+
+	// collect some extra metadata
+	syms := make([]*DocumentSymbol, 0, len(roots))
+	for _, sym := range roots {
+		// only language entity symbols need to be collect on next
+		if c.spec.IsEntitySymbol(*sym) {
+			syms = append(syms, sym)
+		}
+		c.processSymbol(ctx, sym, 1)
+	}
+
+	// collect internal references
+	// for _, sym := range syms {
+	// 	i := c.spec.DeclareTokenOfSymbol(*sym)
+	// 	if i < 0 {
+	// 		log.Error("declare token of symbol %s failed\n", sym)
+	// 		continue
+	// 	}
+	// 	refs, err := c.cli.References(ctx, sym.Tokens[i].Location)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	for _, rloc := range refs {
+	// 		// remove child symbol
+	// 		if sym.Location.Include(rloc) {
+	// 			continue
+	// 		}
+	// 		rsym, err := c.getSymbolByLocation(ctx, rloc)
+	// 		if err != nil || rsym == nil {
+	// 			log.Error("symbol not found for location %v\n", rloc)
+	// 			continue
+	// 		}
+	// 		// remove external or parent symbol
+	// 		if !c.internal(rsym.Location) || rsym.Location.Include(sym.Location) {
+	// 			continue
+	// 		}
+	// 		c.deps[rsym] = append(c.deps[rsym], Dependency{
+	// 			Location: rloc,
+	// 			Symbol:   sym,
+	// 		})
+	// 	}
+	// }
+
+	// collect dependencies
+	for _, sym := range syms {
+	next_token:
+
+		for i, token := range sym.Tokens {
+			// only entity token need to be collect (std token is only collected when NeedStdSymbol is true)
+			if !c.spec.IsEntityToken(token) {
+				continue
+			}
+
+			// skip function's params
+			if sym.Kind == SKFunction || sym.Kind == SKMethod {
+				if finfo, ok := c.funcs[sym]; ok {
+					if finfo.Method != nil {
+						if finfo.Method.Receiver.Location.Include(token.Location) {
+							continue next_token
+						}
+					}
+					if finfo.Inputs != nil {
+						if _, ok := finfo.Inputs[i]; ok {
+							continue next_token
+						}
+					}
+					if finfo.Outputs != nil {
+						if _, ok := finfo.Outputs[i]; ok {
+							continue next_token
+						}
+					}
+					if finfo.TypeParams != nil {
+						if _, ok := finfo.TypeParams[i]; ok {
+							continue next_token
+						}
+					}
+				}
+			}
+			// skip variable's type
+			if sym.Kind == SKVariable || sym.Kind == SKConstant {
+				if dep, ok := c.vars[sym]; ok {
+					if dep.Location.Include(token.Location) {
+						continue next_token
+					}
+				}
+			}
+
+			// go to definition
+			dep, err := c.getSymbolByToken(ctx, token)
+			if err != nil || dep == nil {
+				log.Error("dep token %v not found: %v\n", token, err)
+				continue
+			}
+			// remove self
+			if sym.Location.Include(dep.Location) {
+				continue
+			}
+
+			// NOTICE: some internal symbols may not been get by DocumentSymbols, thus we let Unknown symbol pass
+			if dep.Kind == SKUnknown && c.internal(dep.Location) {
+				// try get symbol kind by token
+				sk := c.spec.TokenKind(token)
+				if sk != SKUnknown {
+					dep.Kind = sk
+					dep.Name = token.Text
+				}
+			}
+			c.deps[sym] = append(c.deps[sym], dependency{
+				Location: token.Location,
+				Symbol:   dep,
+			})
+
+		}
+	}
+
+	return nil
+}
+
+func (c *Collector) internal(loc Location) bool {
+	return strings.HasPrefix(loc.URI.File(), c.repo)
+}
+
+func (c *Collector) getSymbolByToken(ctx context.Context, tok Token) (*DocumentSymbol, error) {
+	return c.getSymbolByTokenWithLimit(ctx, tok, 1)
+}
+
+func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, depth int) (*DocumentSymbol, error) {
+	// get definition symbol
+	defs, err := c.cli.Definition(ctx, tok.Location.URI, tok.Location.Range.Start)
+	if err != nil {
+		return nil, err
+	}
+	if len(defs) == 0 {
+		return nil, fmt.Errorf("definition of token %s not found", tok)
+	}
+	if len(defs) > 1 {
+		log.Error("definition of token %s not unique", tok)
+	}
+	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
+}
+
+func (c *Collector) filterEntitySymbols(syms []*DocumentSymbol) *DocumentSymbol {
+	for _, sym := range syms {
+		if c.spec.IsEntitySymbol(*sym) {
+			return sym
+		}
+	}
+	return nil
+}
+
+// return a language entity symbol
+//   - loaded: just return loaded symbol
+//   - not loaded but set option LoadExternalSymbol: load external symbol and return
+//   - otherwise: return a Unknown symbol
+func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth int, from Token) (*DocumentSymbol, error) {
+	// already loaded
+	// if sym, ok := c.syms[loc]; ok {
+	// 	return sym, nil
+	// }
+	var ret []*DocumentSymbol
+	for _, sym := range c.syms {
+		if sym.Location.Include(loc) {
+			ret = append(ret, sym)
+		}
+	}
+	if len(ret) > 0 {
+		return c.filterEntitySymbols(ret), nil
+	}
+
+	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
+		//  external symbol, locate and process it
+		syms, err := c.cli.DocumentSymbols(ctx, loc.URI)
+		if err != nil {
+			return nil, err
+		}
+		for _, sym := range syms {
+			// save symbol first
+			if _, ok := c.syms[sym.Location]; !ok {
+				content, err := c.cli.Locate(sym.Location)
+				if err != nil {
+					return nil, err
+				}
+				sym.Text = content
+				c.syms[sym.Location] = sym
+			}
+			if sym.Location.Include(loc) {
+				ret = append(ret, sym)
+			}
+		}
+		if depth >= 0 {
+			// process target symbol
+			for _, sym := range syms {
+				// check if need process
+				if c.needProcessExternal(sym) {
+					// collect tokens before process
+					tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+					if err != nil {
+						return nil, err
+					}
+					sym.Tokens = tokens
+					c.processSymbol(ctx, sym, depth-1)
+				}
+			}
+		}
+
+		// filter entity symbol
+		rsym := c.filterEntitySymbols(ret)
+		return rsym, nil
+
+	} else {
+		//  external symbol, just locate the content
+		var text string
+		if c.internal(loc) {
+			// maybe internal symbol not loaded, like `lazy_static!` in Rust
+			// use the before and after symbol as text
+			var left, right *DocumentSymbol
+			syms, err := c.cli.DocumentSymbols(ctx, loc.URI)
+			if err != nil {
+				if c.cli.ClientOptions.Verbose {
+					log.Error("locate %v failed: %v\n", loc, err)
+				}
+				goto finally
+			}
+			for _, sym := range syms {
+				if sym.Location.Range.End.Less(loc.Range.Start) {
+					if left == nil || left.Location.Range.End.Less(sym.Location.Range.End) {
+						left = sym
+					}
+				}
+				if loc.Range.End.Less(sym.Location.Range.Start) {
+					if right == nil || sym.Location.Range.Start.Less(right.Location.Range.Start) {
+						right = sym
+					}
+				}
+			}
+			if left == nil {
+				left = &DocumentSymbol{
+					Location: Location{
+						URI: loc.URI,
+						Range: Range{
+							Start: Position{
+								Line:      0,
+								Character: 0,
+							},
+							End: Position{
+								Line:      0,
+								Character: 0,
+							},
+						},
+					},
+				}
+			}
+			if right == nil {
+				lines := c.cli.LineCounts(loc.URI)
+				right = &DocumentSymbol{
+					Location: Location{
+						URI: loc.URI,
+						Range: Range{
+							Start: Position{
+								Line:      len(lines),
+								Character: 1,
+							},
+							End: Position{
+								Line:      len(lines),
+								Character: 1,
+							},
+						},
+					},
+				}
+			}
+			var end int
+			line := c.cli.Line(loc.URI, right.Location.Range.Start.Line-1)
+			for i := 0; i < len(line); i++ {
+				if unicode.IsSpace(rune(line[i])) {
+					end = i
+					break
+				}
+			}
+			txt, err := c.cli.Locate(Location{
+				URI: loc.URI,
+				Range: Range{
+					Start: Position{
+						Line:      left.Location.Range.End.Line + 1,
+						Character: 0,
+					},
+					End: Position{
+						Line:      right.Location.Range.Start.Line - 1,
+						Character: end,
+					},
+				},
+			})
+			if err != nil {
+				if c.cli.ClientOptions.Verbose {
+					log.Error("locate %v failed: %v\n", loc, err)
+				}
+				goto finally
+			}
+			text = txt
+		}
+	finally:
+		if text == "" {
+			txt, err := c.cli.Locate(loc)
+			if err != nil {
+				if c.cli.ClientOptions.Verbose {
+					log.Error("locate %v failed: %v\n", loc, err)
+				}
+			}
+			text = txt
+		}
+		// not loaded, make a fake Unknown symbol
+		tmp := &DocumentSymbol{
+			Name:     from.Text,
+			Kind:     c.spec.TokenKind(from),
+			Location: loc,
+			Text:     text,
+		}
+		c.syms[loc] = tmp
+		return tmp, nil
+	}
+}
+
+func (c *Collector) getDepsWithLimit(ctx context.Context, sym *DocumentSymbol, tps []int, depth int) (map[int]dependency, []dependency) {
+	var tsyms = make(map[int]dependency, len(tps))
+	var sorted = make([]dependency, 0, len(tps))
+	for _, tp := range tps {
+		dep, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[tp], depth)
+		if err != nil || sym == nil {
+			log.Error_skip(1, "token %v not found its symbol: %v", tp, err)
+		} else {
+			d := dependency{sym.Tokens[tp].Location, dep}
+			tsyms[tp] = d
+			sorted = append(sorted, d)
+		}
+	}
+	return tsyms, sorted
+}
+
+func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth int) {
+	// method info: receiver, implementee
+	inter, rec, fn := c.spec.ImplSymbol(*sym)
+	if rec < 0 {
+		return
+	}
+	var rd, ind *dependency
+	var err error
+	rsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[rec], depth)
+	if err != nil || rsym == nil {
+		log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
+		return
+	}
+	rd = &dependency{sym.Tokens[rec].Location, rsym}
+	if inter >= 0 {
+		isym, err := c.getSymbolByToken(ctx, sym.Tokens[inter])
+		if err != nil || isym == nil {
+			log.Error("get implement symbol for token %v failed: %v\n", inter, err)
+		} else {
+			ind = &dependency{sym.Tokens[inter].Location, isym}
+		}
+	}
+	var impl string
+	if fn > 0 && fn < len(sym.Tokens) {
+		impl = lsp.ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
+	}
+	if impl == "" || len(impl) < len(sym.Name) {
+		impl = sym.Name
+	}
+	// search all methods
+	for _, method := range c.syms {
+		// NOTICE: some class method (ex: XXType::new) are SKFunction, but still collect its receiver
+		if (method.Kind == SKMethod || method.Kind == SKFunction) && sym.Location.Include(method.Location) {
+			c.funcs[method] = functionInfo{
+				Method: &methodInfo{
+					Receiver:  *rd,
+					Interface: ind,
+					ImplHead:  impl,
+				},
+			}
+		}
+	}
+}
+
+func (c *Collector) needProcessExternal(sym *DocumentSymbol) bool {
+	return (c.spec.HasImplSymbol() && sym.Kind == SKObject) || (!c.spec.HasImplSymbol() && sym.Kind == SKMethod)
+}
+
+func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, depth int) {
+	// method info: receiver, implementee
+	hasImpl := c.spec.HasImplSymbol()
+	if hasImpl {
+		c.collectImpl(ctx, sym, depth)
+	}
+
+	// function info: type params, inputs, outputs, receiver (if !needImpl)
+	if sym.Kind == SKFunction || sym.Kind == SKMethod {
+		var rsym *dependency
+		rec, tps, ips, ops := c.spec.FunctionSymbol(*sym)
+
+		if !hasImpl && rec >= 0 {
+			rsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[rec], depth)
+			if err != nil || rsym == nil {
+				log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
+			}
+		}
+
+		tsyms, ts := c.getDepsWithLimit(ctx, sym, tps, depth-1)
+		ipsyms, is := c.getDepsWithLimit(ctx, sym, ips, depth-1)
+		opsyms, os := c.getDepsWithLimit(ctx, sym, ops, depth-1)
+		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rsym)
+	}
+
+	// variable info: type
+	if sym.Kind == SKVariable || sym.Kind == SKConstant {
+		i := c.spec.DeclareTokenOfSymbol(*sym)
+		// find first entity token
+		for i = i + 1; i < len(sym.Tokens); i++ {
+			if c.spec.IsEntityToken(sym.Tokens[i]) {
+				break
+			}
+		}
+		if i < 0 || i >= len(sym.Tokens) {
+			log.Error("get type token of variable symbol %s failed\n", sym)
+			return
+		}
+		tsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[i], depth-1)
+		if err != nil || tsym == nil {
+			log.Error("get type symbol for token %s failed:%v\n", sym.Tokens[i], err)
+			return
+		}
+		c.vars[sym] = dependency{
+			Location: sym.Tokens[i].Location,
+			Symbol:   tsym,
+		}
+	}
+}
+
+func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsyms map[int]dependency, ts, is, os []dependency, rsym *dependency) {
+	f, ok := c.funcs[sym]
+	if ok {
+		f.TypeParams = tsyms
+		f.TypeParamsSorted = ts
+		f.Inputs = ipsyms
+		f.InputsSorted = is
+		f.Outputs = opsyms
+		f.OutputsSorted = os
+		if rsym != nil {
+			if f.Method == nil {
+				f.Method = &methodInfo{}
+			}
+			f.Method.Receiver = *rsym
+		}
+	} else {
+		f = functionInfo{
+			TypeParams: tsyms,
+			Inputs:     ipsyms,
+			Outputs:    opsyms,
+		}
+		if rsym != nil {
+			if f.Method == nil {
+				f.Method = &methodInfo{}
+			}
+			f.Method.Receiver = *rsym
+		}
+	}
+	c.funcs[sym] = f
+}
