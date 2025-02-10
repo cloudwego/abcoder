@@ -802,7 +802,7 @@ pub async fn cascade_compress_struct(
             return;
         }
     }
-    panic!("empty compress for {:?}", id)
+    // panic!("empty compress for {:?}", id)
 }
 
 async fn llm_compress_package(pkg: &str) -> Option<String> {

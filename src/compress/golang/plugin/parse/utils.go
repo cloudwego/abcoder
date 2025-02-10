@@ -185,12 +185,17 @@ func getTypeKind(n ast.Expr) TypeKind {
 func getNamedType(typ types.Type) (ty types.Object, isPointer bool) {
 	if pt, ok := typ.(*types.Pointer); ok {
 		typ = pt.Elem()
-	}
-	name, ok := typ.(*types.Named)
-	if ok {
+	} else if name, ok := typ.(*types.Named); ok {
 		return name.Obj(), isPointer
 	}
 	return nil, isPointer
+}
+
+func extractName(typ string) string {
+	if strings.Contains(typ, ".") {
+		return strings.Split(typ, ".")[1]
+	}
+	return typ
 }
 
 func parseExpr(expr string) (interface{}, error) {

@@ -19,7 +19,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -362,10 +361,7 @@ func (p *goParser) parsePackage(pkgPath PkgPath) (err error) {
 
 		for idx, file := range pkg.Syntax {
 			filePath := pkg.GoFiles[idx]
-			bs, err := ioutil.ReadFile(filePath)
-			if err != nil {
-				return err
-			}
+			bs := p.getFileBytes(filePath)
 			ctx := &fileContext{
 				repoDir:     p.homePageDir,
 				filePath:    filePath,

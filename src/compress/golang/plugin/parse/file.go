@@ -308,8 +308,14 @@ func (p *goParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 		}
 		// callName := string(ctx.GetRawContent(expr))
 		// get receiver type name
+		var rname string
 		rev, _ := getNamedType(sel.Recv())
-		id := NewIdentity(mod, pkg, rev.Name()+"."+expr.Sel.Name)
+		if rev == nil {
+			rname = extractName(sel.Recv().String())
+		} else {
+			rname = rev.Name()
+		}
+		id := NewIdentity(mod, pkg, rname+"."+expr.Sel.Name)
 		if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
 		}

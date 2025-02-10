@@ -20,7 +20,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,24 +80,32 @@ func (p *goParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	}
 	for i, fpath := range pkg.GoFiles {
 		file := pkg.Syntax[i]
-		fc, e := ioutil.ReadFile(fpath)
-		if e != nil {
-			err = e
-			continue
-		}
-		impts, e := p.parseImports(ctx.fset, ctx.bs, mod, file.Imports)
+		bs := p.getFileBytes(fpath)
+		impts, e := p.parseImports(pkg.Fset, bs, mod, file.Imports)
 		if e != nil {
 			err = e
 			continue
 		}
 		// println("search file", fpath)
-		_, e = p.searchOnFile(file, pkg.Fset, fc, id.ModPath, pkg.ID, impts, id.Name)
+		_, e = p.searchOnFile(file, pkg.Fset, bs, id.ModPath, pkg.ID, impts, id.Name)
 		if e != nil {
 			err = e
 			continue
 		}
 	}
 	return
+}
+
+func (p *goParser) getFileBytes(path string) []byte {
+	if bs, ok := p.files[path]; ok {
+		return bs
+	}
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	p.files[path] = bs
+	return bs
 }
 
 func (ctx *fileContext) GetImportPath(alias string) (string, string, error) {

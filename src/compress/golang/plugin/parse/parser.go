@@ -43,12 +43,21 @@ type goParser struct {
 	opts        *Options
 	interfaces  map[*types.Interface]Identity
 	types       map[types.Type]Identity
+	files       map[string][]byte
 }
 
 type moduleInfo struct {
 	name string
 	dir  string
 	path string
+}
+
+func newModuleInfo(name string, dir string, path string) moduleInfo {
+	return moduleInfo{
+		name: name,
+		dir:  dir,
+		path: path,
+	}
 }
 
 func (p *goParser) setOptions(opts *Options) {
@@ -78,6 +87,7 @@ func newGoParser(name string, homePageDir string) *goParser {
 		repo:        NewRepository(name),
 		interfaces:  map[*types.Interface]Identity{},
 		types:       map[types.Type]Identity{},
+		files:       map[string][]byte{},
 	}
 
 	if err := p.collectGoMods(p.homePageDir); err != nil {
@@ -108,7 +118,7 @@ func (p *goParser) collectGoMods(startDir string) error {
 		}
 		for k, v := range deps {
 			p.repo.Modules[name].Dependencies[k] = v
-			libs = append(libs, moduleInfo{name: k, path: v})
+			libs = append(libs, newModuleInfo(k, "", v))
 		}
 		return nil
 	})
@@ -116,17 +126,17 @@ func (p *goParser) collectGoMods(startDir string) error {
 		return err
 	}
 
-	for _, v := range p.repo.Modules {
+	for k, v := range p.repo.Modules {
 		found := false
 		for i, l := range libs {
 			if v.Name == l.name {
-				libs[i] = moduleInfo{name: v.Name, dir: filepath.Join(p.homePageDir, v.Dir)}
+				libs[i].dir = filepath.Join(p.homePageDir, v.Dir)
 				found = true
 				break
 			}
 		}
 		if !found {
-			libs = append(libs, moduleInfo{name: v.Name, dir: filepath.Join(p.homePageDir, v.Dir)})
+			libs = append(libs, newModuleInfo(v.Name, filepath.Join(p.homePageDir, v.Dir), k))
 		}
 	}
 
@@ -264,11 +274,7 @@ func (p *goParser) searchName(name string) (ids []Identity, err error) {
 		pkg := p.pkgPathFromABS(filepath.Dir(path))
 		// go AST parse file
 		fset := token.NewFileSet()
-		fcontent, e := os.ReadFile(path)
-		if e != nil {
-			err = e
-			return nil
-		}
+		fcontent := p.getFileBytes(path)
 		file, e := parser.ParseFile(fset, path, fcontent, parser.SkipObjectResolution)
 		if e != nil {
 			err = e
