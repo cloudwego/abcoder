@@ -1,0 +1,36 @@
+name: Pull Request Check
+
+on: [ pull_request ]
+
+jobs:
+  compliant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check License Header
+        uses: apache/skywalking-eyes/header@v0.4.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check Spell
+        uses: crate-ci/typos@master
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          # for self-hosted, the cache path is shared across projects
+          # and it works well without the cache of github actions
+          # Enable it if we're going to use Github only
+          cache: true
+
+      - name: Golangci Lint
+        # https://golangci-lint.run/
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
