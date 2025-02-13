@@ -1,0 +1,468 @@
+// Copyright 2025 CloudWeGo Authors
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     https://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package parse
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type Parser interface {
+	ParseRepo() (Repository, error)
+	ParseNode(pkgPath string, name string) (Repository, error)
+	ParsePackage(pkgPath PkgPath) (Repository, error)
+}
+
+//---------------- Golang Parser -----------------
+
+// golang parser, used parse multle packages from the entire project
+type goParser struct {
+	homePageDir string           // absolute path to the home page of the repo
+	visited     map[PkgPath]bool // visited packages
+	modules     []moduleInfo     //  [name, abs-path] of modules, sorted by path length in descending order
+	repo        Repository
+	opts        *Options
+	interfaces  map[*types.Interface]Identity
+	types       map[types.Type]Identity
+	files       map[string][]byte
+}
+
+type moduleInfo struct {
+	name string
+	dir  string
+	path string
+}
+
+func newModuleInfo(name string, dir string, path string) moduleInfo {
+	return moduleInfo{
+		name: name,
+		dir:  dir,
+		path: path,
+	}
+}
+
+func (p *goParser) setOptions(opts *Options) {
+	p.opts = opts
+}
+
+func NewParser(name string, homePageDir string, options ...Option) Parser {
+	p := newGoParser(name, homePageDir)
+	o := &Options{}
+	for _, opt := range options {
+		opt(o)
+	}
+	p.setOptions(o)
+	return p
+}
+
+// newGoParser
+func newGoParser(name string, homePageDir string) *goParser {
+	abs, err := filepath.Abs(homePageDir)
+	if err != nil {
+		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
+	}
+
+	p := &goParser{
+		homePageDir: abs,
+		visited:     map[string]bool{},
+		repo:        NewRepository(name),
+		interfaces:  map[*types.Interface]Identity{},
+		types:       map[types.Type]Identity{},
+		files:       map[string][]byte{},
+	}
+
+	if err := p.collectGoMods(p.homePageDir); err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func (p *goParser) collectGoMods(startDir string) error {
+	var libs []moduleInfo
+
+	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || !strings.HasSuffix(path, "go.mod") {
+			return nil
+		}
+		name, content, err := getModuleName(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(p.homePageDir, filepath.Dir(path))
+		if err != nil {
+			return fmt.Errorf("module path %v is not in the repo", path)
+		}
+		p.repo.Modules[name] = NewModule(name, rel)
+		deps, err := parseModuleFile(content)
+		if err != nil {
+			return err
+		}
+		for k, v := range deps {
+			p.repo.Modules[name].Dependencies[k] = v
+			libs = append(libs, newModuleInfo(k, "", v))
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	for k, v := range p.repo.Modules {
+		found := false
+		for i, l := range libs {
+			if v.Name == l.name {
+				libs[i].dir = filepath.Join(p.homePageDir, v.Dir)
+				found = true
+				break
+			}
+		}
+		if !found {
+			libs = append(libs, newModuleInfo(v.Name, filepath.Join(p.homePageDir, v.Dir), k))
+		}
+	}
+
+	p.modules = libs
+	return nil
+}
+
+// ParseRepo parse the entiry repo from homePageDir recursively until end
+func (p *goParser) ParseRepo() (Repository, error) {
+	for _, lib := range p.repo.Modules {
+		startDir := filepath.Join(p.homePageDir, lib.Dir)
+		filepath.WalkDir(startDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || !d.IsDir() || shouldIgnoreDir(path) {
+				return nil
+			}
+			pkgPath := p.pkgPathFromABS(path)
+			if err := p.parsePackage(pkgPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing package %v: %v", path, err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	p.associateStructWithMethods()
+	p.associateImplements()
+	return p.getRepo(), nil
+}
+
+// getRepo return currently parsed golang AST
+// Notice: To get completely parsed repo, you'd better call goParser.ParseRepo() before this
+func (p *goParser) getRepo() Repository {
+	return p.repo
+}
+
+func (p *Module) GetDependency(pkg string) string {
+	// // search internal library first
+	// if lib := p.Libraries[mod]; lib != nil {
+	// 	return lib
+	// }
+	// match the prefix of name for each repo.Dependencies
+	for k, v := range p.Dependencies {
+		if strings.HasPrefix(pkg, k) {
+			return v
+		}
+	}
+	// FIXME: return value's dependency may not explicitly defined in go.mod, thus may not be found
+	// fmt.Fprintf(os.Stderr, "Error: not found dependency for %v", pkg)
+	return ""
+}
+
+// ToABS converts a local package path to absolute path
+// If the path is not a local package, return empty string
+// func (p *goParser) pkgPathToABS(path PkgPath) string {
+// 	if !strings.HasPrefix(string(path), p.curMod) {
+// 		return ""
+// 	} else {
+// 		return filepath.Join(p.homePageDir, strings.TrimPrefix(string(path), p.modName))
+// 	}
+// }
+
+func (p *goParser) associateStructWithMethods() {
+	for _, lib := range p.repo.Modules {
+		for _, fs := range lib.Packages {
+			for _, f := range fs.Functions {
+				if f.IsMethod && f.Receiver != nil {
+					def := p.repo.GetType(f.Receiver.Type)
+					// entrue the Struct has been visted
+					if def != nil {
+						if def.Methods == nil {
+							def.Methods = map[string]Identity{}
+						}
+						names := strings.Split(f.Name, ".")
+						var name = names[0]
+						if len(names) > 1 {
+							name = names[1]
+						}
+						def.Methods[name] = f.Identity
+					}
+				}
+			}
+		}
+	}
+}
+
+// getNode get a AST node from cache if parsed, or parse corresponding package and get the node
+func (p *goParser) getNode(id Identity) (interface{}, error) {
+	if def := p.repo.GetFunction(id); def != nil {
+		return def, nil
+	}
+	if def := p.repo.GetType(id); def != nil {
+		return def, nil
+	}
+	if def := p.repo.GetVar(id); def != nil {
+		return def, nil
+	}
+
+	lib := p.repo.Modules[id.ModPath]
+	if lib == nil {
+		lib = NewModule(id.ModPath, "")
+		p.repo.Modules[id.ModPath] = lib
+	}
+	if err := p.parsePackage(id.PkgPath); err != nil {
+		return nil, err
+	}
+
+	pkg := lib.Packages[id.PkgPath]
+	if pkg == nil {
+		return nil, fmt.Errorf("package not defined: %v", id.PkgPath)
+	}
+	if def := pkg.Functions[id.Name]; def != nil {
+		return def, nil
+	}
+	if def := pkg.Types[id.Name]; def != nil {
+		return def, nil
+	}
+	if def := pkg.Vars[id.Name]; def != nil {
+		return def, nil
+	}
+	return nil, nil
+}
+
+func (p *goParser) searchName(name string) (ids []Identity, err error) {
+	filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, e error) error {
+		if e != nil || info.IsDir() || shouldIgnoreFile(path) || shouldIgnoreDir(filepath.Dir(path)) || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		mod, _ := p.getModuleFromPath(filepath.Dir(path))
+		m := p.repo.Modules[mod]
+		if m == nil {
+			dir, _ := filepath.Rel(p.homePageDir, path)
+			m = NewModule(mod, dir)
+			p.repo.Modules[mod] = m
+		}
+		pkg := p.pkgPathFromABS(filepath.Dir(path))
+		// go AST parse file
+		fset := token.NewFileSet()
+		fcontent := p.getFileBytes(path)
+		file, e := parser.ParseFile(fset, path, fcontent, parser.SkipObjectResolution)
+		if e != nil {
+			err = e
+			return nil
+		}
+		impts, err := p.parseImports(fset, fcontent, m, file.Imports)
+		if err != nil {
+			return err
+		}
+		tids, e := p.searchOnFile(file, fset, fcontent, m.Name, pkg, impts, name)
+		if e != nil {
+			err = e
+			return nil
+		}
+		ids = append(ids, tids...)
+		return nil
+	})
+	return
+}
+
+// getRelativeOrBasePath returns the relative path if possible, otherwise the base path.
+func getRelativeOrBasePath(homePageDir string, fset *token.FileSet, pos token.Pos) string {
+	relp, err := filepath.Rel(homePageDir, fset.Position(pos).Filename)
+	if err == nil {
+		return relp
+	}
+	return filepath.Base(fset.Position(pos).Filename)
+}
+
+func (p *goParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []byte, mod string, pkg string, impt *importInfo, name string) (ids []Identity, err error) {
+	for _, decl := range file.Decls {
+		// println(string(GetRawContent(fset, fcontent, decl)))
+		switch decl := decl.(type) {
+		case *ast.FuncDecl:
+			dname := decl.Name.Name
+			var receiver *Receiver
+			if decl.Recv != nil && strings.Contains(name, ".") {
+				var m = map[string]Identity{}
+				tname, isPointer := p.mockTypes(decl.Recv.List[0].Type, m, fcontent, fset, getRelativeOrBasePath(p.homePageDir, fset, decl.Pos()), mod, pkg, impt)
+				if tname == "" {
+					fmt.Fprintf(os.Stderr, "Error: cannot get type from receiver %v", decl.Recv.List[0].Type)
+					continue
+				}
+				dname = fmt.Sprintf("%v.%v", tname, dname)
+				// mock type
+				id := Identity{
+					ModPath: mod,
+					PkgPath: pkg,
+					Name:    tname,
+				}
+				receiver = &Receiver{
+					Type:      id,
+					IsPointer: isPointer,
+					Name:      name,
+				}
+			}
+			if dname == name {
+				ids = append(ids, newIdentity(mod, pkg, name))
+				fn := p.newFunc(mod, pkg, name)
+				fn.Content = string(GetRawContent(fset, fcontent, decl))
+				fn.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
+				fn.Line = fset.Position(decl.Pos()).Line
+				fn.IsMethod = decl.Recv != nil
+				fn.Receiver = receiver
+				// if decl.Type.Params != nil {
+				// 	params := map[string]Identity{}
+				// 	for _, fdec := range decl.Type.Params.List {
+				// 		p.mockTypes(fdec.Type, params, fcontent, fset, fn.File, mod, pkg, impt)
+				// 	}
+				// 	fn.Params = params
+				// }
+				// if decl.Type.Results != nil {
+				// 	results := map[string]Identity{}
+				// 	for _, fdec := range decl.Type.Results.List {
+				// 		p.mockTypes(fdec.Type, results, fcontent, fset, fn.File, mod, pkg, impt)
+				// 	}
+				// 	fn.Results = results
+				// }
+			}
+		case *ast.GenDecl:
+			for _, spec := range decl.Specs {
+				switch spec := spec.(type) {
+				case *ast.TypeSpec:
+					// NOTICE: collect every types to avoid missing when searching from other refs
+					// OPTIMIZE: only collect the type with the name
+					var st *Type
+					if spec.Name.Name == name {
+						st = p.newType(mod, pkg, spec.Name.Name)
+						st.Content = string(GetRawContent(fset, fcontent, spec))
+						st.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
+						st.Line = fset.Position(decl.Pos()).Line
+						st.TypeKind = getTypeKind(spec.Type)
+						ids = append(ids, newIdentity(mod, pkg, name))
+					}
+					if inter, ok := spec.Type.(*ast.InterfaceType); st != nil && ok {
+						// interface type may be a method called
+						for _, m := range inter.Methods.List {
+							if len(m.Names) == 0 {
+								continue
+							}
+							mname := spec.Name.Name + "." + m.Names[0].Name
+							if mname == name {
+								// collect the method
+								ids = append(ids, newIdentity(mod, pkg, name))
+								fn := p.newFunc(mod, pkg, name)
+								fn.Content = string(GetRawContent(fset, fcontent, m))
+								fn.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
+								fn.Line = fset.Position(decl.Pos()).Line
+								fn.IsMethod = true
+								fn.Receiver = &Receiver{
+									Type:      st.Identity,
+									IsPointer: true,
+									Name:      name,
+								}
+								// if m.Type != nil {
+								// 	// collect method's func params
+								// 	params := map[string]Identity{}
+								// 	for _, fdec := range m.Type.(*ast.FuncType).Params.List {
+								// 		p.mockTypes(fdec.Type, params, fcontent, fset, fn.File, mod, pkg, impt)
+								// 	}
+								// 	fn.Params = params
+								// 	results := map[string]Identity{}
+								// 	for _, fdec := range m.Type.(*ast.FuncType).Results.List {
+								// 		p.mockTypes(fdec.Type, results, fcontent, fset, fn.File, mod, pkg, impt)
+								// 	}
+								// 	fn.Results = results
+								// }
+							}
+						}
+					}
+				case *ast.ValueSpec:
+					var lastType *Identity
+					for _, n := range spec.Names {
+						if n.Name == name {
+							ids = append(ids, newIdentity(mod, pkg, name))
+							v := p.newVar(mod, pkg, name, decl.Tok == token.CONST)
+							v.Content = string(GetRawContent(fset, fcontent, spec))
+							v.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
+							v.Line = fset.Position(decl.Pos()).Line
+							if spec.Type != nil {
+								var m = map[string]Identity{}
+								// NOTICE: collect all types
+								tname, _ := p.mockTypes(spec.Type, m, fcontent, fset, v.File, mod, pkg, impt)
+								v.Type = &Identity{
+									ModPath: mod,
+									PkgPath: pkg,
+									Name:    tname,
+								}
+							} else {
+								v.Type = lastType
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+func (p *goParser) getModuleFromPkg(pkg PkgPath) (name string, dir string) {
+	for _, m := range p.modules {
+		if strings.HasPrefix(pkg, m.name) {
+			return m.name, m.dir
+		}
+	}
+	return "", ""
+}
+
+// path is absolute path
+func (p *goParser) getModuleFromPath(path string) (name string, dir string) {
+	for _, m := range p.modules {
+		if len(m.dir) != 0 && strings.HasPrefix(path, m.dir) {
+			return m.name, m.dir
+		}
+	}
+	return "", ""
+}
+
+// FromABS converts an absolute path to local mod path
+func (p *goParser) pkgPathFromABS(path string) PkgPath {
+	mod, dir := p.getModuleFromPath(path)
+	if mod == "" {
+		panic("not found package from " + path)
+	}
+	if rel, err := filepath.Rel(dir, path); err != nil {
+		panic("path " + path + " is not relative from mod path " + dir)
+	} else {
+		return filepath.Join(mod, rel)
+	}
+}
