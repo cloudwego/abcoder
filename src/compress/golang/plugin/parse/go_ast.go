@@ -26,6 +26,7 @@ import (
 var (
 	referCodeDepth int
 	collectComment bool
+	excludes       string
 )
 
 func init() {
@@ -36,6 +37,7 @@ func init() {
 	}
 	flag.BoolVar(&collectComment, "collect_comment", false, "collect comments for each node")
 	flag.IntVar(&referCodeDepth, "refer_code_depth", 0, "the depth to referenced codes, 0 means only return its identity")
+	flag.StringVar(&excludes, "excludes", "", "exclude paths, seperated by comma")
 }
 
 func Main() {
@@ -58,7 +60,11 @@ func Main() {
 		id = as[1]
 	}
 
-	p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth))
+	var exs []string
+	if excludes != "" {
+		exs = strings.Split(excludes, ",")
+	}
+	p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth), WithExcludes(exs))
 
 	var out interface{}
 

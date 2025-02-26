@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -47,8 +47,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			abs, _ := filepath.Abs(tt.fields.homePageDir)
 			println(abs)
-			p := newGoParser(tt.fields.modName, tt.fields.homePageDir)
-			p.setOptions(&Options{
+			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, &Options{
 				ReferCodeDepth: 1,
 			})
 			_, err := p.ParseRepo()
@@ -103,8 +102,7 @@ func Test_goParser_ParseDirs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser(tt.args.modName, tt.args.homePageDir)
-			p.setOptions(&tt.args.opts)
+			p := newGoParser(tt.args.modName, tt.args.homePageDir, &tt.args.opts)
 			_, err := p.ParseRepo()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("goParser.ParseDirs() error = %v, wantErr %v", err, tt.wantErr)
