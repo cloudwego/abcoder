@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -97,7 +97,6 @@ func newGoParser(name string, homePageDir string) *goParser {
 }
 
 func (p *goParser) collectGoMods(startDir string) error {
-	var libs []moduleInfo
 
 	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
@@ -112,13 +111,14 @@ func (p *goParser) collectGoMods(startDir string) error {
 			return fmt.Errorf("module path %v is not in the repo", path)
 		}
 		p.repo.Modules[name] = NewModule(name, rel)
+		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 		deps, err := parseModuleFile(content)
 		if err != nil {
 			return err
 		}
 		for k, v := range deps {
 			p.repo.Modules[name].Dependencies[k] = v
-			libs = append(libs, newModuleInfo(k, "", v))
+			p.modules = append(p.modules, newModuleInfo(k, "", v))
 		}
 		return nil
 	})
@@ -126,44 +126,28 @@ func (p *goParser) collectGoMods(startDir string) error {
 		return err
 	}
 
-	for k, v := range p.repo.Modules {
-		found := false
-		for i, l := range libs {
-			if v.Name == l.name {
-				libs[i].dir = filepath.Join(p.homePageDir, v.Dir)
-				found = true
-				break
-			}
-		}
-		if !found {
-			libs = append(libs, newModuleInfo(v.Name, filepath.Join(p.homePageDir, v.Dir), k))
-		}
-	}
-
-	p.modules = libs
 	return nil
 }
 
 // ParseRepo parse the entiry repo from homePageDir recursively until end
 func (p *goParser) ParseRepo() (Repository, error) {
-	for _, lib := range p.repo.Modules {
-		startDir := filepath.Join(p.homePageDir, lib.Dir)
-		filepath.WalkDir(startDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || !d.IsDir() || shouldIgnoreDir(path) {
-				return nil
-			}
-			pkgPath := p.pkgPathFromABS(path)
-			if err := p.parsePackage(pkgPath); err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing package %v: %v", path, err)
-				return err
-			}
-			return nil
-		})
+	for _, lib := range p.modules {
+		if strings.Contains(lib.path, "@") {
+			continue
+		}
+		mod := p.repo.Modules[lib.name]
+		if err := p.ParseModule(mod, filepath.Join(p.homePageDir, mod.Dir)); err != nil {
+			return p.getRepo(), err
+		}
 	}
-
 	p.associateStructWithMethods()
 	p.associateImplements()
+	fmt.Fprintf(os.Stderr, "total call packages.Load %d times\n", loadCount)
 	return p.getRepo(), nil
+}
+
+func (p *goParser) ParseModule(mod *Module, dir string) (err error) {
+	return p.loadPackages(mod, dir, "./...")
 }
 
 // getRepo return currently parsed golang AST
@@ -437,11 +421,12 @@ func (p *goParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 
 func (p *goParser) getModuleFromPkg(pkg PkgPath) (name string, dir string) {
 	for _, m := range p.modules {
-		if strings.HasPrefix(pkg, m.name) {
-			return m.name, m.dir
+		if strings.HasPrefix(pkg, m.name) && len(m.name) > len(name) {
+			name = m.name
+			dir = m.dir
 		}
 	}
-	return "", ""
+	return
 }
 
 // path is absolute path
