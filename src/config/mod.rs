@@ -176,10 +176,14 @@ pub fn parser_and_args<'a>(repo_path: &'a str, load_extern: bool) -> (String, Ve
     };
     let args = match lang {
         ProgramLanguage::Go => {
-            let mut args = vec!["--collect_comment".to_string(), repo_path.to_string()];
+            let mut args = vec!["--collect_comment".to_string()];
             if load_extern {
-                args.push("--load-external-symbol".to_string());
+                args.push("--refer_code_depth=1".to_string());
             }
+            if CONFIG.exclude_dirs.len() > 0 {
+                args.push(format!("--excludes={}", &CONFIG.exclude_dirs.join(",")));
+            }
+            args.push(repo_path.to_string());
             args
         }
         ProgramLanguage::Rust => {

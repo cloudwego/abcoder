@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -45,8 +45,7 @@ func Test_goParser_GeMainOnDepends(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser(tt.fields.modName, tt.fields.homePageDir)
-			p.setOptions(&tt.fields.opts)
+			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, &tt.fields.opts)
 			n, err := p.getNode(NewIdentity("github.com/cloudwego/kitex", "github.com/cloudwego/kitex/pkg/generic", "ParseContent"))
 			if err != nil {
 				t.Fatal(err)
@@ -357,7 +356,7 @@ func TestCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser("a.b/c", "/root/codes/abcoder/testdata")
+			p := newGoParser("a.b/c", "/root/codes/abcoder/testdata", &Options{})
 			if tt.refered != nil {
 				p.opts.ReferCodeDepth = 1
 			}

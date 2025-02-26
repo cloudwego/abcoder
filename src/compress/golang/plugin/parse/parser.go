@@ -60,22 +60,16 @@ func newModuleInfo(name string, dir string, path string) moduleInfo {
 	}
 }
 
-func (p *goParser) setOptions(opts *Options) {
-	p.opts = opts
-}
-
 func NewParser(name string, homePageDir string, options ...Option) Parser {
-	p := newGoParser(name, homePageDir)
 	o := &Options{}
 	for _, opt := range options {
 		opt(o)
 	}
-	p.setOptions(o)
-	return p
+	return newGoParser(name, homePageDir, o)
 }
 
 // newGoParser
-func newGoParser(name string, homePageDir string) *goParser {
+func newGoParser(name string, homePageDir string, opts *Options) *goParser {
 	abs, err := filepath.Abs(homePageDir)
 	if err != nil {
 		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
@@ -93,6 +87,8 @@ func newGoParser(name string, homePageDir string) *goParser {
 	if err := p.collectGoMods(p.homePageDir); err != nil {
 		panic(err)
 	}
+
+	p.opts = opts
 	return p
 }
 

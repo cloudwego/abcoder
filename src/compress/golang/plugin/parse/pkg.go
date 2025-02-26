@@ -371,9 +371,15 @@ func (p *goParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		if pp, ok := mod.Packages[pkg.ID]; ok && pp != nil {
 			continue
 		}
-
+	next_file:
 		for idx, file := range pkg.Syntax {
 			filePath := pkg.GoFiles[idx]
+			for _, exclude := range p.opts.Excludes {
+				if exclude.MatchString(filePath) {
+					fmt.Fprintf(os.Stderr, "skip file %s\n", filePath)
+					continue next_file
+				}
+			}
 			bs := p.getFileBytes(filePath)
 			ctx := &fileContext{
 				repoDir:     p.homePageDir,
