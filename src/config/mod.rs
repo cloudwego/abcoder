@@ -1,17 +1,17 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// limitations under the License.
 
+// limitations under the License.
 use std::path::{Path, PathBuf};
 
 use lazy_static::lazy_static;
@@ -167,7 +167,7 @@ fn decide_language(path: &str) -> ProgramLanguage {
         .unwrap_or(ProgramLanguage::Unknown(path.to_string()))
 }
 
-pub fn parser_and_args<'a>(repo_path: &'a str) -> (String, Vec<String>) {
+pub fn parser_and_args<'a>(repo_path: &'a str, load_extern: bool) -> (String, Vec<String>) {
     let lang = decide_language(repo_path);
     let path = match lang {
         ProgramLanguage::Go => go_ast_path(),
@@ -175,20 +175,24 @@ pub fn parser_and_args<'a>(repo_path: &'a str) -> (String, Vec<String>) {
         _ => panic!("unsupported language"),
     };
     let args = match lang {
-        ProgramLanguage::Go => vec![
-            "--refer_code_depth=1".to_string(),
-            "--collect_comment".to_string(),
-            repo_path.to_string(),
-        ],
+        ProgramLanguage::Go => {
+            let mut args = vec!["--collect_comment".to_string(), repo_path.to_string()];
+            if load_extern {
+                args.push("--load-external-symbol".to_string());
+            }
+            args
+        }
         ProgramLanguage::Rust => {
-            let mut args: Vec<String> = vec![
+            let mut args = vec![
                 "collect".to_string(),
                 "rust".to_string(),
-                "--load-external-symbol".to_string(),
                 repo_path.to_string(),
             ];
             for exclude in &CONFIG.exclude_dirs {
                 args.push(format!("--exclude={exclude}"));
+            }
+            if load_extern {
+                args.push("--load-external-symbol".to_string());
             }
             args
         }

@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,7 +28,7 @@ import (
 
 // Repository
 type Repository struct {
-	Name    string             // module name
+	Name    string             `json:"id"` // go module name
 	Modules map[string]*Module // module name => Library
 }
 
@@ -338,6 +338,17 @@ func (p *goParser) parsePackage(pkgPath PkgPath) (err error) {
 	}
 	// fmt.Println("[parsePackage] mod:", mod, "dir:", dir, "pkgPath:", pkgPath, p.opts.ReferCodeDepth)
 
+	return p.loadPackages(lib, dir, pkgPath)
+}
+
+var loadCount = 0
+
+func (p *goParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err error) {
+	if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkgPath] != nil {
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s", mod.Name, dir, pkgPath)
+	loadCount++
 	// slow-path: load packages in the dir, including sub pakcages
 	opts := packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
 	if p.opts.ReferCodeDepth != 0 {
@@ -354,8 +365,10 @@ func (p *goParser) parsePackage(pkgPath PkgPath) (err error) {
 	}
 
 	for _, pkg := range pkgs {
-		//TODO: only path single main package at present
-		if pkg.ID != pkgPath {
+		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
+			continue
+		}
+		if pp, ok := mod.Packages[pkg.ID]; ok && pp != nil {
 			continue
 		}
 
@@ -365,27 +378,27 @@ func (p *goParser) parsePackage(pkgPath PkgPath) (err error) {
 			ctx := &fileContext{
 				repoDir:     p.homePageDir,
 				filePath:    filePath,
-				module:      lib,
-				pkgPath:     pkgPath,
+				module:      mod,
+				pkgPath:     pkg.ID,
 				bs:          bs,
 				fset:        fset,
 				pkgTypeInfo: pkg.TypesInfo,
 				deps:        pkg.Imports,
 			}
-			imports, err := p.parseImports(ctx.fset, ctx.bs, lib, file.Imports)
+			imports, err := p.parseImports(ctx.fset, ctx.bs, mod, file.Imports)
 			if err != nil {
 				return err
 			}
 			ctx.imports = imports
 			relpath, _ := filepath.Rel(p.homePageDir, filePath)
 			f := NewFile(relpath)
-			lib.Files[relpath] = f
+			mod.Files[relpath] = f
 			f.Imports = imports.Origins
 			if err := p.parseFile(ctx, file); err != nil {
 				return err
 			}
 		}
-		if obj := lib.Packages[pkgPath]; obj != nil {
+		if obj := mod.Packages[pkg.ID]; obj != nil {
 			// obj.Dependencies = make([]PkgPath, 0, len(pkg.Imports))
 			// for _, imp := range pkg.Imports {
 			// 	if isSysPkg(imp.ID) {

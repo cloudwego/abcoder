@@ -1,17 +1,16 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::{
     fs::{self, File},
     io::Write,
@@ -198,10 +197,10 @@ pub fn export_repo(repo: &Repository) {
     file.write_all(csv_pkg.as_bytes()).unwrap();
 }
 
-pub fn force_parse_repo(repo_path: &String) -> Result<Repository, Error> {
+pub fn force_parse_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Error> {
     let (path, name) = parse_repo_path(repo_path)?;
     // force to parse the repo
-    let data = parse_repo(name, &path)?;
+    let data = parse_repo(name, &path, load_extern)?;
     match compress::from_json(&name, String::from_utf8(data).unwrap().as_str()) {
         Ok(repo) => Ok(repo),
         Err(err) => Err(Error::Parse(err.to_string())),
@@ -234,7 +233,7 @@ fn parse_repo_path(repo_path: &String) -> Result<(PathBuf, &str), Error> {
     Ok((path, name))
 }
 
-pub fn get_repo(repo_path: &String) -> Result<Repository, Error> {
+pub fn get_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Error> {
     let (path, name) = parse_repo_path(repo_path)?;
 
     // check if cache the result
@@ -242,7 +241,7 @@ pub fn get_repo(repo_path: &String) -> Result<Repository, Error> {
         data
     } else {
         // parse the repo
-        parse_repo(name, &path)?
+        parse_repo(name, &path, load_extern)?
     };
 
     match compress::from_json(&name, String::from_utf8(data).unwrap().as_str()) {
@@ -251,8 +250,8 @@ pub fn get_repo(repo_path: &String) -> Result<Repository, Error> {
     }
 }
 
-fn parse_repo(name: &str, path: &Path) -> Result<Vec<u8>, Error> {
-    let (parser, args) = config::parser_and_args(path.to_str().unwrap());
+fn parse_repo(name: &str, path: &Path, load_extern: bool) -> Result<Vec<u8>, Error> {
+    let (parser, args) = config::parser_and_args(path.to_str().unwrap(), load_extern);
     // parse the repo by parse
     match cmd::run_command_bytes(&parser, args, path.to_str().unwrap()) {
         Ok(output) => {
