@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	. "github.com/cloudwego/abcoder/src/uniast"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -392,12 +393,4 @@ func (ctx *fileContext) getIdFromType(typ types.Type) (x Identity, isPointer boo
 func (ctx *fileContext) IsSysImport(alias string) bool {
 	_, ok := ctx.imports.SysImports[alias]
 	return ok
-}
-
-// FileLine represents a filename and line number
-type FileLine struct {
-	File string
-
-	// NOTICE: line number start from 1
-	Line int
 }

@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/Knetic/govaluate"
+	. "github.com/cloudwego/abcoder/src/uniast"
 	"golang.org/x/mod/modfile"
 )
 
@@ -218,11 +219,10 @@ func parseExpr(expr string) (interface{}, error) {
 	return result, nil
 }
 
-func Dedup(ids []Identity, id Identity) []Identity {
-	for _, i := range ids {
-		if i == id {
-			return ids
-		}
-	}
-	return append(ids, id)
+func newIdentity(mod, pkg, name string) Identity {
+	return Identity{ModPath: mod, PkgPath: pkg, Name: name}
+}
+
+func isUpperCase(c byte) bool {
+	return c >= 'A' && c <= 'Z'
 }

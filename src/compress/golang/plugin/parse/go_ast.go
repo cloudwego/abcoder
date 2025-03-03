@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	. "github.com/cloudwego/abcoder/src/uniast"
 )
 
 var (
