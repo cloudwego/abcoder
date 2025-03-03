@@ -27,6 +27,7 @@ import (
 type Repository struct {
 	Name    string             `json:"id"` // go module name
 	Modules map[string]*Module // module name => Library
+	Graph   map[string]*Node
 }
 
 func NewRepository(name string) Repository {
@@ -319,9 +320,4 @@ type Var struct {
 	Content string
 
 	CompressData *string `json:"compress_data,omitempty"`
-}
-
-type Dependency struct {
-	Range [2]int32
-	Identity
 }
