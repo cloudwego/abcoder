@@ -23,6 +23,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	. "github.com/cloudwego/abcoder/src/uniast"
 )
 
 func Test_goParser_ParseRepo(t *testing.T) {
@@ -60,7 +62,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 				t.Fatal(err)
 			}
 			_ = pj
-			_ = os.WriteFile("nakama.json", pj, 0644)
+			_ = os.WriteFile("ast.json", pj, 0644)
 			n, err := p.getNode(NewIdentity("github.com/cloudwego/localsession", "github.com/cloudwego/localsession/backup", "RecoverCtxOndemands"))
 			if err != nil {
 				t.Fatal(err)

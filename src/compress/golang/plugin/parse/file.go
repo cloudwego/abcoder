@@ -1,17 +1,16 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 
 package parse
 
@@ -23,45 +22,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	. "github.com/cloudwego/abcoder/src/uniast"
 )
-
-// Function holds the information about a function
-type Function struct {
-	Exported bool
-
-	IsMethod bool // If the function is a method
-	Identity      // unique identity in a repo
-	FileLine
-	Content string // Content of the function, including functiion signature and body
-
-	Receiver *Receiver  `json:",omitempty"` // Method receiver
-	Params   []Identity `json:",omitempty"` // function parameters, key is the parameter name
-	Results  []Identity `json:",omitempty"` // function results, key is the result name or type name
-
-	// call to in-the-project functions, key is {{pkgAlias.funcName}} or {{funcName}}
-	FunctionCalls []Identity `json:",omitempty"`
-
-	// call to internal methods,
-	// NOTICE: method name may be duplicated, so we collect according to the SEQUENCE of APPEARANCE
-	MethodCalls []Identity `json:",omitempty"`
-
-	Types       []Identity `json:",omitempty"` // types used in the function
-	GolobalVars []Identity `json:",omitempty"` // global vars used in the function
-
-	// func llm compress result
-	CompressData *string `json:"compress_data,omitempty"`
-}
-
-type Receiver struct {
-	IsPointer bool
-	Type      Identity
-	Name      string
-}
-
-type Dependency struct {
-	Range [2]int32
-	Identity
-}
 
 func (p *goParser) parseFile(ctx *fileContext, f *ast.File) error {
 	cont := true
@@ -113,17 +76,6 @@ func (p *goParser) parseFile(ctx *fileContext, f *ast.File) error {
 		return cont
 	})
 	return nil
-}
-
-type Var struct {
-	IsExported bool
-	IsConst    bool
-	Identity
-	FileLine
-	Type    *Identity `json:",omitempty"`
-	Content string
-
-	CompressData *string `json:"compress_data,omitempty"`
 }
 
 func (p *goParser) newVar(mod string, pkg string, name string, isConst bool) *Var {
@@ -458,46 +410,6 @@ set_func:
 	f.GolobalVars = globalVars
 	f.Types = tys
 	return f, false
-}
-
-type TypeKind int
-
-const (
-	TypeKindStruct    = 0 // type struct
-	TypeKindInterface = 1 // type interface
-	TypeKindNamed     = 2 // type NamedXXX other..
-	TypeKindEnum      = 3 // type NamedXXX other..
-)
-
-// Type holds the information about a struct
-type Type struct {
-	Exported bool // if the struct is exported
-
-	TypeKind // type Kind: Struct / Interface / Typedef
-	Identity // unique id in a repo
-	FileLine
-	Content string // struct declaration content
-
-	// field type (not include basic types), type name => type id
-	SubStruct []Identity `json:",omitempty"`
-
-	// inline field type (not include basic types)
-	InlineStruct []Identity `json:",omitempty"`
-
-	// methods defined on the Struct, not including inlined type's method
-	Methods map[string]Identity `json:",omitempty"`
-
-	// Implemented interfaces
-	Implements []Identity `json:",omitempty"`
-
-	// functions defined in fields, key is type name, val is the function Signature
-	// FieldFunctions map[string]string
-
-	CompressData *string `json:"compress_data,omitempty"` // struct llm compress result
-}
-
-func isUpperCase(c byte) bool {
-	return c >= 'A' && c <= 'Z'
 }
 
 func (p *goParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string) (st *Type, ct bool) {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	. "github.com/cloudwego/abcoder/src/uniast"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 )
