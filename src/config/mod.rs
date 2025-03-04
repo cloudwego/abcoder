@@ -27,6 +27,7 @@ pub enum Language {
 
 #[derive(Debug)]
 pub struct Config {
+    pub work_dir: String,
     pub repo_dir: String,
     pub cache_dir: String,
     pub parser_dir: String,
@@ -42,6 +43,14 @@ pub struct Config {
 
     pub language: Language,
     pub exclude_dirs: Vec<String>,
+}
+
+fn default_work_dir() -> String {
+    std::env::current_dir()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 fn default_repo_dir() -> String {
@@ -71,6 +80,7 @@ fn default_maas_model_name() -> String {
 impl Config {
     pub fn new() -> Self {
         Self {
+            work_dir: default_work_dir(),
             repo_dir: default_repo_dir(),
             cache_dir: default_cache_dir(),
             parser_dir: default_parser_dir(),
@@ -86,8 +96,9 @@ impl Config {
         }
     }
 
-    pub fn from_env() -> Self {
-        Self {
+    pub fn parse_from_env() -> Self {
+        let mut s = Self {
+            work_dir: std::env::var("WORK_DIR").unwrap_or_else(|_| default_work_dir()),
             repo_dir: std::env::var("REPO_DIR").unwrap_or_else(|_| default_repo_dir()),
             cache_dir: std::env::var("CACHE_DIR").unwrap_or_else(|_| default_cache_dir()),
             parser_dir: std::env::var("PARSER_DIR").unwrap_or_else(|_| default_parser_dir()),
@@ -109,14 +120,44 @@ impl Config {
                     _ => Language::Chinese,
                 })
                 .unwrap_or(Language::Chinese),
+        };
+
+        if !s.repo_dir.starts_with("/") {
+            s.repo_dir = Path::new(&s.work_dir)
+                .join(s.repo_dir)
+                .to_str()
+                .unwrap()
+                .to_string();
         }
+        if !s.cache_dir.starts_with("/") {
+            s.cache_dir = Path::new(&s.work_dir)
+                .join(s.cache_dir)
+                .to_str()
+                .unwrap()
+                .to_string();
+        }
+        if !s.parser_dir.starts_with("/") {
+            s.parser_dir = Path::new(&s.work_dir)
+                .join(s.parser_dir)
+                .to_str()
+                .unwrap()
+                .to_string();
+        }
+        if !s.tools_dir.starts_with("/") {
+            s.tools_dir = Path::new(&s.work_dir)
+                .join(s.tools_dir)
+                .to_str()
+                .unwrap()
+                .to_string();
+        }
+        s
     }
 }
 
 lazy_static! {
     pub static ref CONFIG: Config = {
         dotenv::dotenv().ok();
-        Config::from_env()
+        Config::parse_from_env()
     };
 }
 

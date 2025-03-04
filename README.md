@@ -55,7 +55,7 @@ refactoring guidance.
 ```
 REPO_DIR={YOU_REPO_PATH}
 CACHE_DIR={YOUR_CACHE_PATH}
-TOOLS_DIR={ABCODER_PATH}/toos
+TOOLS_DIR={ABCODER_PATH}/tools
 EXCLUDE_DIRS=target,gen-codes
 
 # coze|ollama 

@@ -147,6 +147,7 @@ fn export_compress(repo_path: &String, cmp: &CompressAction) {
     let repo = repo::get_repo(repo_path, !cmp.not_load_external_symbol);
     if let Err(err) = repo {
         println!("get repo error: {:?}", err);
+
         process::exit(1);
     }
 

@@ -253,7 +253,7 @@ pub fn get_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Err
 fn parse_repo(name: &str, path: &Path, load_extern: bool) -> Result<Vec<u8>, Error> {
     let (parser, args) = config::parser_and_args(path.to_str().unwrap(), load_extern);
     // parse the repo by parse
-    match cmd::run_command_bytes(&parser, args, path.to_str().unwrap()) {
+    match cmd::run_command_bytes(&parser, args) {
         Ok(output) => {
             cache::get_cache().put(&name, output.clone()).unwrap();
             return Ok(output);
