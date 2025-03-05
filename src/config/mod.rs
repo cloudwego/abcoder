@@ -54,7 +54,7 @@ fn default_work_dir() -> String {
 }
 
 fn default_repo_dir() -> String {
-    "tmp".to_string()
+    "tmp_repos".to_string()
 }
 
 fn default_tools_dir() -> String {
@@ -62,7 +62,7 @@ fn default_tools_dir() -> String {
 }
 
 fn default_cache_dir() -> String {
-    "tmp_compress".to_string()
+    "tmp_caches".to_string()
 }
 
 fn default_parser_dir() -> String {

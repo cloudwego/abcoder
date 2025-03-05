@@ -53,9 +53,13 @@ refactoring guidance.
 ## Running through Coze OpenAPI
 1. Set .env file for configuration on ABCoder's working directory. Taking Coze as an example:
 ```
-REPO_DIR={YOU_REPO_PATH}
-CACHE_DIR={YOUR_CACHE_PATH}
-TOOLS_DIR={ABCODER_PATH}/tools
+# Base directory for other XXX_DIRs, default to current directory
+WORK_DIR=./
+
+# DIRs below support both relative and absolute paths, and relative paths are relative to WORK_DIR
+REPO_DIR=tmp_repos
+CACHE_DIR=tmp_caches
+TOOLS_DIR=tools
 EXCLUDE_DIRS=target,gen-codes
 
 # coze|ollama 
