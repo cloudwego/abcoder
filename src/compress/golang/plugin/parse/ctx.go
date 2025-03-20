@@ -62,7 +62,7 @@ func newModule(mod string, dir string) *Module {
 	return ret
 }
 
-func (p *goParser) referCodes(ctx *fileContext, id *Identity, depth int) (err error) {
+func (p *GoParser) referCodes(ctx *fileContext, id *Identity, depth int) (err error) {
 	if depth == 0 || id.PkgPath == "" || !isExternalID(id, ctx.module.Name) {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (p *goParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	return
 }
 
-func (p *goParser) getFileBytes(path string) []byte {
+func (p *GoParser) getFileBytes(path string) []byte {
 	if bs, ok := p.files[path]; ok {
 		return bs
 	}
@@ -226,7 +226,7 @@ type importInfo struct {
 	Origins           []string
 }
 
-func (p *goParser) mockTypes(typ ast.Expr, m map[string]Identity, file []byte, fset *token.FileSet, fpath string, mod string, pkg string, impts *importInfo) (name string, isPointer bool) {
+func (p *GoParser) mockTypes(typ ast.Expr, m map[string]Identity, file []byte, fset *token.FileSet, fpath string, mod string, pkg string, impts *importInfo) (name string, isPointer bool) {
 	ids, _, isP := getTypeName(fset, file, typ)
 	for _, id := range ids {
 		// NOTICE: mock all types in the module
@@ -327,7 +327,7 @@ func getTypeName(fset *token.FileSet, file []byte, typ ast.Expr) (ret []Identity
 	return
 }
 
-func (p *goParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inlined bool) {
+func (p *GoParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inlined bool) {
 	id, _, isGoBuiltins := ctx.GetTypeId(typ)
 	if isGoBuiltins || id.PkgPath == "" {
 		return

@@ -27,7 +27,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func (p *goParser) parseImports(fset *token.FileSet, file []byte, mod *Module, impts []*ast.ImportSpec) (*importInfo, error) {
+func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, impts []*ast.ImportSpec) (*importInfo, error) {
 	thirdPartyImports := make(map[string][2]string)
 	projectImports := make(map[string]string)
 	sysImports := make(map[string]string)
@@ -63,7 +63,7 @@ func (p *goParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	return ret, nil
 }
 
-func (p *goParser) ParseNode(pkgPath string, name string) (Repository, error) {
+func (p *GoParser) ParseNode(pkgPath string, name string) (Repository, error) {
 	out := NewRepository(p.repo.Name)
 	if pkgPath == "" {
 		//search mode
@@ -87,7 +87,7 @@ func (p *goParser) ParseNode(pkgPath string, name string) (Repository, error) {
 	return out, nil
 }
 
-func (p *goParser) associateImplements() {
+func (p *GoParser) associateImplements() {
 	for typ, tid := range p.types {
 		for iface, iid := range p.interfaces {
 			if types.Implements(typ, iface) {
@@ -103,7 +103,7 @@ func (p *goParser) associateImplements() {
 	}
 }
 
-func (p *goParser) ParsePackage(pkgPath PkgPath) (Repository, error) {
+func (p *GoParser) ParsePackage(pkgPath PkgPath) (Repository, error) {
 	if err := p.parsePackage(pkgPath); err != nil {
 		return Repository{}, err
 	}
@@ -115,7 +115,7 @@ func (p *goParser) ParsePackage(pkgPath PkgPath) (Repository, error) {
 	return out, nil
 }
 
-func (p *goParser) parsePackage(pkgPath PkgPath) (err error) {
+func (p *GoParser) parsePackage(pkgPath PkgPath) (err error) {
 	mod, dir := p.getModuleFromPkg(pkgPath)
 	if mod == "" {
 		return fmt.Errorf("not found module for package %s", pkgPath)
@@ -146,7 +146,7 @@ func (p *goParser) parsePackage(pkgPath PkgPath) (err error) {
 
 var loadCount = 0
 
-func (p *goParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err error) {
+func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err error) {
 	if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkgPath] != nil {
 		return nil
 	}
