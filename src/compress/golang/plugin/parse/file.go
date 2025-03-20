@@ -26,7 +26,7 @@ import (
 	. "github.com/cloudwego/abcoder/src/uniast"
 )
 
-func (p *goParser) parseFile(ctx *fileContext, f *ast.File) error {
+func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {
 	cont := true
 	ast.Inspect(f, func(node ast.Node) bool {
 		defer func() {
@@ -78,7 +78,7 @@ func (p *goParser) parseFile(ctx *fileContext, f *ast.File) error {
 	return nil
 }
 
-func (p *goParser) newVar(mod string, pkg string, name string, isConst bool) *Var {
+func (p *GoParser) newVar(mod string, pkg string, name string, isConst bool) *Var {
 	ret := &Var{
 		Identity:   NewIdentity(mod, pkg, name),
 		IsConst:    isConst,
@@ -87,7 +87,7 @@ func (p *goParser) newVar(mod string, pkg string, name string, isConst bool) *Va
 	return p.repo.SetVar(ret.Identity, ret)
 }
 
-func (p *goParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool, lastType *Identity, lastValue *float64, doc string) (*Identity, *float64) {
+func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool, lastType *Identity, lastValue *float64, doc string) (*Identity, *float64) {
 	var typ *Identity
 	var val *ast.Expr
 	for i, name := range vspec.Names {
@@ -193,18 +193,18 @@ func (p *goParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 }
 
 // newFunc allocate a function in the repo
-func (p *goParser) newFunc(mod, pkg, name string) *Function {
+func (p *GoParser) newFunc(mod, pkg, name string) *Function {
 	ret := &Function{Identity: NewIdentity(mod, pkg, name), Exported: isUpperCase(name[0])}
 	return p.repo.SetFunction(ret.Identity, ret)
 }
 
 // newType allocate a struct in the repo
-func (p *goParser) newType(mod, pkg, name string) *Type {
+func (p *GoParser) newType(mod, pkg, name string) *Type {
 	ret := &Type{Identity: NewIdentity(mod, pkg, name), Exported: isUpperCase(name[0])}
 	return p.repo.SetType(ret.Identity, ret)
 }
 
-func (p *goParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos collectInfos) (cont bool) {
+func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos collectInfos) (cont bool) {
 	// println("[parseFunc] ast.SelectorExpr:", string(ctx.GetRawContent(expr)))
 	// TODO: not the best but works, optimize it later.
 	if ident, ok := expr.X.(*ast.Ident); ok {
@@ -297,7 +297,7 @@ type collectInfos struct {
 }
 
 // parseFunc parses all function declaration in one file
-func (p *goParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Function, bool) {
+func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Function, bool) {
 	// method receiver
 	var receiver *Receiver
 	isMethod := funcDecl.Recv != nil
@@ -425,7 +425,7 @@ set_func:
 	return f, false
 }
 
-func (p *goParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string) (st *Type, ct bool) {
+func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string) (st *Type, ct bool) {
 	switch decl := typDecl.Type.(type) {
 	case *ast.StructType:
 		st, ct = p.parseStruct(ctx, typDecl.Name.Name, typDecl.Name, decl)
@@ -455,7 +455,7 @@ func (p *goParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string
 }
 
 // parse a ast.StructType node and renturn allocated *Struct
-func (p *goParser) parseStruct(ctx *fileContext, struName string, name *ast.Ident, struDecl *ast.StructType) (*Type, bool) {
+func (p *GoParser) parseStruct(ctx *fileContext, struName string, name *ast.Ident, struDecl *ast.StructType) (*Type, bool) {
 	st := p.newType(ctx.module.Name, ctx.pkgPath, struName)
 	st.FileLine = ctx.FileLine(struDecl)
 	st.TypeKind = TypeKindStruct
@@ -490,7 +490,7 @@ func (p *goParser) parseStruct(ctx *fileContext, struName string, name *ast.Iden
 	return st, false
 }
 
-func (p *goParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.InterfaceType) (*Type, bool) {
+func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.InterfaceType) (*Type, bool) {
 	if decl == nil || decl.Incomplete || decl.Methods == nil {
 		return nil, true
 	}

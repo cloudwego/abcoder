@@ -28,16 +28,10 @@ import (
 	. "github.com/cloudwego/abcoder/src/uniast"
 )
 
-type Parser interface {
-	ParseRepo() (Repository, error)
-	ParseNode(pkgPath string, name string) (Repository, error)
-	ParsePackage(pkgPath PkgPath) (Repository, error)
-}
-
 //---------------- Golang Parser -----------------
 
 // golang parser, used parse multle packages from the entire project
-type goParser struct {
+type GoParser struct {
 	homePageDir string           // absolute path to the home page of the repo
 	visited     map[PkgPath]bool // visited packages
 	modules     []moduleInfo     //  [name, abs-path] of modules, sorted by path length in descending order
@@ -62,7 +56,7 @@ func newModuleInfo(name string, dir string, path string) moduleInfo {
 	}
 }
 
-func NewParser(name string, homePageDir string, options ...Option) Parser {
+func NewParser(name string, homePageDir string, options ...Option) *GoParser {
 	o := &Options{}
 	for _, opt := range options {
 		opt(o)
@@ -71,13 +65,13 @@ func NewParser(name string, homePageDir string, options ...Option) Parser {
 }
 
 // newGoParser
-func newGoParser(name string, homePageDir string, opts *Options) *goParser {
+func newGoParser(name string, homePageDir string, opts *Options) *GoParser {
 	abs, err := filepath.Abs(homePageDir)
 	if err != nil {
 		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
 	}
 
-	p := &goParser{
+	p := &GoParser{
 		homePageDir: abs,
 		visited:     map[string]bool{},
 		repo:        NewRepository(name),
@@ -94,7 +88,7 @@ func newGoParser(name string, homePageDir string, opts *Options) *goParser {
 	return p
 }
 
-func (p *goParser) collectGoMods(startDir string) error {
+func (p *GoParser) collectGoMods(startDir string) error {
 
 	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
@@ -128,7 +122,7 @@ func (p *goParser) collectGoMods(startDir string) error {
 }
 
 // ParseRepo parse the entiry repo from homePageDir recursively until end
-func (p *goParser) ParseRepo() (Repository, error) {
+func (p *GoParser) ParseRepo() (Repository, error) {
 	for _, lib := range p.modules {
 		if strings.Contains(lib.path, "@") {
 			continue
@@ -144,13 +138,13 @@ func (p *goParser) ParseRepo() (Repository, error) {
 	return p.getRepo(), nil
 }
 
-func (p *goParser) ParseModule(mod *Module, dir string) (err error) {
+func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 	return p.loadPackages(mod, dir, "./...")
 }
 
 // getRepo return currently parsed golang AST
 // Notice: To get completely parsed repo, you'd better call goParser.ParseRepo() before this
-func (p *goParser) getRepo() Repository {
+func (p *GoParser) getRepo() Repository {
 	return p.repo
 }
 
@@ -164,7 +158,7 @@ func (p *goParser) getRepo() Repository {
 // 	}
 // }
 
-func (p *goParser) associateStructWithMethods() {
+func (p *GoParser) associateStructWithMethods() {
 	for _, lib := range p.repo.Modules {
 		for _, fs := range lib.Packages {
 			for _, f := range fs.Functions {
@@ -189,7 +183,7 @@ func (p *goParser) associateStructWithMethods() {
 }
 
 // getNode get a AST node from cache if parsed, or parse corresponding package and get the node
-func (p *goParser) getNode(id Identity) (interface{}, error) {
+func (p *GoParser) getNode(id Identity) (interface{}, error) {
 	if def := p.repo.GetFunction(id); def != nil {
 		return def, nil
 	}
@@ -225,7 +219,7 @@ func (p *goParser) getNode(id Identity) (interface{}, error) {
 	return nil, nil
 }
 
-func (p *goParser) searchName(name string) (ids []Identity, err error) {
+func (p *GoParser) searchName(name string) (ids []Identity, err error) {
 	filepath.Walk(p.homePageDir, func(path string, info fs.FileInfo, e error) error {
 		if e != nil || info.IsDir() || shouldIgnoreFile(path) || shouldIgnoreDir(filepath.Dir(path)) || !strings.HasSuffix(path, ".go") {
 			return nil
@@ -270,7 +264,7 @@ func getRelativeOrBasePath(homePageDir string, fset *token.FileSet, pos token.Po
 	return filepath.Base(fset.Position(pos).Filename)
 }
 
-func (p *goParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []byte, mod string, pkg string, impt *importInfo, name string) (ids []Identity, err error) {
+func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []byte, mod string, pkg string, impt *importInfo, name string) (ids []Identity, err error) {
 	for _, decl := range file.Decls {
 		// println(string(GetRawContent(fset, fcontent, decl)))
 		switch decl := decl.(type) {
@@ -401,7 +395,7 @@ func (p *goParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 	return
 }
 
-func (p *goParser) getModuleFromPkg(pkg PkgPath) (name string, dir string) {
+func (p *GoParser) getModuleFromPkg(pkg PkgPath) (name string, dir string) {
 	for _, m := range p.modules {
 		if strings.HasPrefix(pkg, m.name) && len(m.name) > len(name) {
 			name = m.name
@@ -412,7 +406,7 @@ func (p *goParser) getModuleFromPkg(pkg PkgPath) (name string, dir string) {
 }
 
 // path is absolute path
-func (p *goParser) getModuleFromPath(path string) (name string, dir string) {
+func (p *GoParser) getModuleFromPath(path string) (name string, dir string) {
 	for _, m := range p.modules {
 		if len(m.dir) != 0 && strings.HasPrefix(path, m.dir) {
 			return m.name, m.dir
@@ -422,7 +416,7 @@ func (p *goParser) getModuleFromPath(path string) (name string, dir string) {
 }
 
 // FromABS converts an absolute path to local mod path
-func (p *goParser) pkgPathFromABS(path string) PkgPath {
+func (p *GoParser) pkgPathFromABS(path string) PkgPath {
 	mod, dir := p.getModuleFromPath(path)
 	if mod == "" {
 		panic("not found package from " + path)

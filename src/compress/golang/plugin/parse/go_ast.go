@@ -104,7 +104,7 @@ func Main() {
 	fmt.Println(buf.String())
 }
 
-func loadNode(p *goParser, pkgPath string, name string, out *Repository) error {
+func loadNode(p *GoParser, pkgPath string, name string, out *Repository) error {
 	mod, _ := p.getModuleFromPkg(pkgPath)
 	np, err := p.getNode(NewIdentity(mod, PkgPath(pkgPath), name))
 	if err != nil {
