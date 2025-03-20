@@ -33,7 +33,7 @@ func (p *goParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	sysImports := make(map[string]string)
 	ret := &importInfo{}
 	for _, imp := range impts {
-		ret.Origins = append(ret.Origins, string(GetRawContent(fset, file, imp.Path)))
+		ret.Origins = append(ret.Origins, string(GetRawContent(fset, file, imp)))
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
 		importAlias := ""
 		// Check if user has defined an alias for current import
@@ -110,7 +110,7 @@ func (p *goParser) ParsePackage(pkgPath PkgPath) (Repository, error) {
 	repo := p.getRepo()
 	k, _ := p.getModuleFromPkg(pkgPath)
 	var out = NewRepository(repo.Name)
-	out.Modules[k] = NewModule(repo.Modules[k].Name, repo.Modules[k].Dir)
+	out.Modules[k] = newModule(repo.Modules[k].Name, repo.Modules[k].Dir)
 	out.Modules[k].Packages[pkgPath] = repo.Modules[k].Packages[pkgPath]
 	return out, nil
 }

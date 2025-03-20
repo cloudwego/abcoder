@@ -112,7 +112,7 @@ func loadNode(p *goParser, pkgPath string, name string, out *Repository) error {
 	}
 	repo := p.getRepo()
 	if out.Modules[mod] == nil {
-		out.Modules[mod] = NewModule(repo.Modules[mod].Name, repo.Modules[mod].Dir)
+		out.Modules[mod] = newModule(repo.Modules[mod].Name, repo.Modules[mod].Dir)
 	}
 	if out.Modules[mod].Packages[pkgPath] == nil {
 		out.Modules[mod].Packages[pkgPath] = NewPackage(pkgPath)

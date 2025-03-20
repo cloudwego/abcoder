@@ -16,31 +16,11 @@
 
 package uniast
 
-import (
-	"encoding/json"
-	"os"
-)
+type Writer interface {
+	WriteModule(repo *Repository, modPath string) error
+	// SplitImportsAndCodes will split the imports and codes from the src.
+	// the src has only codes, just return the src.
+	SplitImportsAndCodes(src string) (codes string, imports []string, err error)
 
-func Dedup(ids []Identity, id Identity) []Identity {
-	for _, i := range ids {
-		if i == id {
-			return ids
-		}
-	}
-	return append(ids, id)
-}
-
-func LoadRepo(path string) (*Repository, error) {
-	bs, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var repo Repository
-	if err := json.Unmarshal(bs, &repo); err != nil {
-		return nil, err
-	}
-	if err := repo.BuildGraph(); err != nil {
-		return nil, err
-	}
-	return &repo, nil
+	IdToImport(id Identity) (string, error)
 }

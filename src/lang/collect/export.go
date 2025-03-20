@@ -27,6 +27,12 @@ import (
 	parse "github.com/cloudwego/abcoder/src/uniast"
 )
 
+func newModule(name string, dir string) *parse.Module {
+	ret := parse.NewModule(name, dir)
+	ret.Language = parse.Rust
+	return ret
+}
+
 func (c *Collector) Export(ctx context.Context) (*parse.Repository, error) {
 	// recursively read all go files in repo
 	repo := parse.NewRepository(c.repo)
@@ -41,7 +47,7 @@ func (c *Collector) Export(ctx context.Context) (*parse.Repository, error) {
 		if err != nil {
 			return nil, err
 		}
-		repo.Modules[name] = parse.NewModule(name, rel)
+		repo.Modules[name] = newModule(name, rel)
 	}
 
 	// export symbols
@@ -94,7 +100,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 	}
 
 	if repo.Modules[mod] == nil {
-		repo.Modules[mod] = parse.NewModule(mod, "")
+		repo.Modules[mod] = newModule(mod, "")
 	}
 	module := repo.Modules[mod]
 	if repo.Modules[mod].Packages[path] == nil {

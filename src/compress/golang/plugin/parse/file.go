@@ -101,11 +101,13 @@ func (p *goParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		v := p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
 		if vspec.Type != nil {
-			id, _, _ := ctx.GetTypeId(vspec.Type)
+			id, isPointer, _ := ctx.GetTypeId(vspec.Type)
 			v.Type = &id
+			v.IsPointer = isPointer
 		} else if val != nil && !isConst {
-			id, _, _ := ctx.GetTypeId(*val)
+			id, isPointer, _ := ctx.GetTypeId(*val)
 			v.Type = &id
+			v.IsPointer = isPointer
 		} else {
 			v.Type = typ
 		}
@@ -113,12 +115,23 @@ func (p *goParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		if isConst && v.Type == nil {
 			v.Type = lastType
 		}
+		var varType string
+		if v.Type != nil {
+			if v.Type.PkgPath == ctx.pkgPath {
+				varType = v.Type.Name
+			} else {
+				varType = v.Type.CallName()
+			}
+			if v.IsPointer {
+				varType = "*" + varType
+			}
+		}
 
 		if !isConst {
-			v.Content = fmt.Sprintf("var %s %s", name.Name, v.Type.CallName())
+			v.Content = fmt.Sprintf("var %s %s", name.Name, varType)
 		} else {
-			if v.Type != nil {
-				v.Content = fmt.Sprintf("const %s %s", name.Name, v.Type.CallName())
+			if varType != "" {
+				v.Content = fmt.Sprintf("const %s %s", name.Name, varType)
 			} else {
 				v.Content = fmt.Sprintf("const %s", name.Name)
 			}
@@ -507,6 +520,8 @@ func (p *goParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 			}
 			fn.Content = doc + string(ctx.GetRawContent(fieldDecl))
 			fn.FileLine = ctx.FileLine(fieldDecl)
+			fn.IsMethod = true
+			fn.IsInterfaceMethod = true
 		}
 		p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 	}

@@ -23,17 +23,25 @@ import (
 	"strings"
 )
 
+type Language string
+
+const (
+	Golang Language = "go"
+	Rust   Language = "rust"
+)
+
 // Repository
 type Repository struct {
-	Name    string             `json:"id"` // go module name
+	Name    string             `json:"id"` // module name
 	Modules map[string]*Module // module name => Library
-	Graph   map[string]*Node
+	Graph   map[string]*Node   `json:"-"`
 }
 
 func NewRepository(name string) Repository {
 	ret := Repository{
 		Name:    name,
 		Modules: map[string]*Module{},
+		Graph:   map[string]*Node{},
 	}
 	return ret
 }
@@ -51,11 +59,16 @@ func NewFile(path string) *File {
 }
 
 type Module struct {
+	Language     Language
 	Name         string               // go module name
 	Dir          string               // relative path to repo
 	Packages     map[PkgPath]*Package // pkage import path => Package
 	Dependencies map[string]string    `json:",omitempty"` // module name => module_path@version
 	Files        map[string]*File     `json:",omitempty"` // relative path => file info
+}
+
+func IsExternalModule(modpath string) bool {
+	return modpath == "" || strings.Contains(modpath, "@")
 }
 
 func NewModule(name string, dir string) *Module {
@@ -238,8 +251,9 @@ func (p *Repository) SetVar(id Identity, v *Var) *Var {
 type Function struct {
 	Exported bool
 
-	IsMethod bool // If the function is a method
-	Identity      // unique identity in a repo
+	IsMethod          bool // If the function is a method
+	IsInterfaceMethod bool // If is a empty interface method stub
+	Identity               // unique identity in a repo
 	FileLine
 	Content string // Content of the function, including functiion signature and body
 
@@ -314,6 +328,7 @@ type Type struct {
 type Var struct {
 	IsExported bool
 	IsConst    bool
+	IsPointer  bool // if its Type is a pointer type
 	Identity
 	FileLine
 	Type    *Identity `json:",omitempty"`
