@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -662,6 +662,8 @@ pub struct Variant {
     pub is_const: bool,
     #[serde(rename = "Type")]
     pub type_id: Option<Identity>,
+    #[serde(rename = "IsPointer", default)]
+    pub is_pointer: bool,
     #[serde(rename = "Content")]
     pub content: String,
 
@@ -699,8 +701,10 @@ pub struct Function {
     pub line: u32,
     #[serde(rename = "Exported", default)]
     pub is_exported: bool,
-    #[serde(rename = "IsMethod")]
+    #[serde(rename = "IsMethod", default)]
     is_method: bool,
+    #[serde(rename = "IsInterfaceMethod", default)]
+    is_interface_method: bool,
     #[serde(rename = "Content")]
     pub content: String,
     #[serde(rename = "Receiver")]

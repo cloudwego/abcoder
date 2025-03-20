@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudwego/abcoder/src/uniast"
 	. "github.com/cloudwego/abcoder/src/uniast"
 	"golang.org/x/tools/go/packages"
 )
@@ -55,6 +56,12 @@ func isExternalID(id *Identity, curmod string) bool {
 		strings.Contains(id.PkgPath, "/kitex_gen/") || strings.Contains(id.PkgPath, "/hertz_gen/")
 }
 
+func newModule(mod string, dir string) *Module {
+	ret := uniast.NewModule(mod, dir)
+	ret.Language = Golang
+	return ret
+}
+
 func (p *goParser) referCodes(ctx *fileContext, id *Identity, depth int) (err error) {
 	if depth == 0 || id.PkgPath == "" || !isExternalID(id, ctx.module.Name) {
 		return nil
@@ -71,7 +78,8 @@ func (p *goParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	// }()
 	mod := p.repo.Modules[id.ModPath]
 	if mod == nil {
-		mod = NewModule(id.ModPath, "")
+		mod = newModule(id.ModPath, "")
+		mod.Language = uniast.Golang
 		p.repo.Modules[id.ModPath] = mod
 	}
 	// fmt.Printf("refer code for %v\n", id.Full())
@@ -161,28 +169,27 @@ func (ctx *fileContext) GetRawContent(node ast.Node) []byte {
 
 func GetRawContent(fset *token.FileSet, file []byte, node ast.Node) []byte {
 	var doc = bytes.Buffer{}
-	if collectComment {
-		switch v := node.(type) {
-		case *ast.GenDecl:
-			if v.Doc != nil {
-				doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
-				doc.WriteByte('\n')
-			}
-		case *ast.TypeSpec:
-			if v.Doc != nil {
-				doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
-				doc.WriteByte('\n')
-			}
-		case *ast.ValueSpec:
-			if v.Doc != nil {
-				doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
-				doc.WriteByte('\n')
-			}
-		case *ast.FuncDecl:
-			if v.Doc != nil {
-				doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
-				doc.WriteByte('\n')
-			}
+	switch v := node.(type) {
+	case *ast.GenDecl:
+		if collectComment && v.Doc != nil {
+			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
+			doc.WriteByte('\n')
+		}
+	case *ast.TypeSpec:
+		if collectComment && v.Doc != nil {
+			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
+			doc.WriteByte('\n')
+		}
+		doc.WriteString("type ")
+	case *ast.ValueSpec:
+		if collectComment && v.Doc != nil {
+			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
+			doc.WriteByte('\n')
+		}
+	case *ast.FuncDecl:
+		if collectComment && v.Doc != nil {
+			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
+			doc.WriteByte('\n')
 		}
 	}
 	doc.Write(file[fset.Position(node.Pos()).Offset:fset.Position(node.End()).Offset])

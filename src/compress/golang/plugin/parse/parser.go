@@ -108,7 +108,7 @@ func (p *goParser) collectGoMods(startDir string) error {
 		if err != nil {
 			return fmt.Errorf("module path %v is not in the repo", path)
 		}
-		p.repo.Modules[name] = NewModule(name, rel)
+		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 		deps, err := parseModuleFile(content)
 		if err != nil {
@@ -202,7 +202,7 @@ func (p *goParser) getNode(id Identity) (interface{}, error) {
 
 	lib := p.repo.Modules[id.ModPath]
 	if lib == nil {
-		lib = NewModule(id.ModPath, "")
+		lib = newModule(id.ModPath, "")
 		p.repo.Modules[id.ModPath] = lib
 	}
 	if err := p.parsePackage(id.PkgPath); err != nil {
@@ -234,7 +234,7 @@ func (p *goParser) searchName(name string) (ids []Identity, err error) {
 		m := p.repo.Modules[mod]
 		if m == nil {
 			dir, _ := filepath.Rel(p.homePageDir, path)
-			m = NewModule(mod, dir)
+			m = newModule(mod, dir)
 			p.repo.Modules[mod] = m
 		}
 		pkg := p.pkgPathFromABS(filepath.Dir(path))
