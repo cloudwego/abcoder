@@ -24,7 +24,7 @@ import (
 	"github.com/cloudwego/abcoder/src/lang/log"
 	"github.com/cloudwego/abcoder/src/lang/lsp"
 	. "github.com/cloudwego/abcoder/src/lang/lsp"
-	parse "github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/uniast"
 )
 
 type dependency struct {
@@ -32,22 +32,22 @@ type dependency struct {
 	Symbol   *DocumentSymbol `json:"symbol"`
 }
 
-func (d dependency) FileLine() parse.FileLine {
-	return parse.FileLine{
+func (d dependency) FileLine() uniast.FileLine {
+	return uniast.FileLine{
 		File: d.Location.URI.File(),
 		Line: d.Location.Range.Start.Line,
 	}
 }
 
-func newModule(name string, dir string) *parse.Module {
-	ret := parse.NewModule(name, dir)
-	ret.Language = parse.Rust
+func newModule(name string, dir string) *uniast.Module {
+	ret := uniast.NewModule(name, dir)
+	ret.Language = uniast.Rust
 	return ret
 }
 
-func (c *Collector) Export(ctx context.Context) (*parse.Repository, error) {
+func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	// recursively read all go files in repo
-	repo := parse.NewRepository(c.repo)
+	repo := uniast.NewRepository(c.repo)
 	modules, err := c.spec.WorkSpace(c.repo)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (c *Collector) Export(ctx context.Context) (*parse.Repository, error) {
 
 	// export symbols
 	for _, symbol := range c.syms {
-		visited := make(map[*lsp.DocumentSymbol]*parse.Identity)
+		visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
 		_, err := c.exportSymbol(&repo, symbol, "", visited)
 		if err != nil {
 			log.Info("export symbol %s failed: %v\n", symbol, err)
@@ -82,7 +82,7 @@ func (c *Collector) Export(ctx context.Context) (*parse.Repository, error) {
 	return &repo, nil
 }
 
-func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol, refName string, visited map[*DocumentSymbol]*parse.Identity) (*parse.Identity, error) {
+func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol, refName string, visited map[*DocumentSymbol]*uniast.Identity) (*uniast.Identity, error) {
 	if symbol == nil {
 		return nil, errors.New("symbol is nil")
 	}
@@ -103,7 +103,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 	if err != nil {
 		return nil, err
 	}
-	id := parse.NewIdentity(mod, path, name)
+	id := uniast.NewIdentity(mod, path, name)
 	visited[symbol] = &id
 
 	// Load eternal symbol on demands
@@ -116,7 +116,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 	}
 	module := repo.Modules[mod]
 	if repo.Modules[mod].Packages[path] == nil {
-		repo.Modules[mod].Packages[path] = parse.NewPackage(path)
+		repo.Modules[mod].Packages[path] = uniast.NewPackage(path)
 	}
 	pkg := repo.Modules[mod].Packages[path]
 	if c.spec.IsMainFunction(*symbol) {
@@ -129,13 +129,13 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 	} else {
 		relfile = filepath.Base(file)
 	}
-	fileLine := parse.FileLine{
+	fileLine := uniast.FileLine{
 		File: relfile,
 		Line: symbol.Location.Range.Start.Line + 1,
 	}
 	// collect files
 	if module.Files[relfile] == nil {
-		module.Files[relfile] = parse.NewFile(relfile)
+		module.Files[relfile] = uniast.NewFile(relfile)
 	}
 
 	content := symbol.Text
@@ -156,7 +156,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 			// NOTICE: no need collect interface method
 			break
 		}
-		obj := &parse.Function{
+		obj := &uniast.Function{
 			FileLine: fileLine,
 			Content:  content,
 			Exported: public,
@@ -171,8 +171,8 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
-				dep := parse.NewDependency(*tyid, input.FileLine())
-				obj.Types = parse.Dedup(obj.Types, dep)
+				dep := uniast.NewDependency(*tyid, input.FileLine())
+				obj.Types = uniast.Dedup(obj.Types, dep)
 			}
 		}
 		if info.Inputs != nil {
@@ -183,8 +183,8 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
-				dep := parse.NewDependency(*tyid, input.FileLine())
-				obj.Params = parse.Dedup(obj.Params, dep)
+				dep := uniast.NewDependency(*tyid, input.FileLine())
+				obj.Params = uniast.Dedup(obj.Params, dep)
 			}
 		}
 		if info.Outputs != nil {
@@ -195,15 +195,15 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export output symbol %s failed: %v\n", output.Symbol, err)
 					continue
 				}
-				dep := parse.NewDependency(*tyid, output.FileLine())
-				obj.Results = parse.Dedup(obj.Results, dep)
+				dep := uniast.NewDependency(*tyid, output.FileLine())
+				obj.Results = uniast.Dedup(obj.Results, dep)
 			}
 		}
 		if info.Method != nil && info.Method.Receiver.Symbol != nil {
 			tok, _ := c.cli.Locate(info.Method.Receiver.Location)
 			rid, err := c.exportSymbol(repo, info.Method.Receiver.Symbol, tok, visited)
 			if err == nil {
-				obj.Receiver = &parse.Receiver{
+				obj.Receiver = &uniast.Receiver{
 					Type: *rid,
 					// Name: rid.Name,
 				}
@@ -244,26 +244,26 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export dep symbol %s failed: %v\n", dep.Symbol, err)
 					continue
 				}
-				pdep := parse.NewDependency(*depid, dep.FileLine())
+				pdep := uniast.NewDependency(*depid, dep.FileLine())
 				switch dep.Symbol.Kind {
 				case lsp.SKFunction:
-					obj.FunctionCalls = parse.Dedup(obj.FunctionCalls, pdep)
+					obj.FunctionCalls = uniast.Dedup(obj.FunctionCalls, pdep)
 				case lsp.SKMethod:
 					if obj.MethodCalls == nil {
-						obj.MethodCalls = make([]parse.Dependency, 0, len(deps))
+						obj.MethodCalls = make([]uniast.Dependency, 0, len(deps))
 					}
 					// NOTICE: use loc token as key here, to make it more readable
-					obj.MethodCalls = parse.Dedup(obj.MethodCalls, pdep)
+					obj.MethodCalls = uniast.Dedup(obj.MethodCalls, pdep)
 				case lsp.SKVariable, lsp.SKConstant:
 					if obj.GlobalVars == nil {
-						obj.GlobalVars = make([]parse.Dependency, 0, len(deps))
+						obj.GlobalVars = make([]uniast.Dependency, 0, len(deps))
 					}
-					obj.GlobalVars = parse.Dedup(obj.GlobalVars, pdep)
+					obj.GlobalVars = uniast.Dedup(obj.GlobalVars, pdep)
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
 					if obj.Types == nil {
-						obj.Types = make([]parse.Dependency, 0, len(deps))
+						obj.Types = make([]uniast.Dependency, 0, len(deps))
 					}
-					obj.Types = parse.Dedup(obj.Types, pdep)
+					obj.Types = uniast.Dedup(obj.Types, pdep)
 				default:
 					log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
 				}
@@ -274,7 +274,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 
 	// Type
 	case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
-		obj := &parse.Type{
+		obj := &uniast.Type{
 			FileLine: fileLine,
 			Content:  content,
 			TypeKind: mapKind(k),
@@ -291,7 +291,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 				}
 				switch dep.Symbol.Kind {
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
-					obj.SubStruct = append(obj.SubStruct, parse.NewDependency(*depid, dep.FileLine()))
+					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, dep.FileLine()))
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
 				}
@@ -299,7 +299,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 		}
 		// collect methods
 		if rec := receivers[symbol]; rec != nil {
-			obj.Methods = make(map[string]parse.Identity, len(rec))
+			obj.Methods = make(map[string]uniast.Identity, len(rec))
 			for _, method := range rec {
 				tok, _ := c.cli.Locate(method.Location)
 				mid, err := c.exportSymbol(repo, method, tok, visited)
@@ -315,7 +315,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 		pkg.Types[id.Name] = obj
 	// Vars
 	case lsp.SKConstant, lsp.SKVariable:
-		obj := &parse.Var{
+		obj := &uniast.Var{
 			FileLine:   fileLine,
 			Content:    content,
 			IsExported: public,
@@ -339,16 +339,16 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 	return &id, nil
 }
 
-func mapKind(kind lsp.SymbolKind) parse.TypeKind {
+func mapKind(kind lsp.SymbolKind) uniast.TypeKind {
 	switch kind {
 	case lsp.SKStruct:
-		return parse.TypeKindStruct
+		return uniast.TypeKindStruct
 	case lsp.SKTypeParameter:
-		return parse.TypeKindNamed
+		return uniast.TypeKindNamed
 	case lsp.SKInterface:
-		return parse.TypeKindInterface
+		return uniast.TypeKindInterface
 	case lsp.SKEnum:
-		return parse.TypeKindEnum
+		return uniast.TypeKindEnum
 	default:
 		panic(fmt.Sprintf("unexpected kind %v", kind))
 	}
