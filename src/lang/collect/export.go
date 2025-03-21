@@ -205,7 +205,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 			if err == nil {
 				obj.Receiver = &parse.Receiver{
 					Type: *rid,
-					Name: rid.Name,
+					// Name: rid.Name,
 				}
 				obj.IsMethod = true
 				id.Name = rid.Name

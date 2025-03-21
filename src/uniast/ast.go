@@ -290,7 +290,6 @@ func NewDependency(id Identity, fl FileLine) Dependency {
 type Receiver struct {
 	IsPointer bool
 	Type      Identity
-	Name      string
 }
 
 // FileLine represents a filename and line number
