@@ -288,7 +288,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 				receiver = &Receiver{
 					Type:      id,
 					IsPointer: isPointer,
-					Name:      name,
+					// Name:      name,
 				}
 			}
 			if dname == name {
@@ -347,7 +347,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 								fn.Receiver = &Receiver{
 									Type:      st.Identity,
 									IsPointer: true,
-									Name:      name,
+									// Name:      name,
 								}
 								// if m.Type != nil {
 								// 	// collect method's func params

@@ -306,14 +306,14 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	if isMethod {
 		// TODO: reserve the pointer message?
 		id, isPointer, _ := ctx.GetTypeId(funcDecl.Recv.List[0].Type)
-		name := "self"
-		if len(funcDecl.Recv.List[0].Names) > 0 {
-			name = funcDecl.Recv.List[0].Names[0].Name
-		}
+		// name := "self"
+		// if len(funcDecl.Recv.List[0].Names) > 0 {
+		// 	name = funcDecl.Recv.List[0].Names[0].Name
+		// }
 		receiver = &Receiver{
 			Type:      id,
 			IsPointer: isPointer,
-			Name:      name,
+			// Name:      name,
 		}
 	}
 
