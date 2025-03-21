@@ -27,6 +27,18 @@ import (
 	parse "github.com/cloudwego/abcoder/src/uniast"
 )
 
+type dependency struct {
+	Location Location        `json:"location"`
+	Symbol   *DocumentSymbol `json:"symbol"`
+}
+
+func (d dependency) FileLine() parse.FileLine {
+	return parse.FileLine{
+		File: d.Location.URI.File(),
+		Line: d.Location.Range.Start.Line,
+	}
+}
+
 func newModule(name string, dir string) *parse.Module {
 	ret := parse.NewModule(name, dir)
 	ret.Language = parse.Rust
@@ -159,7 +171,8 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
-				obj.Types = parse.Dedup(obj.Types, *tyid)
+				dep := parse.NewDependency(*tyid, input.FileLine())
+				obj.Types = parse.Dedup(obj.Types, dep)
 			}
 		}
 		if info.Inputs != nil {
@@ -170,7 +183,8 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
-				obj.Params = parse.Dedup(obj.Params, *tyid)
+				dep := parse.NewDependency(*tyid, input.FileLine())
+				obj.Params = parse.Dedup(obj.Params, dep)
 			}
 		}
 		if info.Outputs != nil {
@@ -181,7 +195,8 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export output symbol %s failed: %v\n", output.Symbol, err)
 					continue
 				}
-				obj.Results = parse.Dedup(obj.Results, *tyid)
+				dep := parse.NewDependency(*tyid, output.FileLine())
+				obj.Results = parse.Dedup(obj.Results, dep)
 			}
 		}
 		if info.Method != nil && info.Method.Receiver.Symbol != nil {
@@ -229,25 +244,26 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					log.Error("export dep symbol %s failed: %v\n", dep.Symbol, err)
 					continue
 				}
+				pdep := parse.NewDependency(*depid, dep.FileLine())
 				switch dep.Symbol.Kind {
 				case lsp.SKFunction:
-					obj.FunctionCalls = parse.Dedup(obj.FunctionCalls, *depid)
+					obj.FunctionCalls = parse.Dedup(obj.FunctionCalls, pdep)
 				case lsp.SKMethod:
 					if obj.MethodCalls == nil {
-						obj.MethodCalls = make([]parse.Identity, 0, len(deps))
+						obj.MethodCalls = make([]parse.Dependency, 0, len(deps))
 					}
 					// NOTICE: use loc token as key here, to make it more readable
-					obj.MethodCalls = parse.Dedup(obj.MethodCalls, *depid)
+					obj.MethodCalls = parse.Dedup(obj.MethodCalls, pdep)
 				case lsp.SKVariable, lsp.SKConstant:
 					if obj.GolobalVars == nil {
-						obj.GolobalVars = make([]parse.Identity, 0, len(deps))
+						obj.GolobalVars = make([]parse.Dependency, 0, len(deps))
 					}
-					obj.GolobalVars = parse.Dedup(obj.GolobalVars, *depid)
+					obj.GolobalVars = parse.Dedup(obj.GolobalVars, pdep)
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
 					if obj.Types == nil {
-						obj.Types = make([]parse.Identity, 0, len(deps))
+						obj.Types = make([]parse.Dependency, 0, len(deps))
 					}
-					obj.Types = parse.Dedup(obj.Types, *depid)
+					obj.Types = parse.Dedup(obj.Types, pdep)
 				default:
 					log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
 				}
@@ -275,7 +291,7 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 				}
 				switch dep.Symbol.Kind {
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
-					obj.SubStruct = append(obj.SubStruct, *depid)
+					obj.SubStruct = append(obj.SubStruct, parse.NewDependency(*depid, dep.FileLine()))
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
 				}

@@ -378,11 +378,8 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 								var m = map[string]Identity{}
 								// NOTICE: collect all types
 								tname, _ := p.mockTypes(spec.Type, m, fcontent, fset, v.File, mod, pkg, impt)
-								v.Type = &Identity{
-									ModPath: mod,
-									PkgPath: pkg,
-									Name:    tname,
-								}
+								id := NewIdentity(mod, pkg, tname)
+								v.Type = &id
 							} else {
 								v.Type = lastType
 							}
