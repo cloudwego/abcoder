@@ -719,7 +719,7 @@ pub struct Function {
     pub method_calls: Option<Vec<Identity>>,
     #[serde(rename = "Types")]
     pub types: Option<Vec<Identity>>,
-    #[serde(rename = "GolobalVars")]
+    #[serde(rename = "GlobalVars")]
     pub global_vars: Option<Vec<Identity>>,
 
     // compress_data
@@ -732,8 +732,6 @@ pub struct Receiver {
     pub is_pointer: bool,
     #[serde(rename = "Type")]
     pub type_id: Identity,
-    #[serde(rename = "Name")]
-    pub name: String,
 }
 
 impl Function {

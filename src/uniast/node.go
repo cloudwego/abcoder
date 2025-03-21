@@ -104,7 +104,7 @@ func (r *Repository) BuildGraph() error {
 				for _, dep := range f.Types {
 					r.AddRelation(n, dep.Identity)
 				}
-				for _, dep := range f.GolobalVars {
+				for _, dep := range f.GlobalVars {
 					r.AddRelation(n, dep.Identity)
 				}
 			}
