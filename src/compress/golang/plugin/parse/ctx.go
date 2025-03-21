@@ -209,14 +209,18 @@ func (ctx *fileContext) GetTypeId(typ ast.Expr) (x Identity, isPointer bool, isS
 	}
 }
 
-func (ctx *fileContext) collectFields(fields []*ast.Field, m *[]Identity) {
+func (ctx *fileContext) collectFields(fields []*ast.Field, m *[]Dependency) {
 	for _, fieldDecl := range fields {
 		id, _, isStdOrBuiltin := ctx.GetTypeId(fieldDecl.Type)
 		if isStdOrBuiltin || id.PkgPath == "" {
 			continue
 		}
-		*m = append(*m, id)
+		*m = append(*m, Dependency{
+			Identity: id,
+			FileLine: ctx.FileLine(fieldDecl),
+		})
 	}
+	return
 }
 
 type importInfo struct {
@@ -329,6 +333,7 @@ func getTypeName(fset *token.FileSet, file []byte, typ ast.Expr) (ret []Identity
 
 func (p *GoParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inlined bool) {
 	id, _, isGoBuiltins := ctx.GetTypeId(typ)
+	dep := NewDependency(id, ctx.FileLine(typ))
 	if isGoBuiltins || id.PkgPath == "" {
 		return
 	}
@@ -336,9 +341,9 @@ func (p *GoParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inline
 		fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
 	}
 	if inlined {
-		st.InlineStruct = append(st.InlineStruct, id)
+		st.InlineStruct = append(st.InlineStruct, dep)
 	} else {
-		st.SubStruct = append(st.SubStruct, id)
+		st.SubStruct = append(st.SubStruct, dep)
 	}
 }
 

@@ -257,22 +257,34 @@ type Function struct {
 	FileLine
 	Content string // Content of the function, including functiion signature and body
 
-	Receiver *Receiver  `json:",omitempty"` // Method receiver
-	Params   []Identity `json:",omitempty"` // function parameters, key is the parameter name
-	Results  []Identity `json:",omitempty"` // function results, key is the result name or type name
+	Receiver *Receiver    `json:",omitempty"` // Method receiver
+	Params   []Dependency `json:",omitempty"` // function parameters, key is the parameter name
+	Results  []Dependency `json:",omitempty"` // function results, key is the result name or type name
 
 	// call to in-the-project functions, key is {{pkgAlias.funcName}} or {{funcName}}
-	FunctionCalls []Identity `json:",omitempty"`
+	FunctionCalls []Dependency `json:",omitempty"`
 
 	// call to internal methods,
 	// NOTICE: method name may be duplicated, so we collect according to the SEQUENCE of APPEARANCE
-	MethodCalls []Identity `json:",omitempty"`
+	MethodCalls []Dependency `json:",omitempty"`
 
-	Types       []Identity `json:",omitempty"` // types used in the function
-	GolobalVars []Identity `json:",omitempty"` // global vars used in the function
+	Types       []Dependency `json:",omitempty"` // types used in the function
+	GolobalVars []Dependency `json:",omitempty"` // global vars used in the function
 
 	// func llm compress result
 	CompressData *string `json:"compress_data,omitempty"`
+}
+
+type Dependency struct {
+	Identity
+	FileLine `json:",omitempty"`
+}
+
+func NewDependency(id Identity, fl FileLine) Dependency {
+	return Dependency{
+		Identity: id,
+		FileLine: fl,
+	}
 }
 
 type Receiver struct {
@@ -308,10 +320,10 @@ type Type struct {
 	Content string // struct declaration content
 
 	// field type (not include basic types), type name => type id
-	SubStruct []Identity `json:",omitempty"`
+	SubStruct []Dependency `json:",omitempty"`
 
 	// inline field type (not include basic types)
-	InlineStruct []Identity `json:",omitempty"`
+	InlineStruct []Dependency `json:",omitempty"`
 
 	// methods defined on the Struct, not including inlined type's method
 	Methods map[string]Identity `json:",omitempty"`

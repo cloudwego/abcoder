@@ -96,26 +96,26 @@ func (r *Repository) BuildGraph() error {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
 				for _, dep := range f.FunctionCalls {
-					r.AddRelation(n, dep)
+					r.AddRelation(n, dep.Identity)
 				}
 				for _, dep := range f.MethodCalls {
-					r.AddRelation(n, dep)
+					r.AddRelation(n, dep.Identity)
 				}
 				for _, dep := range f.Types {
-					r.AddRelation(n, dep)
+					r.AddRelation(n, dep.Identity)
 				}
 				for _, dep := range f.GolobalVars {
-					r.AddRelation(n, dep)
+					r.AddRelation(n, dep.Identity)
 				}
 			}
 
 			for _, t := range pkg.Types {
 				n := r.SetNode(t.Identity, TYPE)
 				for _, dep := range t.SubStruct {
-					r.AddRelation(n, dep)
+					r.AddRelation(n, dep.Identity)
 				}
 				for _, dep := range t.InlineStruct {
-					r.AddRelation(n, dep)
+					r.AddRelation(n, dep.Identity)
 				}
 			}
 
@@ -138,8 +138,8 @@ const (
 )
 
 type Relation struct {
-	Kind   RelationKind
 	Target Identity
+	Kind   RelationKind
 	Desc   string
 }
 

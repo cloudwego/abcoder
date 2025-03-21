@@ -21,9 +21,9 @@ import (
 	"os"
 )
 
-func Dedup(ids []Identity, id Identity) []Identity {
+func Dedup(ids []Dependency, id Dependency) []Dependency {
 	for _, i := range ids {
-		if i == id {
+		if i.Identity == id.Identity {
 			return ids
 		}
 	}

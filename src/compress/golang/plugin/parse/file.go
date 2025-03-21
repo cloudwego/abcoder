@@ -219,6 +219,7 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 					return false
 				}
 				id := NewIdentity(mod, path, expr.Sel.Name)
+				dep := NewDependency(id, ctx.FileLine(expr.Sel))
 
 				// NOTICE: refer external codes for convinience
 				if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
@@ -233,16 +234,16 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 						// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
 						// 	return false
 						// }
-						*infos.tys = Dedup(*infos.tys, id)
+						*infos.tys = Dedup(*infos.tys, dep)
 						// global var
 					} else if _, ok := v.(*types.Const); ok {
-						*infos.globalVars = Dedup(*infos.globalVars, id)
+						*infos.globalVars = Dedup(*infos.globalVars, dep)
 						// external const
 					} else if _, ok := v.(*types.Var); ok {
-						*infos.globalVars = Dedup(*infos.globalVars, id)
+						*infos.globalVars = Dedup(*infos.globalVars, dep)
 						// external function
 					} else if _, ok := v.(*types.Func); ok {
-						*infos.functionCalls = Dedup(*infos.functionCalls, id)
+						*infos.functionCalls = Dedup(*infos.functionCalls, dep)
 					}
 					return false
 				}
@@ -281,10 +282,11 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 			rname = rev.Name()
 		}
 		id := NewIdentity(mod, pkg, rname+"."+expr.Sel.Name)
+		dep := NewDependency(id, ctx.FileLine(expr.Sel))
 		if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
 		}
-		*infos.methodCalls = Dedup(*infos.methodCalls, id)
+		*infos.methodCalls = Dedup(*infos.methodCalls, dep)
 		return false
 	}
 
@@ -292,8 +294,8 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 }
 
 type collectInfos struct {
-	functionCalls, methodCalls *[]Identity
-	tys, globalVars            *[]Identity
+	functionCalls, methodCalls *[]Dependency
+	tys, globalVars            *[]Dependency
 }
 
 // parseFunc parses all function declaration in one file
@@ -321,23 +323,20 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	}
 
 	// collect parameters
-	params := []Identity{}
+	var params []Dependency
 	if funcDecl.Type.Params != nil {
 		ctx.collectFields(funcDecl.Type.Params.List, &params)
 	}
 	// collect results
-	results := []Identity{}
+	var results []Dependency
 	if funcDecl.Type.Results != nil {
 		ctx.collectFields(funcDecl.Type.Results.List, &results)
 	}
-	// collect types
-	tys := []Identity{}
-	// collect global vars
-	globalVars := []Identity{}
+
 	// collect content
 	content := string(ctx.GetRawContent(funcDecl))
 
-	var functionCalls, methodCalls = []Identity{}, []Identity{}
+	var functionCalls, globalVars, tys, methodCalls []Dependency
 
 	if funcDecl.Body == nil {
 		goto set_func
@@ -370,6 +369,7 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 			// }
 			if use, ok := ctx.pkgTypeInfo.Uses[expr]; ok {
 				id := NewIdentity(ctx.module.Name, ctx.pkgPath, callName)
+				dep := NewDependency(id, ctx.FileLine(expr))
 				// type name
 				if _, isNamed := use.(*types.TypeName); isNamed {
 					// id, ok := ctx.getTypeId(tn.Type())
@@ -377,24 +377,24 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
 					// 	return false
 					// }
-					tys = Dedup(tys, id)
+					tys = Dedup(tys, dep)
 					// global var
 				} else if v, ok := use.(*types.Var); ok {
 					// NOTICE: the Parent of global scope is nil?
 					if isPkgScope(v.Parent()) {
-						globalVars = Dedup(globalVars, id)
+						globalVars = Dedup(globalVars, dep)
 					}
 					// global const
 				} else if c, ok := use.(*types.Const); ok {
 					if isPkgScope(c.Parent()) {
-						globalVars = Dedup(globalVars, id)
+						globalVars = Dedup(globalVars, dep)
 					}
 					return false
 					// function
 				} else if f, ok := use.(*types.Func); ok {
 					// exclude method
 					if f.Type().(*types.Signature).Recv() == nil {
-						functionCalls = Dedup(functionCalls, id)
+						functionCalls = Dedup(functionCalls, dep)
 					}
 				}
 			}
@@ -472,7 +472,8 @@ func (p *GoParser) parseStruct(ctx *fileContext, struName string, name *ast.Iden
 		if stru, ok := fieldDecl.Type.(*ast.StructType); ok {
 			// anonymous struct. parse and collect it
 			as, _ := p.parseStruct(ctx, "_"+fieldname, nil, stru)
-			st.SubStruct = append(st.SubStruct, as.Identity)
+			dep := NewDependency(as.Identity, ctx.FileLine(fieldDecl.Type))
+			st.SubStruct = append(st.SubStruct, dep)
 		} else {
 			p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 		}
