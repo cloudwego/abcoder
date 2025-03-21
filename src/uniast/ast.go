@@ -268,8 +268,8 @@ type Function struct {
 	// NOTICE: method name may be duplicated, so we collect according to the SEQUENCE of APPEARANCE
 	MethodCalls []Dependency `json:",omitempty"`
 
-	Types       []Dependency `json:",omitempty"` // types used in the function
-	GolobalVars []Dependency `json:",omitempty"` // global vars used in the function
+	Types      []Dependency `json:",omitempty"` // types used in the function
+	GlobalVars []Dependency `json:",omitempty"` // global vars used in the function
 
 	// func llm compress result
 	CompressData *string `json:"compress_data,omitempty"`

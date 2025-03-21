@@ -420,7 +420,7 @@ set_func:
 	f.Receiver = receiver
 	f.Params = params
 	f.Results = results
-	f.GolobalVars = globalVars
+	f.GlobalVars = globalVars
 	f.Types = tys
 	return f, false
 }

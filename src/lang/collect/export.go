@@ -255,10 +255,10 @@ func (c *Collector) exportSymbol(repo *parse.Repository, symbol *DocumentSymbol,
 					// NOTICE: use loc token as key here, to make it more readable
 					obj.MethodCalls = parse.Dedup(obj.MethodCalls, pdep)
 				case lsp.SKVariable, lsp.SKConstant:
-					if obj.GolobalVars == nil {
-						obj.GolobalVars = make([]parse.Dependency, 0, len(deps))
+					if obj.GlobalVars == nil {
+						obj.GlobalVars = make([]parse.Dependency, 0, len(deps))
 					}
-					obj.GolobalVars = parse.Dedup(obj.GolobalVars, pdep)
+					obj.GlobalVars = parse.Dedup(obj.GlobalVars, pdep)
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
 					if obj.Types == nil {
 						obj.Types = make([]parse.Dependency, 0, len(deps))
