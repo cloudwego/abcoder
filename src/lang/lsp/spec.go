@@ -14,7 +14,7 @@
 
 package lsp
 
-import parse "github.com/cloudwego/abcoder/src/uniast"
+import "github.com/cloudwego/abcoder/src/uniast"
 
 type Language string
 
@@ -80,5 +80,5 @@ type LanguageSpec interface {
 
 // Patcher is used to patch the AST of a module
 type ModulePatcher interface {
-	Patch(ast *parse.Module)
+	Patch(ast *uniast.Module)
 }

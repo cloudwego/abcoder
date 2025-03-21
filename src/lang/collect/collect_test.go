@@ -24,7 +24,7 @@ import (
 
 	"github.com/cloudwego/abcoder/src/lang/log"
 	"github.com/cloudwego/abcoder/src/lang/lsp"
-	parse "github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/uniast"
 )
 
 var testroot = "../../../testdata"
@@ -44,12 +44,12 @@ func TestCollector_Collect(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		want    *parse.Repository
+		want    *uniast.Repository
 		wantErr bool
 	}{
 		{
 			name:    "rust",
-			want:    &parse.Repository{},
+			want:    &uniast.Repository{},
 			wantErr: false,
 		},
 	}

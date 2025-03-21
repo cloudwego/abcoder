@@ -35,14 +35,14 @@ import (
 	"path/filepath"
 
 	"github.com/cloudwego/abcoder/src/lang/log"
-	parse "github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/uniast"
 )
 
 type RustModulePatcher struct {
 	Root string
 }
 
-func (p *RustModulePatcher) Patch(ast *parse.Module) {
+func (p *RustModulePatcher) Patch(ast *uniast.Module) {
 	filepath.Walk(p.Root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
