@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -299,12 +299,6 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 	return -1, typeParams, inputParams, outputs
 }
 
-// calculate the relative index of a position to a text
-func relativePostion(lines []int, textPos lsp.Position, pos lsp.Position) int {
-	// find the line of the position
-	return lines[pos.Line-textPos.Line] + pos.Character - textPos.Character
-}
-
 func findSingle(text string, lines []int, textPos lsp.Position, tokens []lsp.Token, sep string, start int, end int) int {
 	if start < 0 {
 		start = 0
@@ -315,15 +309,15 @@ func findSingle(text string, lines []int, textPos lsp.Position, tokens []lsp.Tok
 	if start >= len(tokens) {
 		return -1
 	}
-	sPos := relativePostion(lines, textPos, tokens[start].Location.Range.Start)
-	ePos := relativePostion(lines, textPos, tokens[end].Location.Range.End)
+	sPos := lsp.RelativePostionWithLines(lines, textPos, tokens[start].Location.Range.Start)
+	ePos := lsp.RelativePostionWithLines(lines, textPos, tokens[end].Location.Range.End)
 	pos := strings.Index(text[sPos:ePos], sep)
 	if pos == -1 {
 		return -1
 	}
 	pos += sPos
 	for i := start; i <= end && i < len(tokens); i++ {
-		rel := relativePostion(lines, textPos, tokens[i].Location.Range.Start)
+		rel := lsp.RelativePostionWithLines(lines, textPos, tokens[i].Location.Range.Start)
 		if rel > pos {
 			return i - 1
 		}
@@ -342,7 +336,7 @@ func findPair(text string, lines []int, textPos lsp.Position, tokens []lsp.Token
 		return -1, -1
 	}
 
-	startIndex := relativePostion(lines, textPos, tokens[start].Location.Range.Start)
+	startIndex := lsp.RelativePostionWithLines(lines, textPos, tokens[start].Location.Range.Start)
 
 	lArrow := -1
 	lCount := 0
@@ -378,7 +372,7 @@ func findPair(text string, lines []int, textPos lsp.Position, tokens []lsp.Token
 	s := -1
 	e := -1
 	for i := start; i <= end && i < len(tokens); i++ {
-		rel := relativePostion(lines, textPos, tokens[i].Location.Range.Start)
+		rel := lsp.RelativePostionWithLines(lines, textPos, tokens[i].Location.Range.Start)
 		if rel >= lArrow && s == -1 {
 			s = i
 		}
@@ -397,7 +391,7 @@ func findPair(text string, lines []int, textPos lsp.Position, tokens []lsp.Token
 // 		s = 0
 // 	}
 // 	// find the range of the token from i token
-// 	startIndex := relativePostion(symbol.Text, symbol.Location.Range.Start, symbol.Tokens[s].Location.Range.End)
+// 	startIndex := lsp.RelativePostion(symbol.Text, symbol.Location.Range.Start, symbol.Tokens[s].Location.Range.End)
 // 	lArrow := strings.Index(symbol.Text[startIndex:], lsep)
 // 	rArrow := strings.Index(symbol.Text[startIndex:], rsep)
 

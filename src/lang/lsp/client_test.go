@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -28,56 +29,67 @@ import (
 
 var golangLSP *LSPClient
 var rustLSP *LSPClient
-var rootDir = "/Users/bytedance/GOPATH/work/abcoder/testdata"
+var rootDir = "../../../testdata"
 
-func TestMain(m *testing.M) {
-	log.SetLogLevel(log.DebugLevel)
+func testClientInit(t *testing.T) {
 	var err error
-	golangLSP, err = NewLSPClient(rootDir+"/golang", "", 0, ClientOptions{
-		Server:   "gopls",
-		Language: "go",
-		Verbose:  true,
-	})
+	rootDir, err = filepath.Abs(rootDir)
 	if err != nil {
-		fmt.Printf("Failed to initialize golang LSP client: %v", err)
-		os.Exit(1)
+		t.Fatalf("Failed to get absolute path of testdata: %v", err)
 	}
+	sync.OnceFunc(func() {
 
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		rustLSP, err = NewLSPClient("/root/codes/abcoder/tmp/lust-example-item", "/root/codes/abcoder/tmp/lust-example-item/src/lib.rs", time.Second*30, ClientOptions{
-			Server:   "rust-analyzer",
-			Language: "rust",
+		log.SetLogLevel(log.DebugLevel)
+		var err error
+		golangLSP, err = NewLSPClient(rootDir+"/golang", "", 0, ClientOptions{
+			Server:   "gopls",
+			Language: "go",
 			Verbose:  true,
 		})
 		if err != nil {
-			fmt.Printf("Failed to initialize rust: %v", err)
+			fmt.Printf("Failed to initialize golang LSP client: %v", err)
 			os.Exit(1)
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		rustLSP, err = NewLSPClient("/root/codes/abcoder/testdata/rust2", "/root/codes/abcoder/testdata/rust2/Cargo.toml", time.Second*15, ClientOptions{
-			Server:   "rust-analyzer",
-			Language: "rust",
-			Verbose:  true,
-		})
-		if err != nil {
-			fmt.Printf("Failed to initialize rust LSP client: %v", err)
-		}
-	}()
-	wg.Wait()
 
-	c := m.Run()
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		// go func() {
+		// 	defer wg.Done()
+		// 	rustLSP, err = NewLSPClient("/root/codes/abcoder/tmp/lust-example-item", "/root/codes/abcoder/tmp/lust-example-item/src/lib.rs", time.Second*30, ClientOptions{
+		// 		Server:   "rust-analyzer",
+		// 		Language: "rust",
+		// 		Verbose:  true,
+		// 	})
+		// 	if err != nil {
+		// 		fmt.Printf("Failed to initialize rust: %v", err)
+		// 		os.Exit(1)
+		// 	}
+		// }()
+		go func() {
+			defer wg.Done()
+			rustLSP, err = NewLSPClient(rootDir+"/rust2", rootDir+"/rust2/Cargo.toml", time.Second*15, ClientOptions{
+				Server:   "rust-analyzer",
+				Language: "rust",
+				Verbose:  true,
+			})
+			if err != nil {
+				fmt.Printf("Failed to initialize rust LSP client: %v", err)
+			}
+		}()
+		wg.Wait()
 
-	golangLSP.Close()
-	rustLSP.Close()
-	os.Exit(c)
+		// c := m.Run()
+
+		// golangLSP.Close()
+		// rustLSP.Close()
+		// os.Exit(c)
+
+	})()
 }
 
 func TestGolang(t *testing.T) {
+	testClientInit(t)
+
 	uri := NewURI(rootDir + "/golang/pkg/entity/entity.go")
 
 	// documentSymbol
@@ -87,11 +99,11 @@ func TestGolang(t *testing.T) {
 			t.Fatalf("Document Symbol failed: %v", err)
 		}
 		fmt.Printf("Document Symbol: %#v\n", symbols)
-		// js, err := json.Marshal(symbols)
-		// if err != nil {
-		// 	t.Fatalf("Marshal Document Symbol failed: %v", err)
-		// }
-		// os.WriteFile("./symbol_golang.json", js, 0644)
+		js, err := json.Marshal(symbols)
+		if err != nil {
+			t.Fatalf("Marshal Document Symbol failed: %v", err)
+		}
+		os.WriteFile("./symbol_golang.json", js, 0644)
 	})
 
 	// references
@@ -142,6 +154,8 @@ func TestGolang(t *testing.T) {
 }
 
 func TestRust(t *testing.T) {
+	testClientInit(t)
+
 	// url encode
 	uri := NewURI(rootDir + "/rust2/src/entity/mod.rs")
 
@@ -227,6 +241,8 @@ func TestRust(t *testing.T) {
 }
 
 func TestSearchSymbol(t *testing.T) {
+	testClientInit(t)
+
 	syms, err := rustLSP.DocumentSymbols(context.Background(), NewURI("/root/codes/abcoder/tmp/lust-example-item/src/lib.rs"))
 	if err != nil {
 		t.Fatalf("Document Symbol failed: %v", err)
@@ -240,6 +256,8 @@ func TestSearchSymbol(t *testing.T) {
 }
 
 func TestFileStructure(t *testing.T) {
+	testClientInit(t)
+
 	symbols, err := rustLSP.FileStructure(context.Background(), NewURI("/root/codes/abcoder/tmp/lust-example-item/target/debug/build/lust-gen-e0683cdee43abe70/out/lust_gen.rs"))
 	if err != nil {
 		t.Fatalf("File Structure failed: %v", err)

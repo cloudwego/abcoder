@@ -32,10 +32,19 @@ type dependency struct {
 	Symbol   *DocumentSymbol `json:"symbol"`
 }
 
-func (d dependency) FileLine() uniast.FileLine {
+func (c *Collector) fileLine(loc Location) uniast.FileLine {
+	var rel string
+	if c.internal(loc) {
+		rel, _ = filepath.Rel(c.repo, loc.URI.File())
+	} else {
+		rel = filepath.Base(loc.URI.File())
+	}
+	text := c.cli.GetFile(loc.URI).Text
 	return uniast.FileLine{
-		File: d.Location.URI.File(),
-		Line: d.Location.Range.Start.Line,
+		File:        rel,
+		Line:        loc.Range.Start.Line + 1,
+		StartOffset: lsp.PositionOffset(text, loc.Range.Start),
+		EndOffset:   lsp.PositionOffset(text, loc.Range.End),
 	}
 }
 
@@ -129,10 +138,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	} else {
 		relfile = filepath.Base(file)
 	}
-	fileLine := uniast.FileLine{
-		File: relfile,
-		Line: symbol.Location.Range.Start.Line + 1,
-	}
+	fileLine := c.fileLine(symbol.Location)
 	// collect files
 	if module.Files[relfile] == nil {
 		module.Files[relfile] = uniast.NewFile(relfile)
@@ -171,7 +177,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
-				dep := uniast.NewDependency(*tyid, input.FileLine())
+				dep := uniast.NewDependency(*tyid, c.fileLine(input.Location))
 				obj.Types = uniast.Dedup(obj.Types, dep)
 			}
 		}
@@ -183,7 +189,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
-				dep := uniast.NewDependency(*tyid, input.FileLine())
+				dep := uniast.NewDependency(*tyid, c.fileLine(input.Location))
 				obj.Params = uniast.Dedup(obj.Params, dep)
 			}
 		}
@@ -195,7 +201,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					log.Error("export output symbol %s failed: %v\n", output.Symbol, err)
 					continue
 				}
-				dep := uniast.NewDependency(*tyid, output.FileLine())
+				dep := uniast.NewDependency(*tyid, c.fileLine(output.Location))
 				obj.Results = uniast.Dedup(obj.Results, dep)
 			}
 		}
@@ -244,7 +250,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					log.Error("export dep symbol %s failed: %v\n", dep.Symbol, err)
 					continue
 				}
-				pdep := uniast.NewDependency(*depid, dep.FileLine())
+				pdep := uniast.NewDependency(*depid, c.fileLine(dep.Location))
 				switch dep.Symbol.Kind {
 				case lsp.SKFunction:
 					obj.FunctionCalls = uniast.Dedup(obj.FunctionCalls, pdep)
@@ -291,7 +297,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 				switch dep.Symbol.Kind {
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
-					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, dep.FileLine()))
+					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
 				}

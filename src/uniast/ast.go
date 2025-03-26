@@ -296,8 +296,14 @@ type Receiver struct {
 type FileLine struct {
 	File string
 
-	// NOTICE: line number start from 1
+	// NOTICE: start line. line number start from 1
 	Line int
+
+	// start offset in file
+	StartOffset int
+
+	// end offset in file
+	EndOffset int
 }
 
 type TypeKind int
