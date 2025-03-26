@@ -49,11 +49,14 @@ func NewRepository(name string) Repository {
 type File struct {
 	Name    string
 	Imports []string
+	Path    string
 }
 
 func NewFile(path string) *File {
+	abs, _ := filepath.Abs(path)
 	ret := File{
 		Name: filepath.Base(path),
+		Path: abs,
 	}
 	return &ret
 }
