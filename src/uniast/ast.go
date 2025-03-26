@@ -53,12 +53,21 @@ type File struct {
 }
 
 func NewFile(path string) *File {
-	abs, _ := filepath.Abs(path)
+	// abs, _ := filepath.Abs(path)
 	ret := File{
 		Name: filepath.Base(path),
-		Path: abs,
+		Path: path,
 	}
 	return &ret
+}
+
+func (m Module) SetFile(path string, file *File) {
+	if m.Files == nil {
+		m.Files = map[string]*File{}
+	}
+	if m.Files[path] == nil {
+		m.Files[path] = file
+	}
 }
 
 type Module struct {
@@ -68,6 +77,18 @@ type Module struct {
 	Packages     map[PkgPath]*Package // pkage import path => Package
 	Dependencies map[string]string    `json:",omitempty"` // module name => module_path@version
 	Files        map[string]*File     `json:",omitempty"` // relative path => file info
+}
+
+func (r Repository) GetFile(id Identity) *File {
+	mod := r.Modules[id.ModPath]
+	if mod == nil {
+		return nil
+	}
+	node := r.GetNode(id)
+	if node == nil {
+		return nil
+	}
+	return mod.Files[node.FileLine().File]
 }
 
 func IsExternalModule(modpath string) bool {
@@ -112,6 +133,7 @@ type Package struct {
 	Types        map[string]*Type     // type name => type define
 	Vars         map[string]*Var      // var name => var define
 	CompressData *string              `json:"compress_data,omitempty"` // package compress info
+	Path         string               // relative path to repo
 }
 
 func NewPackage(pkgPath PkgPath) *Package {
@@ -127,9 +149,18 @@ func NewPackage(pkgPath PkgPath) *Package {
 // PkgPath is the import path of a package, it is either absolute path or url
 type PkgPath = string
 
+type ModPath = string
+
+func ModPathName(mod ModPath) string {
+	if strings.Contains(mod, "@") {
+		return strings.Split(mod, "@")[0]
+	}
+	return mod
+}
+
 // Identity holds identity information about a third party declaration
 type Identity struct {
-	ModPath string // ModPath is the module which the package belongs to
+	ModPath        // ModPath is the module which the package belongs to
 	PkgPath        // Import Path of the third party package
 	Name    string // Unique Name of declaration (FunctionName, TypeName.MethodName, InterfaceName<TypeName>.MethodName, or TypeName)
 }

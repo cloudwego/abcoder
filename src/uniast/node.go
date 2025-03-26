@@ -28,6 +28,26 @@ func (r *Repository) GetNode(id Identity) *Node {
 	return node
 }
 
+func (r *Repository) GetPackage(id Identity) *Package {
+	mod, ok := r.Modules[id.ModPath]
+	if !ok {
+		return nil
+	}
+	pkg, ok := mod.Packages[id.PkgPath]
+	if !ok {
+		return nil
+	}
+	return pkg
+}
+
+func (r *Repository) GetModule(mod ModPath) *Module {
+	m, ok := r.Modules[mod]
+	if !ok {
+		return nil
+	}
+	return m
+}
+
 // NOTICE: if entity not exist, only set the node on graph
 func (r *Repository) SetNode(id Identity, typ NodeType) *Node {
 	key := id.Full()
@@ -213,6 +233,14 @@ type Node struct {
 	Dependencies []Relation
 	References   []Relation
 	Repo         *Repository `json:"-"`
+}
+
+func NewNode(id Identity, typ NodeType, repo *Repository) *Node {
+	return &Node{
+		Identity: id,
+		Type:     typ,
+		Repo:     repo,
+	}
 }
 
 type NodeID struct {

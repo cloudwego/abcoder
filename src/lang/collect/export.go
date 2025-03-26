@@ -141,7 +141,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	fileLine := c.fileLine(symbol.Location)
 	// collect files
 	if module.Files[relfile] == nil {
-		module.Files[relfile] = uniast.NewFile(file)
+		module.Files[relfile] = uniast.NewFile(relfile)
 	}
 
 	content := symbol.Text
