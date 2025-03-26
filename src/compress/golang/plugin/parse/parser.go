@@ -147,7 +147,7 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 			return nil
 		}
 		rel, _ := filepath.Rel(p.homePageDir, path)
-		mod.Files[rel] = NewFile(path)
+		mod.Files[rel] = NewFile(rel)
 		return nil
 	})
 	return p.loadPackages(mod, dir, "./...")

@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,4 +53,15 @@ func FirstFile(dir string, subfix string, skipdir string) string {
 		return nil
 	})
 	return ret
+}
+
+func MustWriteFile(fpath string, data []byte) error {
+	dir := filepath.Dir(fpath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("mkdir %s failed: %v", dir, err)
+	}
+	if err := os.WriteFile(fpath, data, 0644); err != nil {
+		return fmt.Errorf("write file %s failed: %v", fpath, err)
+	}
+	return nil
 }
