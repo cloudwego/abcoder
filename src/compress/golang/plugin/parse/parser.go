@@ -139,6 +139,17 @@ func (p *GoParser) ParseRepo() (Repository, error) {
 }
 
 func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
+	filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
+		if info != nil && info.IsDir() && filepath.Base(path) == ".git" {
+			return filepath.SkipDir
+		}
+		if e != nil || info.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(p.homePageDir, path)
+		mod.Files[rel] = NewFile(path)
+		return nil
+	})
 	return p.loadPackages(mod, dir, "./...")
 }
 

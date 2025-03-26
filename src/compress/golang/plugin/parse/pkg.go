@@ -200,8 +200,11 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			}
 			ctx.imports = imports
 			relpath, _ := filepath.Rel(p.homePageDir, filePath)
-			f := NewFile(relpath)
-			mod.Files[relpath] = f
+			f := mod.Files[relpath]
+			if f == nil {
+				f = NewFile(relpath)
+				mod.Files[relpath] = f
+			}
 			f.Imports = imports.Origins
 			if err := p.parseFile(ctx, file); err != nil {
 				return err
