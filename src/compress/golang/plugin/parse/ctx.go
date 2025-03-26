@@ -47,7 +47,8 @@ type fileContext struct {
 func (ctx *fileContext) FileLine(node ast.Node) FileLine {
 	pos := ctx.fset.Position((node).Pos())
 	rel, _ := filepath.Rel(ctx.repoDir, pos.Filename)
-	return FileLine{File: rel, Line: pos.Line}
+	end := ctx.fset.Position((node).End())
+	return FileLine{File: rel, Line: pos.Line, StartOffset: pos.Offset, EndOffset: end.Offset}
 }
 
 func isExternalID(id *Identity, curmod string) bool {
