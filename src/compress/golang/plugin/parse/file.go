@@ -237,16 +237,16 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 						// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
 						// 	return false
 						// }
-						*infos.tys = Dedup(*infos.tys, dep)
+						*infos.tys = InsertDependency(*infos.tys, dep)
 						// global var
 					} else if _, ok := v.(*types.Const); ok {
-						*infos.globalVars = Dedup(*infos.globalVars, dep)
+						*infos.globalVars = InsertDependency(*infos.globalVars, dep)
 						// external const
 					} else if _, ok := v.(*types.Var); ok {
-						*infos.globalVars = Dedup(*infos.globalVars, dep)
+						*infos.globalVars = InsertDependency(*infos.globalVars, dep)
 						// external function
 					} else if _, ok := v.(*types.Func); ok {
-						*infos.functionCalls = Dedup(*infos.functionCalls, dep)
+						*infos.functionCalls = InsertDependency(*infos.functionCalls, dep)
 					}
 					return false
 				}
@@ -289,7 +289,7 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 		if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
 		}
-		*infos.methodCalls = Dedup(*infos.methodCalls, dep)
+		*infos.methodCalls = InsertDependency(*infos.methodCalls, dep)
 		return false
 	}
 
@@ -380,24 +380,24 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 					// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
 					// 	return false
 					// }
-					tys = Dedup(tys, dep)
+					tys = InsertDependency(tys, dep)
 					// global var
 				} else if v, ok := use.(*types.Var); ok {
 					// NOTICE: the Parent of global scope is nil?
 					if isPkgScope(v.Parent()) {
-						globalVars = Dedup(globalVars, dep)
+						globalVars = InsertDependency(globalVars, dep)
 					}
 					// global const
 				} else if c, ok := use.(*types.Const); ok {
 					if isPkgScope(c.Parent()) {
-						globalVars = Dedup(globalVars, dep)
+						globalVars = InsertDependency(globalVars, dep)
 					}
 					return false
 					// function
 				} else if f, ok := use.(*types.Func); ok {
 					// exclude method
 					if f.Type().(*types.Signature).Recv() == nil {
-						functionCalls = Dedup(functionCalls, dep)
+						functionCalls = InsertDependency(functionCalls, dep)
 					}
 				}
 			}

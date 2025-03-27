@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,8 @@ import (
 	"bufio"
 	"fmt"
 	"strings"
+
+	"github.com/cloudwego/abcoder/src/uniast"
 )
 
 // UseNode represents a module node in the dependency tree
@@ -26,9 +28,9 @@ type UseNode struct {
 	Children []*UseNode
 }
 
-func ParseUseStatements(fileContent string) ([]string, error) {
+func ParseUseStatements(fileContent string) ([]uniast.Import, error) {
 	file := strings.NewReader(fileContent)
-	var useStatements []string
+	var useStatements []uniast.Import
 	var currentStatement strings.Builder
 	scanner := bufio.NewScanner(file)
 
@@ -40,7 +42,7 @@ func ParseUseStatements(fileContent string) ([]string, error) {
 			inUseBlock = true
 			currentStatement.WriteString(line)
 			if len(line) > 0 && line[len(line)-1] == ';' {
-				useStatements = append(useStatements, currentStatement.String())
+				useStatements = append(useStatements, uniast.Import{Path: currentStatement.String()})
 				currentStatement.Reset()
 				inUseBlock = false
 			}
@@ -54,11 +56,11 @@ func ParseUseStatements(fileContent string) ([]string, error) {
 	return useStatements, nil
 }
 
-func BuildDependencyTree(useStatements []string) *UseNode {
+func BuildDependencyTree(useStatements []uniast.Import) *UseNode {
 	root := &UseNode{Name: "root"}
 	stmts := []string{}
 	for _, s := range useStatements {
-		ss := splitUseStatement(s)
+		ss := splitUseStatement(s.Path)
 		stmts = append(stmts, ss...)
 	}
 	for _, stmt := range stmts {
@@ -171,7 +173,7 @@ func generateSimpleUseStatements(basePath, module string) []string {
 	return simpleUseStmts
 }
 
-func ConvertTreeToUse(node *UseNode, prefix string) []string {
+func ConvertTreeToUse(node *UseNode, prefix string) []uniast.Import {
 	if node == nil {
 		return nil
 	}
@@ -182,10 +184,10 @@ func ConvertTreeToUse(node *UseNode, prefix string) []string {
 	}
 
 	if len(node.Children) == 0 {
-		return []string{"use " + newPrefix + ";"}
+		return []uniast.Import{{Path: "use " + newPrefix + ";"}}
 	}
 
-	var childStatements []string
+	var childStatements []uniast.Import
 	for _, child := range node.Children {
 		childStatements = append(childStatements, ConvertTreeToUse(child, newPrefix)...)
 	}
@@ -193,9 +195,9 @@ func ConvertTreeToUse(node *UseNode, prefix string) []string {
 	return childStatements
 }
 
-func GetAndMergeUse(fileContents []string) ([]string, error) {
+func GetAndMergeUse(fileContents []string) ([]uniast.Import, error) {
 	// 解析出所有文件中的 use 声明
-	var useStatements []string
+	var useStatements []uniast.Import
 	for _, fc := range fileContents {
 		us, err := ParseUseStatements(fc)
 		if err != nil {
@@ -208,7 +210,7 @@ func GetAndMergeUse(fileContents []string) ([]string, error) {
 	dependencyTree := BuildDependencyTree(useStatements)
 
 	// 获取最终改 mod 下的所有 use 声明(去重且唯一)
-	var ret []string
+	var ret []uniast.Import
 	for _, r := range dependencyTree.Children {
 		uses := ConvertTreeToUse(r, "")
 		ret = append(ret, uses...)

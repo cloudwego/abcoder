@@ -27,12 +27,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cloudwego/abcoder/src/lang/utils"
 	"github.com/cloudwego/abcoder/src/uniast"
 )
 
 var _ uniast.Writer = (*Writer)(nil)
 
 type Options struct {
+	RepoDir   string
 	OutDir    string
 	GoVersion string
 }
@@ -44,7 +46,7 @@ type Writer struct {
 
 type fileNode struct {
 	chunks []chunk
-	impts  []string
+	impts  []uniast.Import
 }
 
 type chunk struct {
@@ -101,19 +103,13 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string) error {
 			}
 			sb.WriteString("\n\n")
 
-			var fimpts []string
+			var fimpts []uniast.Import
 			if fi, ok := mod.Files[filepath.Join(mod.Dir, rel, fpath)]; ok && fi.Imports != nil {
 				fimpts = fi.Imports
 			}
-			impts := w.mergeImports(fimpts, f.impts)
+			impts := mergeImports(fimpts, f.impts)
 			if len(impts) > 0 {
-				sb.WriteString("import (\n")
-				for _, v := range impts {
-					sb.WriteString("\t")
-					sb.WriteString(v)
-					sb.WriteString("\n")
-				}
-				sb.WriteString(")\n\n")
+				writeImport(&sb, impts)
 			}
 
 			sort.SliceStable(f.chunks, func(i, j int) bool {
@@ -208,7 +204,7 @@ func (w *Writer) appendNode(node *uniast.Node, pkg string, isMain bool, file str
 	if fs == nil {
 		fs = &fileNode{
 			chunks: make([]chunk, 0, len(node.Dependencies)),
-			impts:  make([]string, 0, len(node.Dependencies)),
+			impts:  make([]uniast.Import, 0, len(node.Dependencies)),
 		}
 		p[fpath] = fs
 	}
@@ -216,7 +212,7 @@ func (w *Writer) appendNode(node *uniast.Node, pkg string, isMain bool, file str
 		if v.Target.PkgPath == "" || v.Target.PkgPath == pkg {
 			continue
 		}
-		fs.impts = append(fs.impts, strconv.Quote(v.Target.PkgPath))
+		fs.impts = append(fs.impts, uniast.Import{Path: strconv.Quote(v.Target.PkgPath)})
 	}
 
 	// 检查是否有imports
@@ -235,7 +231,7 @@ func (w *Writer) appendNode(node *uniast.Node, pkg string, isMain bool, file str
 }
 
 // receive a piece of golang code, parse it and splits the imports and codes
-func (w Writer) SplitImportsAndCodes(src string) (codes string, imports []string, err error) {
+func (w Writer) SplitImportsAndCodes(src string) (codes string, imports []uniast.Import, err error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", src, parser.SkipObjectResolution)
 	if err != nil {
@@ -243,11 +239,11 @@ func (w Writer) SplitImportsAndCodes(src string) (codes string, imports []string
 		return src, nil, nil
 	}
 	for _, imp := range f.Imports {
-		var impt = imp.Path.Value
+		var alias string
 		if imp.Name != nil {
-			impt = fmt.Sprintf("%s %s", imp.Name.Name, impt)
+			alias = imp.Name.Name
 		}
-		imports = append(imports, impt)
+		imports = append(imports, uniast.Import{Path: imp.Path.Value, Alias: &alias})
 	}
 	start := 0
 	for _, s := range f.Decls {
@@ -260,42 +256,58 @@ func (w Writer) SplitImportsAndCodes(src string) (codes string, imports []string
 	return src[start:], imports, nil
 }
 
-func (w *Writer) IdToImport(id uniast.Identity) (string, error) {
-	return strconv.Quote(id.PkgPath), nil
+func (w *Writer) IdToImport(id uniast.Identity) (uniast.Import, error) {
+	return uniast.Import{Path: strconv.Quote(id.PkgPath)}, nil
 }
 
-// merge the imports of file and nodes, and return the merged imports
-// file is in priority (because it contains alias)
-func (w *Writer) mergeImports(priors []string, subs []string) (ret []string) {
-	visited := make(map[string]bool, len(priors)+len(subs))
-	ret = make([]string, 0, len(priors)+len(subs))
-	for _, v := range priors {
-		sp := strings.Split(v, " ")
-		var impt = sp[0]
-		if len(sp) >= 2 {
-			impt = sp[1]
+func (p *Writer) PatchImports(file *uniast.File) ([]byte, error) {
+	bs, err := os.ReadFile(filepath.Join(p.Options.RepoDir, file.Path))
+	if err != nil {
+		return nil, utils.WrapError(err, "fail read file %s", file.Path)
+	}
+
+	fs := token.NewFileSet()
+	f, err := parser.ParseFile(fs, file.Path, bs, parser.ImportsOnly)
+	if err != nil {
+		return nil, utils.WrapError(err, "fail parse file %s", file.Path)
+	}
+
+	old := make([]uniast.Import, 0, len(f.Imports))
+	for _, imp := range f.Imports {
+		i := uniast.Import{
+			Path: imp.Path.Value,
 		}
-		key, _ := strconv.Unquote(impt)
-		if visited[key] {
-			continue
-		} else {
-			visited[key] = true
-			ret = append(ret, v)
+		if imp.Name != nil {
+			tmp := imp.Name.Name
+			i.Alias = &tmp
+		}
+		old = append(old, i)
+	}
+
+	impts := mergeImports(old, file.Imports)
+	if len(impts) == len(old) {
+		return bs, nil
+	}
+
+	var sb strings.Builder
+	writeImport(&sb, impts)
+	final := sb.String()
+
+	imptStart := fs.Position(f.Name.End()).Offset + 1
+	if len(f.Imports) > 0 {
+		for imptStart < len(bs) && bs[imptStart] != 'i' {
+			imptStart++
 		}
 	}
-	for _, v := range subs {
-		sp := strings.Split(v, " ")
-		var impt = sp[0]
-		if len(sp) >= 2 {
-			impt = sp[1]
+	imptEnd := imptStart
+	if len(f.Imports) > 1 {
+		imptEnd = fs.Position(f.Imports[len(f.Imports)-1].End()).Offset
+		for len(old) > 1 && imptEnd < len(bs) && (bs[imptEnd] != ')') {
+			imptEnd++
 		}
-		key, _ := strconv.Unquote(impt)
-		if visited[key] {
-			continue
-		} else {
-			visited[key] = true
-			ret = append(ret, v)
-		}
+		imptEnd += 2 // for `)`
 	}
-	return
+	r1 := append(bs[:imptStart:imptStart], final...)
+	ret := append(r1, bs[imptEnd:]...)
+	return ret, nil
 }

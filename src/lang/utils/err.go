@@ -14,19 +14,37 @@
  * limitations under the License.
  */
 
-package uniast
+package utils
 
-type Writer interface {
-	// write a module onto Options.OutDir.
-	WriteModule(repo *Repository, modPath string) error
+import (
+	"fmt"
+	"runtime"
+)
 
-	// SplitImportsAndCodes will split the imports and codes from the src.
-	// the src has only codes, just return the src.
-	SplitImportsAndCodes(src string) (codes string, imports []Import, err error)
+type withMessage struct {
+	file  string
+	line  int
+	cause error
+	msg   string
+}
 
-	// IdToImport converts the identity to import.
-	IdToImport(id Identity) (Import, error)
+func (e *withMessage) Error() string {
+	return fmt.Sprintf("%s:%d: %s\n%v", e.file, e.line, e.msg, e.cause)
+}
 
-	// PatchImports patches the imports into file content
-	PatchImports(file *File) ([]byte, error)
+func WrapError(err error, msg string, v ...interface{}) error {
+	_, file, line, ok := runtime.Caller(1)
+	if !ok {
+		file = "???"
+		line = 0
+	}
+	if len(v) > 0 {
+		msg = fmt.Sprintf(msg, v...)
+	}
+	return &withMessage{
+		file:  file,
+		line:  line,
+		cause: err,
+		msg:   msg,
+	}
 }

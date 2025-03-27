@@ -33,14 +33,15 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	sysImports := make(map[string]string)
 	ret := &importInfo{}
 	for _, imp := range impts {
-		ret.Origins = append(ret.Origins, string(GetRawContent(fset, file, imp, p.opts.CollectComment)))
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
 		importAlias := ""
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
 			importAlias = imp.Name.Name // update the alias
+			ret.Origins = append(ret.Origins, Import{Path: imp.Path.Value, Alias: &importAlias})
 		} else {
 			importAlias = getPackageAlias(importPath)
+			ret.Origins = append(ret.Origins, Import{Path: imp.Path.Value})
 		}
 
 		// Fix: module name may also be like this?

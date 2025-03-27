@@ -17,6 +17,9 @@
 package writer
 
 import (
+	"bytes"
+	"os"
+	"reflect"
 	"testing"
 
 	"github.com/cloudwego/abcoder/src/uniast"
@@ -43,7 +46,7 @@ func TestWriter_WriteRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				Options: Options{
-					OutDir:    "../../../../tmp/go_writer/localsession",
+					OutDir:    "../../../../tmp/localsession2",
 					GoVersion: "1.18",
 				},
 			},
@@ -56,6 +59,114 @@ func TestWriter_WriteRepo(t *testing.T) {
 			w := NewWriter(tt.fields.Options)
 			if err := w.WriteRepo(tt.args.repo); (err != nil) != tt.wantErr {
 				t.Errorf("Writer.WriteRepo() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPatcher_PatchImports(t *testing.T) {
+	data, err := os.ReadFile("../../../../tmp/localsession/gls.go")
+	if err != nil {
+		t.Errorf("fail read file %v", err)
+		return
+	}
+	alias1 := string("_")
+	data1 := bytes.Replace(data, []byte(`import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+`), []byte(`import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	_ "runtime"
+)
+`), 1)
+	data2, err := os.ReadFile("../../../../tmp/localsession/backup/xx_test.go")
+	if err != nil {
+		t.Errorf("fail read file %v", err)
+		return
+	}
+	data2 = bytes.Replace(data2, []byte(`package backup
+`), []byte(`package backup
+import "fmt"
+`), 1)
+
+	type args struct {
+		file *uniast.File
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []byte
+		wantErr bool
+	}{
+		// {
+		// 	name: "empty new",
+		// 	args: args{
+		// 		file: &uniast.File{
+		// 			Name:    "gls.go",
+		// 			Imports: []uniast.Import{},
+		// 			Path:    "gls.go",
+		// 		},
+		// 	},
+		// 	want:    data,
+		// 	wantErr: false,
+		// },
+		// {
+		// 	name: "empty old",
+		// 	args: args{
+		// 		file: &uniast.File{
+		// 			Name: "backup/xx_test.go",
+		// 			Imports: []uniast.Import{
+		// 				{
+		// 					Path:  `"fmt"`,
+		// 					Alias: nil,
+		// 				},
+		// 			},
+		// 			Path: "backup/xx_test.go",
+		// 		},
+		// 	},
+		// 	want:    data2,
+		// 	wantErr: false,
+		// },
+		{
+			name: "add",
+			args: args{
+				file: &uniast.File{
+					Name: "gls.go",
+					Imports: []uniast.Import{
+						{
+							Path:  `"runtime"`,
+							Alias: &alias1,
+						},
+					},
+					Path: "gls.go",
+				},
+			},
+			want:    data1,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		p := NewWriter(Options{
+			RepoDir: "../../../../tmp/localsession",
+		})
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := p.PatchImports(tt.args.file)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Patcher.PatchImports() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Patcher.PatchImports() = %s, want %s", got, tt.want)
 			}
 		})
 	}

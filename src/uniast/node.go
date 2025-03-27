@@ -243,28 +243,6 @@ func NewNode(id Identity, typ NodeType, repo *Repository) *Node {
 	}
 }
 
-type NodeID struct {
-	Module  string `json:"module,omitempty" jsonschema:"description=the building moudle of the ast node, e.g. github.com/bytedance/sonic@v1.0.0"`
-	Package string `json:"package" jsonschema:"description=the namespace of the ast node, e.g. github.com/bytedance/sonic/ast"`
-	Name    string `json:"name" jsonschema:"description=the name of the ast node, e.g. Node.String"`
-}
-
-func (n NodeID) ToIdentiy() Identity {
-	return Identity{
-		ModPath: n.Module,
-		PkgPath: n.Package,
-		Name:    n.Name,
-	}
-}
-
-func (i Identity) ToNodeID() NodeID {
-	return NodeID{
-		Module:  i.ModPath,
-		Package: i.PkgPath,
-		Name:    i.Name,
-	}
-}
-
 func (n Node) SetCompressData(data string) bool {
 	if n.Repo == nil {
 		return false
