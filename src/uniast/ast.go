@@ -48,8 +48,13 @@ func NewRepository(name string) Repository {
 
 type File struct {
 	Name    string
-	Imports []string
+	Imports []Import
 	Path    string
+}
+
+type Import struct {
+	Alias *string `json:",omitempty"`
+	Path  string
 }
 
 func NewFile(path string) *File {
@@ -79,7 +84,7 @@ type Module struct {
 	Files        map[string]*File     `json:",omitempty"` // relative path => file info
 }
 
-func (r Repository) GetFile(id Identity) *File {
+func (r Repository) GetFileById(id Identity) *File {
 	mod := r.Modules[id.ModPath]
 	if mod == nil {
 		return nil
@@ -312,6 +317,10 @@ type Function struct {
 type Dependency struct {
 	Identity
 	FileLine `json:",omitempty"`
+}
+
+func (d Dependency) Id() Identity {
+	return d.Identity
 }
 
 func NewDependency(id Identity, fl FileLine) Dependency {

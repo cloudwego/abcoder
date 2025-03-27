@@ -32,10 +32,12 @@ func TestPatcher(t *testing.T) {
 	}
 
 	// Create patcher with options
-	patcher := NewPatcher(repo, Options{
+	patcher := NewPatcher(Options{
 		RepoDir: root + "/localsession",
 		OutDir:  root + "/localsession2",
 	})
+
+	patcher.SetRepo(repo)
 
 	// Create a test patch
 	testPatches := []Patch{

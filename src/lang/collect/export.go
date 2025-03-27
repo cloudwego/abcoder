@@ -178,7 +178,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				dep := uniast.NewDependency(*tyid, c.fileLine(input.Location))
-				obj.Types = uniast.Dedup(obj.Types, dep)
+				obj.Types = uniast.InsertDependency(obj.Types, dep)
 			}
 		}
 		if info.Inputs != nil {
@@ -190,7 +190,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				dep := uniast.NewDependency(*tyid, c.fileLine(input.Location))
-				obj.Params = uniast.Dedup(obj.Params, dep)
+				obj.Params = uniast.InsertDependency(obj.Params, dep)
 			}
 		}
 		if info.Outputs != nil {
@@ -202,7 +202,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				dep := uniast.NewDependency(*tyid, c.fileLine(output.Location))
-				obj.Results = uniast.Dedup(obj.Results, dep)
+				obj.Results = uniast.InsertDependency(obj.Results, dep)
 			}
 		}
 		if info.Method != nil && info.Method.Receiver.Symbol != nil {
@@ -253,23 +253,23 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				pdep := uniast.NewDependency(*depid, c.fileLine(dep.Location))
 				switch dep.Symbol.Kind {
 				case lsp.SKFunction:
-					obj.FunctionCalls = uniast.Dedup(obj.FunctionCalls, pdep)
+					obj.FunctionCalls = uniast.InsertDependency(obj.FunctionCalls, pdep)
 				case lsp.SKMethod:
 					if obj.MethodCalls == nil {
 						obj.MethodCalls = make([]uniast.Dependency, 0, len(deps))
 					}
 					// NOTICE: use loc token as key here, to make it more readable
-					obj.MethodCalls = uniast.Dedup(obj.MethodCalls, pdep)
+					obj.MethodCalls = uniast.InsertDependency(obj.MethodCalls, pdep)
 				case lsp.SKVariable, lsp.SKConstant:
 					if obj.GlobalVars == nil {
 						obj.GlobalVars = make([]uniast.Dependency, 0, len(deps))
 					}
-					obj.GlobalVars = uniast.Dedup(obj.GlobalVars, pdep)
+					obj.GlobalVars = uniast.InsertDependency(obj.GlobalVars, pdep)
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
 					if obj.Types == nil {
 						obj.Types = make([]uniast.Dependency, 0, len(deps))
 					}
-					obj.Types = uniast.Dedup(obj.Types, pdep)
+					obj.Types = uniast.InsertDependency(obj.Types, pdep)
 				default:
 					log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
 				}

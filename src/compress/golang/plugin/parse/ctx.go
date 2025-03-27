@@ -267,7 +267,7 @@ type importInfo struct {
 	SysImports        map[string]string
 	ProjectImports    map[string]string
 	ThirdPartyImports map[string][2]string // 0-mod, 1-import
-	Origins           []string
+	Origins           []Import
 }
 
 func (p *GoParser) mockTypes(typ ast.Expr, m map[string]Identity, file []byte, fset *token.FileSet, fpath string, mod string, pkg string, impts *importInfo) (name string, isPointer bool) {

@@ -21,9 +21,18 @@ import (
 	"os"
 )
 
-func Dedup(ids []Dependency, id Dependency) []Dependency {
+func InsertDependency(ids []Dependency, id Dependency) []Dependency {
 	for _, i := range ids {
 		if i.Identity == id.Identity {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
+func InserImport(ids []Import, id Import) []Import {
+	for _, i := range ids {
+		if i.Path == id.Path {
 			return ids
 		}
 	}
