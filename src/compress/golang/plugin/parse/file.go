@@ -42,9 +42,9 @@ func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {
 			// fileFuncs[f.Name] = f
 			cont = ct
 		} else if decl, ok := node.(*ast.GenDecl); ok {
-			var doc string
-			if collectComment && decl.Doc != nil {
-				doc = string(ctx.GetRawContent(decl.Doc)) + "\n"
+			var doc *ast.CommentGroup
+			if ctx.collectComment && decl.Doc != nil {
+				doc = decl.Doc
 			}
 			var ct = true
 			switch decl.Tok {
@@ -87,7 +87,7 @@ func (p *GoParser) newVar(mod string, pkg string, name string, isConst bool) *Va
 	return p.repo.SetVar(ret.Identity, ret)
 }
 
-func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool, lastType *Identity, lastValue *float64, doc string) (*Identity, *float64) {
+func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool, lastType *Identity, lastValue *float64, doc *ast.CommentGroup) (*Identity, *float64) {
 	var typ *Identity
 	var val *ast.Expr
 	for i, name := range vspec.Names {
@@ -137,12 +137,15 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			}
 		}
 
-		if collectComment {
-			if vspec.Doc != nil {
-				doc += string(ctx.GetRawContent(vspec.Doc)) + "\n"
-			}
-			v.Content = doc + v.Content
+		var comment string
+		if ctx.collectComment && doc != nil {
+			comment += string(ctx.GetRawContent(doc)) + "\n"
 		}
+		if ctx.collectComment && vspec.Doc != nil {
+			comment += string(ctx.GetRawContent(vspec.Doc)) + "\n"
+			v.FileLine.StartOffset = ctx.fset.Position(vspec.Pos()).Offset
+		}
+		v.Content = comment + v.Content
 
 		var finalVal string
 		if val != nil {
@@ -425,7 +428,7 @@ set_func:
 	return f, false
 }
 
-func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string) (st *Type, ct bool) {
+func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc *ast.CommentGroup) (st *Type, ct bool) {
 	switch decl := typDecl.Type.(type) {
 	case *ast.StructType:
 		st, ct = p.parseStruct(ctx, typDecl.Name.Name, typDecl.Name, decl)
@@ -435,8 +438,6 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string
 		// typedef, ex: type Str StructA
 		st = p.newType(ctx.module.Name, ctx.pkgPath, typDecl.Name.Name)
 		st.TypeKind = TypeKindNamed
-		st.Content = string(ctx.GetRawContent(typDecl))
-		st.FileLine = ctx.FileLine(typDecl)
 		p.collectTypes(ctx, typDecl.Type, st, typDecl.Assign.IsValid())
 		ct = false
 		// check if it implements any parser.interfaces
@@ -446,10 +447,11 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string
 			}
 		}
 	}
-	if collectComment {
-		st.Content = doc + string(ctx.GetRawContent(typDecl))
-	} else {
-		st.Content = string(ctx.GetRawContent(typDecl))
+
+	st.FileLine = ctx.FileLine(typDecl)
+	st.Content = string(ctx.GetRawContent(typDecl))
+	if ctx.collectComment && doc != nil {
+		st.Content = string(ctx.GetRawContent(doc)) + "\n" + string(ctx.GetRawContent(typDecl))
 	}
 	return
 }
@@ -457,7 +459,6 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc string
 // parse a ast.StructType node and renturn allocated *Struct
 func (p *GoParser) parseStruct(ctx *fileContext, struName string, name *ast.Ident, struDecl *ast.StructType) (*Type, bool) {
 	st := p.newType(ctx.module.Name, ctx.pkgPath, struName)
-	st.FileLine = ctx.FileLine(struDecl)
 	st.TypeKind = TypeKindStruct
 	if struDecl.Fields == nil {
 		return st, false
@@ -497,7 +498,6 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 	}
 
 	st := p.newType(ctx.module.Name, ctx.pkgPath, name.Name)
-	st.FileLine = ctx.FileLine(decl)
 	st.TypeKind = TypeKindInterface
 
 	for _, fieldDecl := range decl.Methods.List {
@@ -515,11 +515,7 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 			}
 			st.Methods[fieldDecl.Names[0].Name] = id
 			fn := p.newFunc(ctx.module.Name, ctx.pkgPath, id.Name)
-			var doc string
-			if collectComment && fieldDecl.Doc != nil {
-				doc = string(ctx.GetRawContent(fieldDecl.Doc)) + "\n"
-			}
-			fn.Content = doc + string(ctx.GetRawContent(fieldDecl))
+			fn.Content = string(ctx.GetRawContent(fieldDecl))
 			fn.FileLine = ctx.FileLine(fieldDecl)
 			fn.IsMethod = true
 			fn.IsInterfaceMethod = true

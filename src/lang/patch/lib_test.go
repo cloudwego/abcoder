@@ -63,6 +63,16 @@ func TestPatcher(t *testing.T) {
 			File: "backup/metainfo.go",
 			Type: uniast.FUNC,
 		},
+		{
+			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "Options"},
+			Codes: `type Options struct {
+	Enable bool
+	localsession.ManagerOptions
+	Test bool
+}`,
+			File: "backup/metainfo.go",
+			Type: uniast.FUNC,
+		},
 	}
 
 	// Apply the patches

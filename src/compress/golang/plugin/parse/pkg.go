@@ -33,7 +33,7 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	sysImports := make(map[string]string)
 	ret := &importInfo{}
 	for _, imp := range impts {
-		ret.Origins = append(ret.Origins, string(GetRawContent(fset, file, imp)))
+		ret.Origins = append(ret.Origins, string(GetRawContent(fset, file, imp, p.opts.CollectComment)))
 		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
 		importAlias := ""
 		// Check if user has defined an alias for current import
@@ -185,14 +185,15 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			}
 			bs := p.getFileBytes(filePath)
 			ctx := &fileContext{
-				repoDir:     p.homePageDir,
-				filePath:    filePath,
-				module:      mod,
-				pkgPath:     pkg.ID,
-				bs:          bs,
-				fset:        fset,
-				pkgTypeInfo: pkg.TypesInfo,
-				deps:        pkg.Imports,
+				repoDir:        p.homePageDir,
+				filePath:       filePath,
+				module:         mod,
+				pkgPath:        pkg.ID,
+				bs:             bs,
+				fset:           fset,
+				pkgTypeInfo:    pkg.TypesInfo,
+				deps:           pkg.Imports,
+				collectComment: p.opts.CollectComment,
 			}
 			imports, err := p.parseImports(ctx.fset, ctx.bs, mod, file.Imports)
 			if err != nil {

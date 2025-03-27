@@ -28,7 +28,6 @@ import (
 )
 
 func Test_goParser_ParseRepo(t *testing.T) {
-	collectComment = true
 	type fields struct {
 		modName     string
 		homePageDir string
@@ -74,7 +73,6 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			println(string(jf))
 		})
 	}
-	collectComment = false
 }
 
 func Test_goParser_ParseDirs(t *testing.T) {
@@ -138,10 +136,10 @@ type Struct struct {
 	ast.Inspect(node, func(n ast.Node) bool {
 		fmt.Printf("%#v\n", n)
 		if sel, ok := n.(*ast.SelectorExpr); ok {
-			println("selector:", string(GetRawContent(fset, []byte(src), sel)))
+			println("selector:", string(GetRawContent(fset, []byte(src), sel, false)))
 		}
 		if stru, ok := n.(*ast.StructType); ok {
-			println("struct:", string(GetRawContent(fset, []byte(src), stru)))
+			println("struct:", string(GetRawContent(fset, []byte(src), stru, true)))
 		}
 		return true
 	})

@@ -23,6 +23,7 @@ import (
 type Options struct {
 	ReferCodeDepth int
 	Excludes       []*regexp.Regexp
+	CollectComment bool
 }
 
 type Option func(options *Options)
@@ -43,5 +44,11 @@ func WithExcludes(excludes []string) Option {
 			}
 			options.Excludes = append(options.Excludes, r)
 		}
+	}
+}
+
+func WithCollectComment(collect bool) Option {
+	return func(options *Options) {
+		options.CollectComment = collect
 	}
 }

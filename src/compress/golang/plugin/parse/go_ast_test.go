@@ -40,6 +40,7 @@ func Test_goParser_GeMainOnDepends(t *testing.T) {
 				homePageDir: "../../../../../tmp/cloudwego/kitex",
 				opts: Options{
 					ReferCodeDepth: 1,
+					CollectComment: true,
 				},
 			},
 		},

@@ -305,7 +305,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 			if dname == name {
 				ids = append(ids, newIdentity(mod, pkg, name))
 				fn := p.newFunc(mod, pkg, name)
-				fn.Content = string(GetRawContent(fset, fcontent, decl))
+				fn.Content = string(GetRawContent(fset, fcontent, decl, p.opts.CollectComment))
 				fn.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
 				fn.Line = fset.Position(decl.Pos()).Line
 				fn.IsMethod = decl.Recv != nil
@@ -334,7 +334,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 					var st *Type
 					if spec.Name.Name == name {
 						st = p.newType(mod, pkg, spec.Name.Name)
-						st.Content = string(GetRawContent(fset, fcontent, spec))
+						st.Content = string(GetRawContent(fset, fcontent, spec, p.opts.CollectComment))
 						st.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
 						st.Line = fset.Position(decl.Pos()).Line
 						st.TypeKind = getTypeKind(spec.Type)
@@ -351,7 +351,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 								// collect the method
 								ids = append(ids, newIdentity(mod, pkg, name))
 								fn := p.newFunc(mod, pkg, name)
-								fn.Content = string(GetRawContent(fset, fcontent, m))
+								fn.Content = string(GetRawContent(fset, fcontent, m, p.opts.CollectComment))
 								fn.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
 								fn.Line = fset.Position(decl.Pos()).Line
 								fn.IsMethod = true
@@ -382,7 +382,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 						if n.Name == name {
 							ids = append(ids, newIdentity(mod, pkg, name))
 							v := p.newVar(mod, pkg, name, decl.Tok == token.CONST)
-							v.Content = string(GetRawContent(fset, fcontent, spec))
+							v.Content = string(GetRawContent(fset, fcontent, spec, p.opts.CollectComment))
 							v.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
 							v.Line = fset.Position(decl.Pos()).Line
 							if spec.Type != nil {
