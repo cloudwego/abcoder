@@ -66,7 +66,7 @@ func Main() {
 	if excludes != "" {
 		exs = strings.Split(excludes, ",")
 	}
-	p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth), WithExcludes(exs))
+	p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth), WithExcludes(exs), WithCollectComment(collectComment))
 
 	var out interface{}
 

@@ -33,22 +33,16 @@ var errSysImport = fmt.Errorf("sys import")
 
 // The go file's context. Used to pass information between ast node handlers
 type fileContext struct {
-	repoDir     string
-	filePath    string
-	module      *Module
-	pkgPath     PkgPath
-	bs          []byte
-	fset        *token.FileSet
-	imports     *importInfo
-	pkgTypeInfo *types.Info
-	deps        map[string]*packages.Package
-}
-
-func (ctx *fileContext) FileLine(node ast.Node) FileLine {
-	pos := ctx.fset.Position((node).Pos())
-	rel, _ := filepath.Rel(ctx.repoDir, pos.Filename)
-	end := ctx.fset.Position((node).End())
-	return FileLine{File: rel, Line: pos.Line, StartOffset: pos.Offset, EndOffset: end.Offset}
+	repoDir        string
+	filePath       string
+	module         *Module
+	pkgPath        PkgPath
+	bs             []byte
+	fset           *token.FileSet
+	imports        *importInfo
+	pkgTypeInfo    *types.Info
+	deps           map[string]*packages.Package
+	collectComment bool
 }
 
 func isExternalID(id *Identity, curmod string) bool {
@@ -164,13 +158,56 @@ func (ctx *fileContext) GetMod(impt string) (string, error) {
 	return "", fmt.Errorf("not found mod: %s", impt)
 }
 
-func (ctx *fileContext) GetRawContent(node ast.Node) []byte {
-	return GetRawContent(ctx.fset, ctx.bs, node)
+func (ctx *fileContext) FileLine(node ast.Node) FileLine {
+	pos := ctx.fset.Position((node).Pos())
+	rel, _ := filepath.Rel(ctx.repoDir, pos.Filename)
+	end := ctx.fset.Position((node).End())
+	ret := FileLine{File: rel, Line: pos.Line, StartOffset: pos.Offset, EndOffset: end.Offset}
+	if _, ok := node.(*ast.TypeSpec); ok {
+		// NOTICE: type spec is not the start of the type definition
+		// so we need to adjust the offset = len("type ")
+		ret.StartOffset -= 5
+	}
+	if ctx.collectComment {
+		fset := ctx.fset
+		switch v := node.(type) {
+		case *ast.Field:
+			if v.Doc != nil {
+				ret.StartOffset = fset.Position(v.Doc.Pos()).Offset
+			}
+		case *ast.GenDecl:
+			if v.Doc != nil {
+				ret.StartOffset = fset.Position(v.Doc.Pos()).Offset
+			}
+		case *ast.TypeSpec:
+			if v.Doc != nil {
+				ret.StartOffset = fset.Position(v.Doc.Pos()).Offset
+			}
+		case *ast.ValueSpec:
+			if v.Doc != nil {
+				ret.StartOffset = fset.Position(v.Doc.Pos()).Offset
+			}
+		case *ast.FuncDecl:
+			if v.Doc != nil {
+				ret.StartOffset = fset.Position(v.Doc.Pos()).Offset
+			}
+		}
+	}
+	return ret
 }
 
-func GetRawContent(fset *token.FileSet, file []byte, node ast.Node) []byte {
+func (ctx *fileContext) GetRawContent(node ast.Node) []byte {
+	return GetRawContent(ctx.fset, ctx.bs, node, ctx.collectComment)
+}
+
+func GetRawContent(fset *token.FileSet, file []byte, node ast.Node, collectComment bool) []byte {
 	var doc = bytes.Buffer{}
 	switch v := node.(type) {
+	case *ast.Field:
+		if collectComment && v.Doc != nil {
+			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
+			doc.WriteByte('\n')
+		}
 	case *ast.GenDecl:
 		if collectComment && v.Doc != nil {
 			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
@@ -181,6 +218,8 @@ func GetRawContent(fset *token.FileSet, file []byte, node ast.Node) []byte {
 			doc.Write(file[fset.Position(v.Doc.Pos()).Offset:fset.Position(v.Doc.End()).Offset])
 			doc.WriteByte('\n')
 		}
+		// NOTICE: type spec is not the start of the type definition
+		// so we need to add "type "
 		doc.WriteString("type ")
 	case *ast.ValueSpec:
 		if collectComment && v.Doc != nil {
