@@ -74,13 +74,13 @@ func (p *Patcher) Patch(patch Patch) error {
 next_dep:
 	for _, dep := range patch.AddedDeps {
 		for _, r := range node.Dependencies {
-			if r.Target == dep {
+			if r.Identity == dep {
 				continue next_dep
 			}
 		}
 		node.Dependencies = append(node.Dependencies, uniast.Relation{
-			Target: dep,
-			Kind:   uniast.DEPENDENCY,
+			Identity: dep,
+			Kind:     uniast.DEPENDENCY,
 		})
 	}
 	f := p.repo.GetFileById(patch.Id)

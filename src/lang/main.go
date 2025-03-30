@@ -210,24 +210,30 @@ func checkLSP(language string, lspPath string) (l lsp.Language, s string) {
 	return
 }
 
-func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (*uniast.Repository, error) {
+func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (repo *uniast.Repository, err error) {
 	if opts.Language == lsp.Golang {
-		return callGoParser(ctx, repoPath, opts)
+		repo, err = callGoParser(ctx, repoPath, opts)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		collector := collect.NewCollector(repoPath, cli)
+		collector.CollectOption = opts
+		log.Info("start collecting symbols...\n")
+		err = collector.Collect(ctx)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("all symbols collected.\n")
+		log.Info("start exporting symbols...\n")
+		repo, err = collector.Export(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	collector := collect.NewCollector(repoPath, cli)
-	collector.CollectOption = opts
-	log.Info("start collecting symbols...\n")
-	err := collector.Collect(ctx)
-	if err != nil {
+	if err := repo.BuildGraph(); err != nil {
 		return nil, err
 	}
-	log.Info("all symbols collected.\n")
-	log.Info("start exporting symbols...\n")
-	repo, err := collector.Export(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	return repo, nil
 }

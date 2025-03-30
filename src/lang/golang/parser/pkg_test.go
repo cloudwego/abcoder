@@ -40,7 +40,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				modName:     "github.com/cloudwego/localsession",
-				homePageDir: "../../../../../tmp/localsession",
+				homePageDir: "../../../../tmp/localsession",
 			},
 		},
 	}
@@ -51,12 +51,13 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, Options{
 				ReferCodeDepth: 1,
 			})
-			_, err := p.ParseRepo()
+			r, err := p.ParseRepo()
 			if err != nil {
 				t.Fatal(err)
 			}
+			r.BuildGraph()
 			// spew.Dump(p)
-			pj, err := json.MarshalIndent(p.repo, "", "  ")
+			pj, err := json.MarshalIndent(r, "", "  ")
 			if err != nil {
 				t.Fatal(err)
 			}

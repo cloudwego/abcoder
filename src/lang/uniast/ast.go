@@ -34,7 +34,7 @@ const (
 type Repository struct {
 	Name    string             `json:"id"` // module name
 	Modules map[string]*Module // module name => Library
-	Graph   map[string]*Node   `json:"-"`
+	Graph   map[string]*Node
 }
 
 func NewRepository(name string) Repository {
@@ -80,8 +80,8 @@ type Module struct {
 	Name         string               // go module name
 	Dir          string               // relative path to repo
 	Packages     map[PkgPath]*Package // pkage import path => Package
-	Dependencies map[string]string    `json:",omitempty"` // module name => module_path@version
-	Files        map[string]*File     `json:",omitempty"` // relative path => file info
+	Dependencies map[string]string    // module name => module_path@version
+	Files        map[string]*File     // relative path => file info
 }
 
 func (r Repository) GetFileById(id Identity) *File {
@@ -138,7 +138,6 @@ type Package struct {
 	Types        map[string]*Type     // type name => type define
 	Vars         map[string]*Var      // var name => var define
 	CompressData *string              `json:"compress_data,omitempty"` // package compress info
-	Path         string               // relative path to repo
 }
 
 func NewPackage(pkgPath PkgPath) *Package {

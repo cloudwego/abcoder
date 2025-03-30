@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,7 +40,11 @@ pub fn from_json(id: &str, json: &str) -> Result<Repository, Box<dyn Error>> {
         f.id = id.to_string();
     }
     if f.graph.is_none() {
-        f.build_graph();
+        //return err
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "graph is None",
+        )));
     }
     f.save_to_cache();
     Ok(f)
@@ -171,18 +175,20 @@ pub async fn cascade_compress_variable(
         return;
     }
     let var_node = var_node.unwrap();
-    for (i, v) in var_node.references.iter().enumerate() {
-        if i >= MAX_REFERS {
-            eprintln!("too many references for {:?}", id);
-            break;
+    if let Some(nfs) = &var_node.references {
+        for (i, v) in nfs.iter().enumerate() {
+            if i >= MAX_REFERS {
+                eprintln!("too many references for {:?}", id);
+                break;
+            }
+            let c = repo.get_id_content(&v.id());
+            if c.is_none() {
+                eprintln!("{:?} node is not found", v);
+                continue;
+            }
+            let elem = c.unwrap();
+            refs.push(elem);
         }
-        let c = repo.get_id_content(v);
-        if c.is_none() {
-            eprintln!("{:?} node is not found", v);
-            continue;
-        }
-        let elem = c.unwrap();
-        refs.push(elem);
     }
 
     // compress type if any
