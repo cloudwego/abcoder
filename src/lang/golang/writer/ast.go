@@ -19,7 +19,7 @@ package writer
 import (
 	"strings"
 
-	"github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 func writeImport(sb *strings.Builder, impts []uniast.Import) {

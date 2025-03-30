@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 func TestWriter_WriteRepo(t *testing.T) {

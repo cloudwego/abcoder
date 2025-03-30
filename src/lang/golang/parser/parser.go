@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"fmt"
@@ -23,9 +23,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
-	. "github.com/cloudwego/abcoder/src/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 //---------------- Golang Parser -----------------
@@ -36,10 +37,11 @@ type GoParser struct {
 	visited     map[PkgPath]bool // visited packages
 	modules     []moduleInfo     //  [name, abs-path] of modules, sorted by path length in descending order
 	repo        Repository
-	opts        *Options
+	opts        Options
 	interfaces  map[*types.Interface]Identity
 	types       map[types.Type]Identity
 	files       map[string][]byte
+	exclues     []*regexp.Regexp
 }
 
 type moduleInfo struct {
@@ -56,16 +58,12 @@ func newModuleInfo(name string, dir string, path string) moduleInfo {
 	}
 }
 
-func NewParser(name string, homePageDir string, options ...Option) *GoParser {
-	o := &Options{}
-	for _, opt := range options {
-		opt(o)
-	}
+func NewParser(name string, homePageDir string, o Options) *GoParser {
 	return newGoParser(name, homePageDir, o)
 }
 
 // newGoParser
-func newGoParser(name string, homePageDir string, opts *Options) *GoParser {
+func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 	abs, err := filepath.Abs(homePageDir)
 	if err != nil {
 		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
@@ -78,6 +76,10 @@ func newGoParser(name string, homePageDir string, opts *Options) *GoParser {
 		interfaces:  map[*types.Interface]Identity{},
 		types:       map[types.Type]Identity{},
 		files:       map[string][]byte{},
+	}
+
+	if opts.Excludes != nil {
+		p.exclues = compileExcludes(opts.Excludes)
 	}
 
 	if err := p.collectGoMods(p.homePageDir); err != nil {

@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 
 	"github.com/cloudwego/abcoder/src/lang/log"
-	"github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 type RustModulePatcher struct {

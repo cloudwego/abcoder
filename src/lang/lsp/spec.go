@@ -14,7 +14,7 @@
 
 package lsp
 
-import "github.com/cloudwego/abcoder/src/uniast"
+import "github.com/cloudwego/abcoder/src/lang/uniast"
 
 type Language string
 

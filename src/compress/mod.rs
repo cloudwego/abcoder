@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod compress;
-pub mod golang;
 mod llm;
 pub mod parser;
 pub mod rust;

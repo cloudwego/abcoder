@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"encoding/json"
@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	. "github.com/cloudwego/abcoder/src/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 func Test_goParser_ParseRepo(t *testing.T) {
@@ -48,7 +48,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			abs, _ := filepath.Abs(tt.fields.homePageDir)
 			println(abs)
-			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, &Options{
+			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, Options{
 				ReferCodeDepth: 1,
 			})
 			_, err := p.ParseRepo()
@@ -102,7 +102,7 @@ func Test_goParser_ParseDirs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser(tt.args.modName, tt.args.homePageDir, &tt.args.opts)
+			p := newGoParser(tt.args.modName, tt.args.homePageDir, tt.args.opts)
 			_, err := p.ParseRepo()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("goParser.ParseDirs() error = %v, wantErr %v", err, tt.wantErr)
@@ -174,7 +174,7 @@ func Test_goParser_ParseNode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(tt.fields.modName, tt.fields.homePageDir)
+			p := NewParser(tt.fields.modName, tt.fields.homePageDir, Options{})
 			got, err := p.ParseNode(tt.args.pkgPath, tt.args.name)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("goParser.ParseNode() error = %v, wantErr %v", err, tt.wantErr)

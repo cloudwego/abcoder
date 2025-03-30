@@ -15,9 +15,9 @@
 
 root=$(dirname $(realpath $(dirname $0)))
 
-# make go_ast
-cd $root/src/compress/golang/plugin
-go build -o ../../../../tools/parser/go_ast .
+# # make go_ast
+# cd $root/src/compress/golang/plugin
+# go build -o ../../../../tools/parser/go_ast .
 
 
 # make lang

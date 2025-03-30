@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,17 +42,20 @@ import (
 	"github.com/cloudwego/abcoder/src/lang/log"
 	"github.com/cloudwego/abcoder/src/lang/lsp"
 	"github.com/cloudwego/abcoder/src/lang/rust"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 	"github.com/spf13/cobra"
 )
 
 func main() {
 	var client *lsp.LSPClient
 	var repoPath string
+	var lang lsp.Language
 
 	// Define flags
 	var flagLsp string
 	var flagVerbose, flagDebug bool
 	var loadExternalSymbol bool
+	var NoNeedComment bool
 	var excludes []string
 
 	var rootCmd = &cobra.Command{
@@ -67,14 +70,18 @@ Language:
 		PreRun: func(cmd *cobra.Command, args []string) {
 			// validate arguments
 			checkVerbose(flagVerbose, flagDebug)
-			l, lspPath := checkLSP(args[1], flagLsp)
 			var err error
 			repoPath, err = filepath.Abs(args[2])
 			if err != nil {
 				log.Error("Failed to get absolute path of repository: %v\n", err)
 				os.Exit(1)
 			}
+			l, lspPath := checkLSP(args[1], flagLsp)
+			lang = l
 			openfile, opentime := checkRepoPath(repoPath, l)
+			if lang == lsp.Golang {
+				return
+			}
 			// Initialize the LSP client
 			log.Info("start initialize LSP server %s...\n", lspPath)
 			client, err = lsp.NewLSPClient(repoPath, openfile, opentime, lsp.ClientOptions{
@@ -99,11 +106,29 @@ Language:
 				opts := collect.CollectOption{
 					LoadExternalSymbol: loadExternalSymbol,
 					Excludes:           excludes,
+					Language:           lang,
+					NoNeedComment:      NoNeedComment,
 				}
-				if err := CollectAndExport(ctx, client, repoPath, opts); err != nil {
+				repo, err := collectSymbol(ctx, client, repoPath, opts)
+				if err != nil {
 					log.Error("Failed to collect symbols: %v\n", err)
 					os.Exit(3)
 				}
+				log.Info("all symbols collected, start writing to stdout...\n")
+				out, err := json.Marshal(repo)
+				if err != nil {
+					log.Error("Failed to marshal repository: %v\n", err)
+					return
+				}
+				for n := 0; n < len(out); {
+					i, err := os.Stdout.Write(out)
+					if err != nil {
+						log.Error("Failed to write to stdout: %v\n", err)
+						return
+					}
+					n += i
+				}
+				return
 			default:
 				log.Error("Unsupported action: %s\n", action)
 				os.Exit(1)
@@ -116,6 +141,7 @@ Language:
 	rootCmd.Flags().BoolVarP(&flagDebug, "debug", "d", false, "Debug mode.")
 	rootCmd.Flags().BoolVarP(&loadExternalSymbol, "load-external-symbol", "", false, "load external symbols into results")
 	rootCmd.Flags().StringSlice("exclude", excludes, "exclude files or directories")
+	rootCmd.Flags().BoolVarP(&NoNeedComment, "no-need-comment", "", false, "do not need comment (only works for Go now)")
 
 	// Execute the command
 	if err := rootCmd.Execute(); err != nil {
@@ -156,6 +182,16 @@ func checkLSP(language string, lspPath string) (l lsp.Language, s string) {
 	switch language {
 	case "rust":
 		l, s = rust.GetDefaultLSP()
+	case "golang", "go":
+		l = lsp.Golang
+		s = ""
+		if _, err := exec.LookPath("go"); err != nil {
+			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
+				log.Error("Go compiler not found, please make it excutable!\n", lspPath)
+				os.Exit(1)
+			}
+		}
+		return
 	default:
 		log.Error("Unsupported language: %s\n", language)
 		os.Exit(1)
@@ -174,31 +210,24 @@ func checkLSP(language string, lspPath string) (l lsp.Language, s string) {
 	return
 }
 
-func CollectAndExport(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) error {
+func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (*uniast.Repository, error) {
+	if opts.Language == lsp.Golang {
+		return callGoParser(ctx, repoPath, opts)
+	}
+
 	collector := collect.NewCollector(repoPath, cli)
 	collector.CollectOption = opts
 	log.Info("start collecting symbols...\n")
 	err := collector.Collect(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Info("all symbols collected.\n")
 	log.Info("start exporting symbols...\n")
 	repo, err := collector.Export(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	log.Info("all symbols exported.\n")
-	out, err := json.Marshal(repo)
-	if err != nil {
-		return err
-	}
-	for n := 0; n < len(out); {
-		i, err := os.Stdout.Write(out)
-		if err != nil {
-			return err
-		}
-		n += i
-	}
-	return nil
+
+	return repo, nil
 }
