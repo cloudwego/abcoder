@@ -15,7 +15,6 @@
 package uniast
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
@@ -84,7 +83,7 @@ func (r *Repository) SetNode(id Identity, typ NodeType) *Node {
 }
 
 func (r *Repository) AddRelation(node *Node, dep Identity) {
-	node.Dependencies = append(node.Dependencies, Relation{Target: dep, Kind: DEPENDENCY})
+	node.Dependencies = append(node.Dependencies, Relation{Identity: dep, Kind: DEPENDENCY})
 	key := dep.Full()
 	nd, ok := r.Graph[key]
 	if !ok {
@@ -94,8 +93,8 @@ func (r *Repository) AddRelation(node *Node, dep Identity) {
 		r.Graph[key] = nd
 	}
 	nd.References = append(nd.References, Relation{
-		Target: node.Identity,
-		Kind:   REFERENCE,
+		Identity: node.Identity,
+		Kind:     REFERENCE,
 	})
 	if f := r.GetFunction(dep); f != nil {
 		nd.Type = FUNC
@@ -111,7 +110,10 @@ func (r *Repository) AddRelation(node *Node, dep Identity) {
 
 func (r *Repository) BuildGraph() error {
 	r.Graph = make(map[string]*Node)
-	for _, mod := range r.Modules {
+	for mpath, mod := range r.Modules {
+		if IsExternalModule(mpath) {
+			continue
+		}
 		for _, pkg := range mod.Packages {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
@@ -158,25 +160,25 @@ const (
 )
 
 type Relation struct {
-	Target Identity
-	Kind   RelationKind
-	Desc   string
+	Identity // target node
+	Kind     RelationKind
+	Desc     string
 }
 
-type marshalerRelation struct {
-	// Kind   RelationKind
-	Target string
-	Desc   string
-}
+// type marshalerRelation struct {
+// 	// Kind   RelationKind
+// 	Target string
+// 	Desc   string
+// }
 
-func (r Relation) MarshalJSON() ([]byte, error) {
-	rr := marshalerRelation{
-		// Kind:   r.Kind,
-		Target: r.Target.Full(),
-		Desc:   r.Desc,
-	}
-	return json.Marshal(rr)
-}
+// func (r Relation) MarshalJSON() ([]byte, error) {
+// 	rr := marshalerRelation{
+// 		// Kind:   r.Kind,
+// 		Target: r.Target.Full(),
+// 		Desc:   r.Desc,
+// 	}
+// 	return json.Marshal(rr)
+// }
 
 // Node 类型
 type NodeType int

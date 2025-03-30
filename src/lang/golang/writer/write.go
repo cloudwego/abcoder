@@ -209,10 +209,10 @@ func (w *Writer) appendNode(node *uniast.Node, pkg string, isMain bool, file str
 		p[fpath] = fs
 	}
 	for _, v := range node.Dependencies {
-		if v.Target.PkgPath == "" || v.Target.PkgPath == pkg {
+		if v.PkgPath == "" || v.PkgPath == pkg {
 			continue
 		}
-		fs.impts = append(fs.impts, uniast.Import{Path: strconv.Quote(v.Target.PkgPath)})
+		fs.impts = append(fs.impts, uniast.Import{Path: strconv.Quote(v.PkgPath)})
 	}
 
 	// 检查是否有imports

@@ -37,14 +37,62 @@ pub struct Repository {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Node {
-    pub kind: NodeKind,
-    pub id: Identity,
-    pub dependencies: Vec<Identity>,
-    pub references: Vec<Identity>,
+    #[serde(rename = "Type")]
+    pub r#type: NodeType,
+    #[serde(rename = "ModPath")]
+    pub mod_path: String,
+    #[serde(rename = "PkgPath")]
+    pub(crate) pkg_path: String,
+    #[serde(rename = "Name")]
+    pub(crate) name: String,
+    #[serde(rename = "Dependencies")]
+    pub dependencies: Option<Vec<Relation>>,
+    #[serde(rename = "References")]
+    pub references: Option<Vec<Relation>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub enum NodeKind {
+impl Node {
+    pub fn id(&self) -> Identity {
+        Identity {
+            mod_path: self.mod_path.clone(),
+            pkg_path: self.pkg_path.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum RelationKind {
+    Dependency,
+    Reference,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Relation {
+    #[serde(rename = "ModPath")]
+    pub mod_path: String,
+    #[serde(rename = "PkgPath")]
+    pub(crate) pkg_path: String,
+    #[serde(rename = "Name")]
+    pub(crate) name: String,
+    #[serde(rename = "Kind")]
+    pub(crate) kind: RelationKind,
+    #[serde(rename = "Desc")]
+    pub(crate) desc: String,
+}
+
+impl Relation {
+    pub fn id(&self) -> Identity {
+        Identity {
+            mod_path: self.mod_path.clone(),
+            pkg_path: self.pkg_path.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone, Default)]
+pub enum NodeType {
     #[default]
     Unknown,
     Func,
@@ -52,36 +100,30 @@ pub enum NodeKind {
     Var,
 }
 
-impl NodeKind {
+impl NodeType {
     pub fn to_string(&self) -> String {
         match self {
-            NodeKind::Func => "Function".to_string(),
-            NodeKind::Type => "Type".to_string(),
-            NodeKind::Var => "Variant".to_string(),
-            _ => "Unknown".to_string(),
+            NodeType::Func => "FUNC".to_string(),
+            NodeType::Type => "TYPE".to_string(),
+            NodeType::Var => "VAR".to_string(),
+            _ => "UNKNOWN".to_string(),
         }
     }
 }
 
-fn ensure_node_in_map<'a>(id: &'a Identity, map: &'a mut HashMap<String, Node>) -> &'a mut Node {
-    map.entry(id.into()).or_insert(Node {
-        id: id.clone(),
-        dependencies: Vec::new(),
-        references: Vec::new(),
-        kind: NodeKind::Unknown,
-    })
-}
-
-fn record_dependency<'a>(
-    refer: &mut Node,
-    depend: &'a Identity,
-    graph: &mut HashMap<String, Node>,
-    refers: &mut HashSet<&'a Identity>,
-) {
-    let cnode = ensure_node_in_map(depend, graph);
-    cnode.references.push((refer.id.clone()));
-    refer.dependencies.push((depend.clone()));
-    refers.insert(depend);
+impl<'de> Deserialize<'de> for NodeType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "FUNC" => Ok(NodeType::Func),
+            "TYPE" => Ok(NodeType::Type),
+            "VAR" => Ok(NodeType::Var),
+            _ => Ok(NodeType::Unknown),
+        }
+    }
 }
 
 impl Repository {
@@ -135,179 +177,6 @@ impl Repository {
         None
     }
 
-    // build_graph retrieves all references to each Identity in the repository
-    pub fn build_graph(&mut self) {
-        println!("building graph...");
-        let graph = Rc::new(RefCell::new(HashMap::new()));
-        let mut referred = HashSet::new();
-
-        let mods = self.modules.clone();
-        for (mname, _mod) in mods.iter() {
-            if _mod.dir == "" {
-                // not collect the external modules
-                continue;
-            }
-            for (_, pkg) in _mod.packages.iter() {
-                // functions
-                for (_, f) in pkg.functions.iter() {
-                    let id = f.id();
-                    let mut inode =
-                        { ensure_node_in_map(&id, &mut graph.clone().borrow_mut()).clone() };
-                    inode.kind = NodeKind::Func;
-
-                    // function calls
-                    if let Some(calls) = &f.function_calls {
-                        for call in calls.iter() {
-                            record_dependency(
-                                &mut inode,
-                                call,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-
-                    // method calls
-                    if let Some(calls) = &f.method_calls {
-                        for call in calls.iter() {
-                            record_dependency(
-                                &mut inode,
-                                call,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-
-                    // receiver
-                    if let Some(rec) = &f.receiver {
-                        record_dependency(
-                            &mut inode,
-                            &rec.type_id,
-                            &mut graph.clone().borrow_mut(),
-                            &mut referred,
-                        );
-                    }
-
-                    // params
-                    if let Some(calls) = &f.params {
-                        for call in calls.iter() {
-                            record_dependency(
-                                &mut inode,
-                                call,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-
-                    // results
-                    if let Some(calls) = &f.results {
-                        for call in calls.iter() {
-                            record_dependency(
-                                &mut inode,
-                                call,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-
-                    // types
-                    if let Some(tys) = &f.types {
-                        for ty in tys.iter() {
-                            record_dependency(
-                                &mut inode,
-                                ty,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-
-                    // global vars
-                    if let Some(vars) = &f.global_vars {
-                        for var in vars.iter() {
-                            record_dependency(
-                                &mut inode,
-                                var,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-
-                    graph.clone().borrow_mut().insert(String::from(&id), inode);
-                }
-
-                // types
-                for (_, t) in pkg.types.iter() {
-                    let id = t.id();
-                    let mut inode =
-                        { ensure_node_in_map(&id, &mut graph.clone().borrow_mut()).clone() };
-                    inode.kind = NodeKind::Type;
-
-                    if let Some(calls) = &t.sub_struct {
-                        for (call) in calls.iter() {
-                            record_dependency(
-                                &mut inode,
-                                call,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-                    if let Some(calls) = &t.inline_struct {
-                        for (call) in calls.iter() {
-                            record_dependency(
-                                &mut inode,
-                                call,
-                                &mut graph.clone().borrow_mut(),
-                                &mut referred,
-                            );
-                        }
-                    }
-                    graph.clone().borrow_mut().insert(String::from(&id), inode);
-                }
-
-                // vars
-                for (_, v) in pkg.vars.iter() {
-                    let id = v.id();
-                    let mut inode =
-                        { ensure_node_in_map(&id, &mut graph.clone().borrow_mut()).clone() };
-                    inode.kind = NodeKind::Var;
-
-                    if let Some(dep) = &v.type_id {
-                        record_dependency(
-                            &mut inode,
-                            dep,
-                            &mut graph.clone().borrow_mut(),
-                            &mut referred,
-                        );
-                        graph.clone().borrow_mut().insert(String::from(&id), inode);
-                    }
-                }
-            }
-        }
-
-        // filter all external (or "kitex_gen" or "hertz_gen") and not referred nodes in repo
-        let mut ngraph = HashMap::new();
-        for (k, v) in graph.clone().borrow().iter() {
-            if (!v.id.inside()
-                || v.id.pkg_path.contains("/kitex_gen")
-                || v.id.pkg_path.contains("/hertz_gen"))
-                && !referred.contains(&v.id)
-            {
-                // remove id in repo
-                self.remove_id(&v.id);
-            } else {
-                ngraph.insert(k.clone(), v.clone());
-            }
-        }
-
-        self.graph = Some(ngraph);
-    }
-
     pub fn remove_id(&mut self, id: &Identity) {
         for (_, _mod) in self.modules.iter_mut() {
             for (_, pkg) in _mod.packages.iter_mut() {
@@ -325,13 +194,13 @@ impl Repository {
     pub fn remove_unreferenced(&mut self, reffered: &HashSet<&Identity>) {
         // filter all external (or "kitex_gen" or "hertz_gen") and not referred nodes in repo
         for (_, v) in self.graph.clone().unwrap().iter() {
-            if (!v.id.inside()
-                || v.id.pkg_path.contains("kitex_gen")
-                || v.id.pkg_path.contains("hertz_gen"))
-                && !reffered.contains(&v.id)
+            if (!v.id().inside()
+                || v.pkg_path.contains("kitex_gen")
+                || v.pkg_path.contains("hertz_gen"))
+                && !reffered.contains(&v.id())
             {
                 // remove id in repo
-                self.remove_id(&v.id);
+                self.remove_id(&v.id());
             }
         }
     }
@@ -366,7 +235,6 @@ impl Repository {
                 self.modules.insert(mod_name.clone(), _mod.clone());
             }
         }
-        self.build_graph();
     }
 
     pub fn save_to_cache(&self) {
@@ -398,17 +266,17 @@ impl Repository {
         None
     }
 
-    pub fn get_kind(&self, id: &Identity) -> NodeKind {
+    pub fn get_kind(&self, id: &Identity) -> NodeType {
         if let Some(func) = self.get_func(id) {
-            return NodeKind::Func;
+            return NodeType::Func;
         } else if let Some(t) = self.get_type(id) {
-            return NodeKind::Type;
+            return NodeType::Type;
         } else if let Some(v) = self.get_var(id) {
-            return NodeKind::Var;
+            return NodeType::Var;
         } else if let Some(code) = self.get_id_content(id) {
-            NodeKind::Unknown
+            NodeType::Unknown
         } else {
-            return NodeKind::Unknown;
+            return NodeType::Unknown;
         }
     }
 
@@ -484,6 +352,26 @@ pub struct Module {
     pub dependencies: Option<HashMap<String, String>>,
     #[serde(rename = "Packages")]
     pub packages: HashMap<String, Package>,
+    #[serde(rename = "Files")]
+    pub files: HashMap<String, File>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct File {
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Path")]
+    pub path: String,
+    #[serde(rename = "Imports")]
+    pub imports: Option<Vec<Import>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Import {
+    #[serde(rename = "Alias")]
+    pub alias: Option<String>,
+    #[serde(rename = "Path")]
+    pub path: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
