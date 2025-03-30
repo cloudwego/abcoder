@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"bytes"
@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudwego/abcoder/src/uniast"
-	. "github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 	"golang.org/x/tools/go/packages"
 )
 

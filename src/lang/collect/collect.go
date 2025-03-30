@@ -31,6 +31,8 @@ import (
 type CollectOption struct {
 	LoadExternalSymbol bool
 	NeedStdSymbol      bool
+	NoNeedComment      bool
+	Language           lsp.Language
 	Excludes           []string
 }
 

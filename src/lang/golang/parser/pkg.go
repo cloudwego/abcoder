@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	. "github.com/cloudwego/abcoder/src/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -178,7 +178,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	next_file:
 		for idx, file := range pkg.Syntax {
 			filePath := pkg.GoFiles[idx]
-			for _, exclude := range p.opts.Excludes {
+			for _, exclude := range p.exclues {
 				if exclude.MatchString(filePath) {
 					fmt.Fprintf(os.Stderr, "skip file %s\n", filePath)
 					continue next_file

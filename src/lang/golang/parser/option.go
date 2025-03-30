@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"fmt"
@@ -22,33 +22,32 @@ import (
 
 type Options struct {
 	ReferCodeDepth int
-	Excludes       []*regexp.Regexp
+	Excludes       []string
 	CollectComment bool
 }
 
-type Option func(options *Options)
+// type Option func(options *Options)
 
-func WithReferCodeDepth(depth int) Option {
-	return func(options *Options) {
-		options.ReferCodeDepth = depth
-	}
-}
+// func WithReferCodeDepth(depth int) Option {
+// 	return func(options *Options) {
+// 		options.ReferCodeDepth = depth
+// 	}
+// }
 
-func WithExcludes(excludes []string) Option {
-	return func(options *Options) {
-		for _, ex := range excludes {
-			r, e := regexp.Compile(ex)
-			if e != nil {
-				fmt.Fprintf(os.Stderr, "compile exlude-path regexp failed: %s", ex)
-				continue
-			}
-			options.Excludes = append(options.Excludes, r)
+func compileExcludes(excludes []string) (ret []*regexp.Regexp) {
+	for _, ex := range excludes {
+		r, e := regexp.Compile(ex)
+		if e != nil {
+			fmt.Fprintf(os.Stderr, "compile exlude-path regexp failed: %s", ex)
+			continue
 		}
+		ret = append(ret, r)
 	}
+	return ret
 }
 
-func WithCollectComment(collect bool) Option {
-	return func(options *Options) {
-		options.CollectComment = collect
-	}
-}
+// func WithCollectComment(collect bool) Option {
+// 	return func(options *Options) {
+// 		options.CollectComment = collect
+// 	}
+// }

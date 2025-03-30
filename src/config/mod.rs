@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 
-use crate::repo::{self};
+use crate::repo::{self, CompressOptions};
 
 #[derive(Debug)]
 pub enum Language {
@@ -185,6 +185,16 @@ pub enum ProgramLanguage {
     Unknown(String),
 }
 
+impl ProgramLanguage {
+    pub fn to_string(&self) -> String {
+        match self {
+            ProgramLanguage::Rust => "rust".to_string(),
+            ProgramLanguage::Go => "go".to_string(),
+            ProgramLanguage::Unknown(s) => s.to_string(),
+        }
+    }
+}
+
 fn decide_language(path: &str) -> ProgramLanguage {
     // scan root directory
     walkdir::WalkDir::new(path)
@@ -208,40 +218,22 @@ fn decide_language(path: &str) -> ProgramLanguage {
         .unwrap_or(ProgramLanguage::Unknown(path.to_string()))
 }
 
-pub fn parser_and_args<'a>(repo_path: &'a str, load_extern: bool) -> (String, Vec<String>) {
+pub fn parser_and_args<'a>(repo_path: &'a str, opts: &CompressOptions) -> (String, Vec<String>) {
     let lang = decide_language(repo_path);
-    let path = match lang {
-        ProgramLanguage::Go => go_ast_path(),
-        ProgramLanguage::Rust => rust_ast_path(),
-        _ => panic!("unsupported language"),
-    };
-    let args = match lang {
-        ProgramLanguage::Go => {
-            let mut args = vec!["--collect_comment".to_string()];
-            if load_extern {
-                args.push("--refer_code_depth=1".to_string());
-            }
-            if CONFIG.exclude_dirs.len() > 0 {
-                args.push(format!("--excludes={}", &CONFIG.exclude_dirs.join(",")));
-            }
-            args.push(repo_path.to_string());
-            args
-        }
-        ProgramLanguage::Rust => {
-            let mut args = vec![
-                "collect".to_string(),
-                "rust".to_string(),
-                repo_path.to_string(),
-            ];
-            for exclude in &CONFIG.exclude_dirs {
-                args.push(format!("--exclude={exclude}"));
-            }
-            if load_extern {
-                args.push("--load-external-symbol".to_string());
-            }
-            args
-        }
-        _ => panic!("unsupported language"),
-    };
+    let path = rust_ast_path();
+    let mut args = vec![
+        "collect".to_string(),
+        lang.to_string(),
+        repo_path.to_string(),
+    ];
+    for exclude in &CONFIG.exclude_dirs {
+        args.push(format!("--exclude={exclude}"));
+    }
+    if !opts.not_load_external_symbol {
+        args.push("--load-external-symbol".to_string());
+    }
+    if opts.no_need_comment {
+        args.push("--no-need-comment".to_string());
+    }
     (path, args)
 }

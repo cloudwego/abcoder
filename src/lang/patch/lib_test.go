@@ -19,7 +19,7 @@ package patch
 import (
 	"testing"
 
-	"github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 var root = "../../../tmp"

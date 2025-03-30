@@ -27,8 +27,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 	"github.com/cloudwego/abcoder/src/lang/utils"
-	"github.com/cloudwego/abcoder/src/uniast"
 )
 
 var _ uniast.Writer = (*Writer)(nil)

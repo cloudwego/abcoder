@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/cloudwego/abcoder/src/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 var (
@@ -66,7 +66,12 @@ func Main() {
 	if excludes != "" {
 		exs = strings.Split(excludes, ",")
 	}
-	p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth), WithExcludes(exs), WithCollectComment(collectComment))
+	// p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth), WithExcludes(exs), WithCollectComment(collectComment))
+	p := NewParser(homeDir, homeDir, Options{
+		ReferCodeDepth: referCodeDepth,
+		Excludes:       exs,
+		CollectComment: collectComment,
+	})
 
 	var out interface{}
 

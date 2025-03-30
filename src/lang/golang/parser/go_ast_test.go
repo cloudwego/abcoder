@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"bytes"
 	"encoding/json"
 	"testing"
 
-	. "github.com/cloudwego/abcoder/src/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +47,7 @@ func Test_goParser_GeMainOnDepends(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, &tt.fields.opts)
+			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, tt.fields.opts)
 			n, err := p.getNode(NewIdentity("github.com/cloudwego/kitex", "github.com/cloudwego/kitex/pkg/generic", "ParseContent"))
 			if err != nil {
 				t.Fatal(err)
@@ -358,7 +358,7 @@ func TestCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser("a.b/c", "/root/codes/abcoder/testdata", &Options{})
+			p := newGoParser("a.b/c", "/root/codes/abcoder/testdata", Options{})
 			if tt.refered != nil {
 				p.opts.ReferCodeDepth = 1
 			}

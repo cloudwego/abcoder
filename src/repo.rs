@@ -197,10 +197,10 @@ pub fn export_repo(repo: &Repository) {
     file.write_all(csv_pkg.as_bytes()).unwrap();
 }
 
-pub fn force_parse_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Error> {
+pub fn force_parse_repo(repo_path: &String, opts: &CompressOptions) -> Result<Repository, Error> {
     let (path, name) = parse_repo_path(repo_path)?;
     // force to parse the repo
-    let data = parse_repo(name, &path, load_extern)?;
+    let data = parse_repo(name, &path, opts)?;
     match compress::from_json(&name, String::from_utf8(data).unwrap().as_str()) {
         Ok(repo) => Ok(repo),
         Err(err) => Err(Error::Parse(err.to_string())),
@@ -233,7 +233,13 @@ fn parse_repo_path(repo_path: &String) -> Result<(PathBuf, &str), Error> {
     Ok((path, name))
 }
 
-pub fn get_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Error> {
+pub struct CompressOptions {
+    pub export_compress: bool,
+    pub not_load_external_symbol: bool,
+    pub no_need_comment: bool,
+}
+
+pub fn get_repo(repo_path: &String, opts: &CompressOptions) -> Result<Repository, Error> {
     let (path, name) = parse_repo_path(repo_path)?;
 
     // check if cache the result
@@ -241,7 +247,7 @@ pub fn get_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Err
         data
     } else {
         // parse the repo
-        parse_repo(name, &path, load_extern)?
+        parse_repo(name, &path, opts)?
     };
 
     match compress::from_json(&name, String::from_utf8(data).unwrap().as_str()) {
@@ -250,8 +256,8 @@ pub fn get_repo(repo_path: &String, load_extern: bool) -> Result<Repository, Err
     }
 }
 
-fn parse_repo(name: &str, path: &Path, load_extern: bool) -> Result<Vec<u8>, Error> {
-    let (parser, args) = config::parser_and_args(path.to_str().unwrap(), load_extern);
+fn parse_repo(name: &str, path: &Path, opts: &CompressOptions) -> Result<Vec<u8>, Error> {
+    let (parser, args) = config::parser_and_args(path.to_str().unwrap(), opts);
     // parse the repo by parse
     match cmd::run_command_bytes(&parser, args) {
         Ok(output) => {

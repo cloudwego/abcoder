@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package parser
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/cloudwego/abcoder/src/uniast"
+	. "github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {

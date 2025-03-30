@@ -24,7 +24,7 @@ import (
 
 	"github.com/cloudwego/abcoder/src/lang/log"
 	"github.com/cloudwego/abcoder/src/lang/lsp"
-	"github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 var testroot = "../../../testdata"

@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudwego/abcoder/src/uniast"
+	"github.com/cloudwego/abcoder/src/lang/uniast"
 )
 
 // UseNode represents a module node in the dependency tree
