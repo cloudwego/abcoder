@@ -437,7 +437,7 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc *ast.C
 	default:
 		// typedef, ex: type Str StructA
 		st = p.newType(ctx.module.Name, ctx.pkgPath, typDecl.Name.Name)
-		st.TypeKind = TypeKindNamed
+		st.TypeKind = "typedef"
 		p.collectTypes(ctx, typDecl.Type, st, typDecl.Assign.IsValid())
 		ct = false
 		// check if it implements any parser.interfaces
@@ -459,7 +459,7 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc *ast.C
 // parse a ast.StructType node and renturn allocated *Struct
 func (p *GoParser) parseStruct(ctx *fileContext, struName string, name *ast.Ident, struDecl *ast.StructType) (*Type, bool) {
 	st := p.newType(ctx.module.Name, ctx.pkgPath, struName)
-	st.TypeKind = TypeKindStruct
+	st.TypeKind = "struct"
 	if struDecl.Fields == nil {
 		return st, false
 	}
@@ -498,7 +498,7 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 	}
 
 	st := p.newType(ctx.module.Name, ctx.pkgPath, name.Name)
-	st.TypeKind = TypeKindInterface
+	st.TypeKind = "interface"
 
 	for _, fieldDecl := range decl.Methods.List {
 		inlined := len(fieldDecl.Names) == 0

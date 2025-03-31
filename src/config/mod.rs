@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 
-use crate::repo::{self, CompressOptions};
+use crate::parse;
 
 #[derive(Debug)]
 pub enum Language {
@@ -218,7 +218,10 @@ fn decide_language(path: &str) -> ProgramLanguage {
         .unwrap_or(ProgramLanguage::Unknown(path.to_string()))
 }
 
-pub fn parser_and_args<'a>(repo_path: &'a str, opts: &CompressOptions) -> (String, Vec<String>) {
+pub fn parser_and_args<'a>(
+    repo_path: &'a str,
+    opts: &parse::CompressOptions,
+) -> (String, Vec<String>) {
     let lang = decide_language(repo_path);
     let path = rust_ast_path();
     let mut args = vec![

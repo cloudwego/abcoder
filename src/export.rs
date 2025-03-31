@@ -26,6 +26,13 @@ use crate::{
     utils::{cmd, errors::Error, git, split},
 };
 
+#[derive(Clone, Debug, Default)]
+pub struct ExportOptions {
+    pub csv: bool,
+    pub public_only: bool,
+    pub output: Option<String>,
+}
+
 fn to_csv_summary(repo: &Repository) -> String {
     let mut w = Writer::from_writer(Vec::new());
     // add header
@@ -176,101 +183,105 @@ pub fn to_csv_pkgs(repo: &Repository) -> String {
     String::from_utf8(w.into_inner().unwrap()).unwrap()
 }
 
-pub fn export_repo(repo: &Repository) {
-    let dir = Path::new(CONFIG.repo_dir.as_str());
-    // write summary to csv
-    let csv_sum = to_csv_summary(repo);
-    let path_sum = dir.join(repo.id.replace("/", "_").to_string() + "_summary.csv");
-    let mut file = File::create(&path_sum).unwrap();
-    file.write_all(csv_sum.as_bytes()).unwrap();
+pub fn to_markdown(repo: &Repository, opts: &ExportOptions) -> String {
+    let mut md = String::new();
 
-    // write summary to csv
-    let csv_decl = to_csv_decl(repo);
-    let path_decl = dir.join(repo.id.replace("/", "_").to_string() + "_decl.csv");
-    let mut file = File::create(&path_decl).unwrap();
-    file.write_all(csv_decl.as_bytes()).unwrap();
+    for (mod_name, module) in repo.modules.iter() {
+        if repo.is_external_mod(mod_name) {
+            continue;
+        }
 
-    // write package to csv
-    let csv_pkg = to_csv_pkgs(repo);
-    let path_pkg = dir.join(repo.id.replace("/", "_").to_string() + "_pkg.csv");
-    let mut file = File::create(&path_pkg).unwrap();
-    file.write_all(csv_pkg.as_bytes()).unwrap();
-}
+        // 添加模块标题
+        md.push_str(&format!("# {}\n\n", mod_name));
+        let lang = &module.language;
 
-pub fn force_parse_repo(repo_path: &String, opts: &CompressOptions) -> Result<Repository, Error> {
-    let (path, name) = parse_repo_path(repo_path)?;
-    // force to parse the repo
-    let data = parse_repo(name, &path, opts)?;
-    match compress::from_json(&name, String::from_utf8(data).unwrap().as_str()) {
-        Ok(repo) => Ok(repo),
-        Err(err) => Err(Error::Parse(err.to_string())),
+        for (pkg_name, pkg) in module.packages.iter() {
+            // 添加包标题
+            md.push_str(&format!("## {}\n\n", pkg_name));
+
+            // 添加函数
+            for (func_name, func) in pkg.functions.iter() {
+                if opts.public_only && !repo.is_exported(&func.id()) {
+                    continue;
+                }
+
+                md.push_str(&format!("### {}\n\n", func_name));
+                if let Some(data) = &func.compress_data {
+                    md.push_str(&format!("- Description\n\n{}\n\n", data));
+                }
+                md.push_str(&format!("- Position\n\n{}:{}\n\n", func.file, func.line));
+                md.push_str(&format!(
+                    "- Codes\n\n```{}\n{}\n```\n\n",
+                    lang, func.content
+                ));
+            }
+
+            // 添加类型
+            for (type_name, typ) in pkg.types.iter() {
+                if opts.public_only && !repo.is_exported(&typ.id()) {
+                    continue;
+                }
+
+                md.push_str(&format!("### {}\n\n", type_name));
+                if let Some(data) = &typ.compress_data {
+                    md.push_str(&format!("- Description\n\n{}\n\n", data));
+                }
+                md.push_str(&format!("- Position\n\n{}:{}\n\n", typ.file, typ.line));
+                md.push_str(&format!("- Codes\n\n```{}\n{}\n```\n\n", lang, typ.content));
+            }
+
+            // 添加变量
+            for (var_name, var) in pkg.vars.iter() {
+                if opts.public_only && !repo.is_exported(&var.id()) {
+                    continue;
+                }
+
+                md.push_str(&format!("### {}\n\n", var_name));
+                if let Some(data) = &var.compress_data {
+                    md.push_str(&format!("- Description\n\n{}\n\n", data));
+                }
+                md.push_str(&format!("- Position\n\n{}:{}\n\n", var.file, var.line));
+                md.push_str(&format!("- Codes\n\n```{}\n{}\n```\n\n", lang, var.content));
+            }
+        }
     }
+
+    md
 }
 
-fn parse_repo_path(repo_path: &String) -> Result<(PathBuf, &str), Error> {
-    let git_dir = Path::new(CONFIG.repo_dir.as_str());
+// ... existing code ...
 
-    let ps: Vec<&str> = repo_path.split('/').collect();
-    let (path, name) = if repo_path.ends_with(".git") || repo_path.starts_with("https://") {
-        // url
-        let repo_name = ps[ps.len() - 1].strip_suffix(".git").unwrap();
-        let path = git_dir.join(repo_name);
-        if !path.exists() {
-            // git clone
-            git::git_clone(&repo_path, &path).expect("Failed to clone repo");
-        }
-        (path, repo_name)
+pub fn export_repo(repo: &Repository, opts: &ExportOptions) {
+    let dir = if let Some(path) = &opts.output {
+        Path::new(path)
     } else {
-        // existing path
-        let path = git_dir.join(&repo_path);
-        if !path.exists() {
-            println!("path not exists: {:?}", path);
-            return Err(Error::GitCloneError("path not exists".to_string()));
-        }
-        // directly use the repo name
-        (path, ps[0])
-    };
-    Ok((path, name))
-}
-
-pub struct CompressOptions {
-    pub export_compress: bool,
-    pub not_load_external_symbol: bool,
-    pub no_need_comment: bool,
-}
-
-pub fn get_repo(repo_path: &String, opts: &CompressOptions) -> Result<Repository, Error> {
-    let (path, name) = parse_repo_path(repo_path)?;
-
-    // check if cache the result
-    let data = if let Some(data) = cache::get_cache().get(&name) {
-        data
-    } else {
-        // parse the repo
-        parse_repo(name, &path, opts)?
+        // pwd
+        Path::new(".")
     };
 
-    match compress::from_json(&name, String::from_utf8(data).unwrap().as_str()) {
-        Ok(repo) => Ok(repo),
-        Err(err) => Err(Error::Parse(err.to_string())),
-    }
-}
+    if opts.csv {
+        // write summary to csv
+        let csv_sum = to_csv_summary(repo);
+        let path_sum = dir.join(repo.id.replace("/", "_").to_string() + "_summary.csv");
+        let mut file = File::create(&path_sum).unwrap();
+        file.write_all(csv_sum.as_bytes()).unwrap();
 
-fn parse_repo(name: &str, path: &Path, opts: &CompressOptions) -> Result<Vec<u8>, Error> {
-    let (parser, args) = config::parser_and_args(path.to_str().unwrap(), opts);
-    // parse the repo by parse
-    match cmd::run_command_bytes(&parser, args) {
-        Ok(output) => {
-            cache::get_cache().put(&name, output.clone()).unwrap();
-            return Ok(output);
-        }
-        Err(err) => {
-            println!(
-                "plugin parse repo {} error: {}",
-                path.to_str().unwrap(),
-                err.to_string()
-            );
-            return Err(Error::Parse(err.to_string()));
-        }
+        // write summary to csv
+        let csv_decl = to_csv_decl(repo);
+        let path_decl = dir.join(repo.id.replace("/", "_").to_string() + "_decl.csv");
+        let mut file = File::create(&path_decl).unwrap();
+        file.write_all(csv_decl.as_bytes()).unwrap();
+
+        // write package to csv
+        let csv_pkg = to_csv_pkgs(repo);
+        let path_pkg = dir.join(repo.id.replace("/", "_").to_string() + "_pkg.csv");
+        let mut file = File::create(&path_pkg).unwrap();
+        file.write_all(csv_pkg.as_bytes()).unwrap();
+    } else {
+        // write markdown
+        let md = to_markdown(repo, opts);
+        let path_md = dir.join(repo.id.replace("/", "_").to_string() + ".md");
+        let mut file = File::create(&path_md).unwrap();
+        file.write_all(md.as_bytes()).unwrap();
     }
 }

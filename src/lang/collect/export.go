@@ -348,13 +348,13 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 func mapKind(kind lsp.SymbolKind) uniast.TypeKind {
 	switch kind {
 	case lsp.SKStruct:
-		return uniast.TypeKindStruct
+		return "struct"
 	case lsp.SKTypeParameter:
-		return uniast.TypeKindNamed
+		return "type-parameter"
 	case lsp.SKInterface:
-		return uniast.TypeKindInterface
+		return "interface"
 	case lsp.SKEnum:
-		return uniast.TypeKindEnum
+		return "enum"
 	default:
 		panic(fmt.Sprintf("unexpected kind %v", kind))
 	}
