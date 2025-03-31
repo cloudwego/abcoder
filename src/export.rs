@@ -256,7 +256,7 @@ pub fn export_repo(repo: &Repository, opts: &ExportOptions) {
         Path::new(path)
     } else {
         // pwd
-        Path::new(".")
+        Path::new(&CONFIG.work_dir)
     };
 
     if opts.csv {

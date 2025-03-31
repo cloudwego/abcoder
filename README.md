@@ -53,17 +53,14 @@ refactoring guidance.
 ## Running through Coze OpenAPI
 1. Set .env file for configuration on ABCoder's working directory. Taking Coze as an example:
 ```
-# Base directory for other XXX_DIRs, default to current directory
-WORK_DIR=./
+# cache for repo，AST and so on
+WORK_DIR=tmp_abcoder
 
-# DIRs below support both relative and absolute paths, and relative paths are relative to WORK_DIR
-REPO_DIR=tmp_repos
-CACHE_DIR=tmp_caches
-TOOLS_DIR=tools
-EXCLUDE_DIRS=target,gen-codes
+# exclude dirs for repo parsing, separated by comma
+EXCLUDE_DIRS=target,gen-codes 
 
-# coze|ollama 
-API_TYPE=coze 
+# LLM's api type
+API_TYPE=coze # coze|ollama 
 
 # LLM's output language
 LANGUAGE=zh 
@@ -88,6 +85,10 @@ cargo run --bin cmd compress https://xxx.git
    2. Parse the repository and store the AST in {CACHE_DIR}
    3. Call the LLM to compress the repository codes, and refresh the AST for each call.
 You can stop the process at anytime after step 2. You can restart the compressing by running the same command.
+
+5. Export the compressed results
+```
+cargo run --bin cmd export https://xxx.git --out-dir {OUTPUT_DIR}
 
 # Status Update
 
