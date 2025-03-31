@@ -348,14 +348,14 @@ type FileLine struct {
 	EndOffset int
 }
 
-type TypeKind int
+type TypeKind string
 
-const (
-	TypeKindStruct    = 0 // type struct
-	TypeKindInterface = 1 // type interface
-	TypeKindNamed     = 2 // type NamedXXX other..
-	TypeKindEnum      = 3 // type NamedXXX other..
-)
+// const (
+// 	TypeKindStruct    = 0 // type struct
+// 	TypeKindInterface = 1 // type interface
+// 	TypeKindNamed     = 2 // type NamedXXX other..
+// 	TypeKindEnum      = 3 // type NamedXXX other..
+// )
 
 // Type holds the information about a struct
 type Type struct {

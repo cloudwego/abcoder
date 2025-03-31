@@ -16,7 +16,8 @@ use std::{env, panic, process, thread, time::Duration};
 
 use ABCoder::{
     compress::compress::compress_all,
-    repo::{self, CompressOptions},
+    export::{self, ExportOptions},
+    parse::{self, CompressOptions},
 };
 
 #[derive(Clone, Debug)]
@@ -27,25 +28,8 @@ struct Options {
 
 #[derive(Clone, Debug)]
 enum Action {
-    Compress(CompressAction),
-}
-
-#[derive(Clone, Debug, Default)]
-struct CompressAction {
-    export_compress: bool,
-    force_update_ast: bool,
-    not_load_external_symbol: bool,
-    no_need_comment: bool,
-}
-
-impl CompressAction {
-    fn to_compress_options(&self) -> CompressOptions {
-        CompressOptions {
-            export_compress: self.export_compress,
-            not_load_external_symbol: self.not_load_external_symbol,
-            no_need_comment: self.no_need_comment,
-        }
-    }
+    Compress(CompressOptions),
+    Export(ExportOptions),
 }
 
 fn main() {
@@ -56,23 +40,28 @@ fn main() {
     match options.action {
         Action::Compress(cmp) => {
             if cmp.force_update_ast {
-                merge_compress(&options.repo_path, &cmp);
+                merge_repo(&options.repo_path, &cmp);
             }
             compress(&options.repo_path, &cmp);
-            if cmp.export_compress {
-                export_compress(&options.repo_path, &cmp);
-            }
+        }
+        Action::Export(exp) => {
+            export(&options.repo_path, &exp);
         }
     }
 }
 
 const USAGE: &str = "Usage: ABCoder <Action> <RepoPath> [Flags]
-Action: compress
-    compress: compress the repo. Including flags:
-      --export-compress: export the compress result
-      --force-update-ast: force parsing repo and merge the previous result 
-      --not-load-external-symbol: not load external external symbols to speed up parsing
-      --no-need-comment: not need comment in symbol content (only works for Go now)
+Actions:
+compress: compress the repo. Including flags:
+    --parse-only: only parse the repo, not compress it
+    --export-compress: export the compress result
+    --force-update-ast: force parsing repo and merge the previous result 
+    --not-load-external-symbol: not load external external symbols to speed up parsing
+    --no-need-comment: not need comment in symbol content (only works for Go now)
+export: export the compress result to csv or markdown (default). Including flags:
+    --csv: export the compress result to csv
+    --out-dir <path>: output directory path, default is current directory
+    --public-only: only export the public symbols
 ";
 
 fn parse_options() -> Options {
@@ -84,13 +73,10 @@ fn parse_options() -> Options {
 
     let action = match args[1].as_str() {
         "compress" => {
-            let mut compress_action = CompressAction::default();
+            let mut compress_action = CompressOptions::default();
             if args.len() > 3 {
                 for i in 3..args.len() {
                     match args[i].as_str() {
-                        "--export-compress" => {
-                            compress_action.export_compress = true;
-                        }
                         "--force-update-ast" => {
                             compress_action.force_update_ast = true;
                         }
@@ -104,8 +90,32 @@ fn parse_options() -> Options {
                     }
                 }
             }
-
             Action::Compress(compress_action)
+        }
+
+        "export" => {
+            let mut opts = ExportOptions::default();
+            if args.len() > 3 {
+                for i in 3..args.len() {
+                    match args[i].as_str() {
+                        "--out-dir" => {
+                            if args.len() <= i + 1 {
+                                println!("--out-dir must specify a value");
+                                process::exit(1);
+                            }
+                            opts.output = Some(args[i + 1].clone());
+                        }
+                        "--csv" => {
+                            opts.csv = true;
+                        }
+                        "--public-only" => {
+                            opts.public_only = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Action::Export(opts)
         }
 
         _ => {
@@ -120,17 +130,22 @@ fn parse_options() -> Options {
     }
 }
 
-fn compress(repo_path: &String, cmp: &CompressAction) {
+fn compress(repo_path: &String, cmp: &CompressOptions) {
     // recoverable logic
     let run = || {
         // get the repo
-        let repo = repo::get_repo(repo_path, &cmp.to_compress_options());
+        let repo = parse::get_repo(repo_path, &cmp);
         if let Err(err) = repo {
             println!("get repo error: {:?}", err);
             process::exit(1);
         }
 
         let mut repo = repo.unwrap();
+        repo.save_to_cache();
+        println!("successfully parsed repo: {}", repo.id);
+        if cmp.parse_only {
+            return;
+        }
 
         // compress the repo
         println!("compressing repo: {}", repo.id);
@@ -157,9 +172,9 @@ fn compress(repo_path: &String, cmp: &CompressAction) {
     }
 }
 
-fn export_compress(repo_path: &String, cmp: &CompressAction) {
+fn export(repo_path: &String, cmp: &ExportOptions) {
     // get the repo
-    let repo = repo::get_repo(repo_path, &cmp.to_compress_options());
+    let repo = parse::get_repo(repo_path, &CompressOptions::default());
     if let Err(err) = repo {
         println!("get repo error: {:?}", err);
 
@@ -170,16 +185,14 @@ fn export_compress(repo_path: &String, cmp: &CompressAction) {
 
     // export the compress
     println!("export repo: {}", repo.id);
-    repo::export_repo(&mut repo);
-    // save the compressed repo
-    repo.save_to_cache();
+    export::export_repo(&mut repo, cmp);
 
-    println!("successfully compressed repo: {}", repo.id);
+    println!("successfully exported repo: {}", repo.id);
 }
 
-fn merge_compress(repo_path: &String, cmp: &CompressAction) {
+fn merge_repo(repo_path: &String, cmp: &CompressOptions) {
     // get old repo
-    let repo = repo::get_repo(repo_path, &cmp.to_compress_options());
+    let repo = parse::get_repo(repo_path, &cmp);
     if let Err(err) = repo {
         println!("get repo error: {:?}", err);
         process::exit(1);
@@ -187,7 +200,7 @@ fn merge_compress(repo_path: &String, cmp: &CompressAction) {
     let mut repo = repo.unwrap();
 
     // parse new repo
-    let nrepo = repo::force_parse_repo(repo_path, &cmp.to_compress_options());
+    let nrepo = parse::force_parse_repo(repo_path, &cmp);
     if let Err(err) = nrepo {
         println!("parse repo error: {:?}", err);
         process::exit(1);

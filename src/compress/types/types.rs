@@ -127,6 +127,10 @@ impl<'de> Deserialize<'de> for NodeType {
 }
 
 impl Repository {
+    pub fn is_external_mod(&self, mod_path: &str) -> bool {
+        return mod_path.contains("@") || mod_path == "std" || mod_path == "";
+    }
+
     pub fn get_id_content(&self, id: &Identity) -> Option<String> {
         if let Some(m) = self.modules.get(&id.mod_path) {
             if let Some(pkg) = m.packages.get(&id.pkg_path) {
@@ -354,6 +358,8 @@ pub struct Module {
     pub packages: HashMap<String, Package>,
     #[serde(rename = "Files")]
     pub files: HashMap<String, File>,
+    #[serde(rename = "Language")]
+    pub language: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -388,7 +394,7 @@ pub struct Package {
     pub types: HashMap<String, Struct>,
     #[serde(rename = "Vars")]
     pub vars: HashMap<String, Variant>,
-
+    #[serde(rename = "compress_data")]
     pub compress_data: Option<String>,
 }
 
@@ -556,6 +562,7 @@ pub struct Variant {
     pub content: String,
 
     // compress_data
+    #[serde(rename = "compress_data")]
     pub compress_data: Option<String>,
 }
 
@@ -611,6 +618,7 @@ pub struct Function {
     pub global_vars: Option<Vec<Identity>>,
 
     // compress_data
+    #[serde(rename = "compress_data")]
     pub compress_data: Option<String>,
 }
 
@@ -653,7 +661,7 @@ pub struct Struct {
     #[serde(rename = "Exported", default)]
     pub is_exported: bool,
     #[serde(rename = "TypeKind")]
-    type_kind: u8,
+    pub type_kind: String,
     #[serde(rename = "Content")]
     pub(crate) content: String,
     #[serde(rename = "SubStruct")]
@@ -664,6 +672,7 @@ pub struct Struct {
     pub(crate) methods: Option<HashMap<String, Identity>>,
 
     // compress_data
+    #[serde(rename = "compress_data")]
     pub compress_data: Option<String>,
 }
 

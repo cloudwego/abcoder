@@ -175,11 +175,11 @@ func isPkgScope(scope *types.Scope) bool {
 func getTypeKind(n ast.Expr) TypeKind {
 	switch n.(type) {
 	case *ast.StructType:
-		return TypeKindStruct
+		return "struct"
 	case *ast.InterfaceType:
-		return TypeKindInterface
+		return "interface"
 	default:
-		return TypeKindNamed
+		return "typedef"
 	}
 }
 
