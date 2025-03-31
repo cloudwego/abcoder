@@ -51,7 +51,8 @@ fn main() {
 }
 
 const USAGE: &str = "Usage: ABCoder <Action> <RepoPath> [Flags]
-Actions:
+RepoPath: the path of the repo to compress. Can be a local path or a git url.
+Actions: compress|export
 compress: compress the repo. Including flags:
     --parse-only: only parse the repo, not compress it
     --export-compress: export the compress result
@@ -60,7 +61,7 @@ compress: compress the repo. Including flags:
     --no-need-comment: not need comment in symbol content (only works for Go now)
 export: export the compress result to csv or markdown (default). Including flags:
     --csv: export the compress result to csv
-    --out-dir <path>: output directory path, default is current directory
+    --out-dir <path>: output directory path, default is $WORK_DIR
     --public-only: only export the public symbols
 ";
 

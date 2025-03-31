@@ -41,7 +41,7 @@ pub fn force_parse_repo(repo_path: &String, opts: &CompressOptions) -> Result<Re
 }
 
 fn parse_repo_path(repo_path: &String) -> Result<PathBuf, Error> {
-    let git_dir = Path::new(CONFIG.repo_dir.as_str());
+    let git_dir = Path::new(CONFIG.work_dir.as_str());
 
     let ps: Vec<&str> = repo_path.split('/').collect();
     let path = if repo_path.ends_with(".git") || repo_path.starts_with("https://") {

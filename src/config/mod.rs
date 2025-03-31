@@ -28,13 +28,10 @@ pub enum Language {
 #[derive(Debug)]
 pub struct Config {
     pub work_dir: String,
-    pub repo_dir: String,
-    pub cache_dir: String,
     pub parser_dir: String,
     pub api_type: String,
     pub maas_model_name: String,
     pub mass_http_url: String,
-    pub tools_dir: String,
 
     pub coze_api_token: Option<String>,
     pub coze_bot_id: Option<String>,
@@ -46,23 +43,7 @@ pub struct Config {
 }
 
 fn default_work_dir() -> String {
-    std::env::current_dir()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string()
-}
-
-fn default_repo_dir() -> String {
-    "tmp_repos".to_string()
-}
-
-fn default_tools_dir() -> String {
-    "tools".to_string()
-}
-
-fn default_cache_dir() -> String {
-    "tmp_caches".to_string()
+    "tmp_abcoder".to_string()
 }
 
 fn default_parser_dir() -> String {
@@ -81,11 +62,8 @@ impl Config {
     pub fn new() -> Self {
         Self {
             work_dir: default_work_dir(),
-            repo_dir: default_repo_dir(),
-            cache_dir: default_cache_dir(),
             parser_dir: default_parser_dir(),
             api_type: default_api_type(),
-            tools_dir: default_tools_dir(),
             maas_model_name: default_maas_model_name(),
             mass_http_url: "".to_string(),
             coze_api_token: None,
@@ -97,13 +75,10 @@ impl Config {
     }
 
     pub fn parse_from_env() -> Self {
-        let mut s = Self {
+        let s = Self {
             work_dir: std::env::var("WORK_DIR").unwrap_or_else(|_| default_work_dir()),
-            repo_dir: std::env::var("REPO_DIR").unwrap_or_else(|_| default_repo_dir()),
-            cache_dir: std::env::var("CACHE_DIR").unwrap_or_else(|_| default_cache_dir()),
             parser_dir: std::env::var("PARSER_DIR").unwrap_or_else(|_| default_parser_dir()),
             api_type: std::env::var("API_TYPE").unwrap_or_else(|_| default_api_type()),
-            tools_dir: std::env::var("TOOLS_DIR").unwrap_or_else(|_| default_tools_dir()),
             maas_model_name: std::env::var("MAAS_MODEL_NAME")
                 .unwrap_or_else(|_| default_maas_model_name()),
             mass_http_url: std::env::var("MASS_HTTP_URL").unwrap_or_else(|_| "".to_string()),
@@ -121,35 +96,6 @@ impl Config {
                 })
                 .unwrap_or(Language::Chinese),
         };
-
-        if !s.repo_dir.starts_with("/") {
-            s.repo_dir = Path::new(&s.work_dir)
-                .join(s.repo_dir)
-                .to_str()
-                .unwrap()
-                .to_string();
-        }
-        if !s.cache_dir.starts_with("/") {
-            s.cache_dir = Path::new(&s.work_dir)
-                .join(s.cache_dir)
-                .to_str()
-                .unwrap()
-                .to_string();
-        }
-        if !s.parser_dir.starts_with("/") {
-            s.parser_dir = Path::new(&s.work_dir)
-                .join(s.parser_dir)
-                .to_str()
-                .unwrap()
-                .to_string();
-        }
-        if !s.tools_dir.starts_with("/") {
-            s.tools_dir = Path::new(&s.work_dir)
-                .join(s.tools_dir)
-                .to_str()
-                .unwrap()
-                .to_string();
-        }
         s
     }
 }
@@ -161,18 +107,8 @@ lazy_static! {
     };
 }
 
-pub fn go_ast_path() -> String {
-    Path::new(&CONFIG.tools_dir)
-        .join("parser")
-        .join("go_ast")
-        .to_str()
-        .unwrap()
-        .to_string()
-}
-
-pub fn rust_ast_path() -> String {
-    Path::new(&CONFIG.tools_dir)
-        .join("parser")
+pub fn parser_path() -> String {
+    Path::new(&CONFIG.parser_dir)
         .join("lang")
         .to_str()
         .unwrap()
@@ -223,7 +159,8 @@ pub fn parser_and_args<'a>(
     opts: &parse::CompressOptions,
 ) -> (String, Vec<String>) {
     let lang = decide_language(repo_path);
-    let path = rust_ast_path();
+    let path = parser_path();
+    println!("parser path: {:?}", path);
     let mut args = vec![
         "collect".to_string(),
         lang.to_string(),
