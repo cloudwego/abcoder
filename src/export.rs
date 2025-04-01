@@ -198,6 +198,9 @@ pub fn to_markdown(repo: &Repository, opts: &ExportOptions) -> String {
         for (pkg_name, pkg) in module.packages.iter() {
             // 添加包标题
             md.push_str(&format!("## {}\n\n", pkg_name));
+            if let Some(data) = &pkg.compress_data {
+                md.push_str(&format!("{}\n\n", data));
+            }
 
             // 添加函数
             for (func_name, func) in pkg.functions.iter() {
@@ -207,7 +210,7 @@ pub fn to_markdown(repo: &Repository, opts: &ExportOptions) -> String {
 
                 md.push_str(&format!("### {}\n\n", func_name));
                 if let Some(data) = &func.compress_data {
-                    md.push_str(&format!("- Description\n\n{}\n\n", data));
+                    md.push_str(&format!("{}\n\n", data));
                 }
                 md.push_str(&format!("- Position\n\n{}:{}\n\n", func.file, func.line));
                 md.push_str(&format!(
@@ -224,7 +227,7 @@ pub fn to_markdown(repo: &Repository, opts: &ExportOptions) -> String {
 
                 md.push_str(&format!("### {}\n\n", type_name));
                 if let Some(data) = &typ.compress_data {
-                    md.push_str(&format!("- Description\n\n{}\n\n", data));
+                    md.push_str(&format!("{}\n\n", data));
                 }
                 md.push_str(&format!("- Position\n\n{}:{}\n\n", typ.file, typ.line));
                 md.push_str(&format!("- Codes\n\n```{}\n{}\n```\n\n", lang, typ.content));
@@ -238,7 +241,7 @@ pub fn to_markdown(repo: &Repository, opts: &ExportOptions) -> String {
 
                 md.push_str(&format!("### {}\n\n", var_name));
                 if let Some(data) = &var.compress_data {
-                    md.push_str(&format!("- Description\n\n{}\n\n", data));
+                    md.push_str(&format!("{}\n\n", data));
                 }
                 md.push_str(&format!("- Position\n\n{}:{}\n\n", var.file, var.line));
                 md.push_str(&format!("- Codes\n\n```{}\n{}\n```\n\n", lang, var.content));

@@ -59,7 +59,7 @@ compress: compress the repo. Including flags:
     --force-update-ast: force parsing repo and merge the previous result 
     --not-load-external-symbol: not load external external symbols to speed up parsing
     --no-need-comment: not need comment in symbol content (only works for Go now)
-export: export the compress result to csv or markdown (default). Including flags:
+export: export the result to csv or markdown (default). Including flags:
     --csv: export the compress result to csv
     --out-dir <path>: output directory path, default is $WORK_DIR
     --public-only: only export the public symbols

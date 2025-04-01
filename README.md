@@ -89,6 +89,7 @@ You can stop the process at anytime after step 2. You can restart the compressin
 5. Export the compressed results
 ```
 cargo run --bin cmd export https://xxx.git --out-dir {OUTPUT_DIR}
+```
 
 # Status Update
 
