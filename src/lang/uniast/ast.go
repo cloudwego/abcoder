@@ -82,6 +82,7 @@ type Module struct {
 	Packages     map[PkgPath]*Package // pkage import path => Package
 	Dependencies map[string]string    // module name => module_path@version
 	Files        map[string]*File     // relative path => file info
+	CompressData *string              `json:"compress_data,omitempty"` // module compress info
 }
 
 func (r Repository) GetFileById(id Identity) *File {

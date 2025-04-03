@@ -31,6 +31,7 @@ use crate::config::CONFIG;
 use crate::storage::cache::get_cache;
 use crate::storage::cache::load_repo;
 
+use super::types::types::Module;
 use super::types::types::ToCompressVar;
 use super::types::types::Variant;
 
@@ -50,13 +51,17 @@ pub fn from_json(id: &str, json: &str) -> Result<Repository, Box<dyn Error>> {
     Ok(f)
 }
 
+pub fn is_externa_mod(modpath: &str) -> bool {
+    return modpath == "" || modpath.contains("@");
+}
+
 pub async fn compress_all(repo: &mut Repository) {
     let mut to_compress_func = Vec::new();
     let mut to_compress_type = Vec::new();
     let mut to_compress_var = Vec::new();
 
-    for (_, _mod) in &repo.modules {
-        if _mod.dir == "" {
+    for (mpath, _mod) in &repo.modules {
+        if is_externa_mod(mpath) {
             // NOTICE: empty dir means it's a external module, which is only used for lookup symbols
             continue;
         }
@@ -93,17 +98,32 @@ pub async fn compress_all(repo: &mut Repository) {
         cascade_compress_struct(&id, repo, &mut m).await;
     }
 
-    for (mname, _mod) in &repo.clone().modules {
-        if _mod.dir == "" {
+    for (mpath, _mod) in repo.clone().modules {
+        if is_externa_mod(&mpath) {
             // NOTICE: empty dir means it's a external module, which is only used for lookup symbols
             continue;
         }
         for (id, pkg) in &_mod.packages {
             if pkg.compress_data.is_none() {
-                compress_package(&id, mname, repo).await;
+                compress_package(&id, &mpath, repo).await;
             }
         }
+        compress_module(&mpath, repo).await;
+        repo.save_to_cache();
     }
+}
+
+pub async fn compress_module(modpath: &str, repo: &mut Repository) {
+    let module = repo.modules.get_mut(modpath).unwrap();
+    let compress_data = module.to_compress();
+    let compress_data =
+        llm_compress_module(serde_json::to_string(&compress_data).unwrap().as_str()).await;
+    if compress_data.is_none() {
+        return;
+    }
+    let compress_data = compress_data.unwrap();
+    module.compress_data = Some(compress_data);
+    println!("finish to compress module: {}", module.name);
 }
 
 pub async fn compress_package(id: &str, module: &str, repo: &mut Repository) {
@@ -809,6 +829,12 @@ pub async fn cascade_compress_struct(
         }
     }
     // panic!("empty compress for {:?}", id)
+}
+
+async fn llm_compress_module(m: &str) -> Option<String> {
+    let compressing = ToCompress::ToCompressModule(m.to_string());
+    let compress_data = compress(&compressing).await;
+    Option::from(compress_data)
 }
 
 async fn llm_compress_package(pkg: &str) -> Option<String> {
