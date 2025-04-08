@@ -239,6 +239,7 @@ impl Repository {
                 self.modules.insert(mod_name.clone(), _mod.clone());
             }
         }
+        self.graph = other.graph.clone();
     }
 
     pub fn save_to_cache(&self) {
@@ -357,8 +358,8 @@ pub struct Module {
     #[serde(rename = "Packages")]
     pub packages: HashMap<String, Package>,
     #[serde(rename = "Files")]
-    pub files: HashMap<String, File>,
-    #[serde(rename = "Language")]
+    pub files: Option<HashMap<String, File>>,
+    #[serde(rename = "Language", default)]
     pub language: String,
     #[serde(rename = "compress_data")]
     pub compress_data: Option<String>,
