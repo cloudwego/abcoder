@@ -50,6 +50,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			println(abs)
 			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, Options{
 				ReferCodeDepth: 1,
+				NeedTest:       true,
 			})
 			r, err := p.ParseRepo()
 			if err != nil {
@@ -63,7 +64,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			}
 			_ = pj
 			_ = os.WriteFile("ast.json", pj, 0644)
-			n, err := p.getNode(NewIdentity("github.com/cloudwego/localsession", "github.com/cloudwego/localsession/backup", "RecoverCtxOndemands"))
+			n, err := p.getNode(NewIdentity("github.com/cloudwego/localsession", "github.com/cloudwego/localsession/backup", "RecoverCtxOnDemands"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,7 +72,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			}
-			println(string(jf))
+			os.WriteFile("node.json", jf, 0644)
 		})
 	}
 }

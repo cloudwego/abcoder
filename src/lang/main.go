@@ -54,16 +54,16 @@ func main() {
 	// Define flags
 	var flagLsp string
 	var flagVerbose, flagDebug bool
-	var loadExternalSymbol bool
-	var NoNeedComment bool
-	var excludes []string
+	var excludes *[]string
+	var opts collect.CollectOption
 
 	var rootCmd = &cobra.Command{
 		Use: `lang <Action> <Language> <RepoPath>
 Action:
    collect		Parse repo and export AST
 Language:
-   rust			For rust codes`,
+   rust			For rust codes
+   go  			For go codes`,
 		Short: "Lang: An universal language analyzer based on Language-Server-Protocol",
 		Args:  cobra.ExactArgs(3),
 
@@ -103,12 +103,10 @@ Language:
 			ctx := context.Background()
 			switch action {
 			case "collect":
-				opts := collect.CollectOption{
-					LoadExternalSymbol: loadExternalSymbol,
-					Excludes:           excludes,
-					Language:           lang,
-					NoNeedComment:      NoNeedComment,
+				if excludes != nil {
+					opts.Excludes = *excludes
 				}
+				opts.Language = lang
 				repo, err := collectSymbol(ctx, client, repoPath, opts)
 				if err != nil {
 					log.Error("Failed to collect symbols: %v\n", err)
@@ -139,9 +137,10 @@ Language:
 	rootCmd.Flags().StringVar(&flagLsp, "lsp", "", "Specify the language server path.")
 	rootCmd.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "Verbose mode.")
 	rootCmd.Flags().BoolVarP(&flagDebug, "debug", "d", false, "Debug mode.")
-	rootCmd.Flags().BoolVarP(&loadExternalSymbol, "load-external-symbol", "", false, "load external symbols into results")
-	rootCmd.Flags().StringSlice("exclude", excludes, "exclude files or directories")
-	rootCmd.Flags().BoolVarP(&NoNeedComment, "no-need-comment", "", false, "do not need comment (only works for Go now)")
+	rootCmd.Flags().BoolVarP(&opts.LoadExternalSymbol, "load-external-symbol", "", false, "load external symbols into results")
+	excludes = rootCmd.Flags().StringSlice("exclude", []string{}, "exclude files or directories")
+	rootCmd.Flags().BoolVarP(&opts.NoNeedComment, "no-need-comment", "", false, "do not need comment (only works for Go now)")
+	rootCmd.Flags().BoolVarP(&opts.NeedTest, "need-test", "", false, "need parse test files (only works for Go now)")
 
 	// Execute the command
 	if err := rootCmd.Execute(); err != nil {

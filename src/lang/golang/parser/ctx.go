@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -82,9 +83,12 @@ func (p *GoParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	if pkg == nil {
 		return fmt.Errorf("cannot find package %s", id.PkgPath)
 	}
-	for i, fpath := range pkg.GoFiles {
-		file := pkg.Syntax[i]
+	for _, fpath := range pkg.GoFiles {
 		bs := p.getFileBytes(fpath)
+		file, err := parser.ParseFile(pkg.Fset, fpath, bs, parser.ParseComments)
+		if err != nil {
+			return err
+		}
 		impts, e := p.parseImports(pkg.Fset, bs, mod, file.Imports)
 		if e != nil {
 			err = e

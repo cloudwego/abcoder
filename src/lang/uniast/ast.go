@@ -161,6 +161,7 @@ func (p *Module) GetDependency(pkg string) string {
 // Package
 type Package struct {
 	IsMain bool
+	IsTest bool
 	PkgPath
 	Functions    map[string]*Function // Function name (may be {{func}} or {{struct.method}}) => Function
 	Types        map[string]*Type     // type name => type define
@@ -415,8 +416,9 @@ type Type struct {
 
 type Var struct {
 	IsExported bool
-	IsConst    bool
-	IsPointer  bool // if its Type is a pointer type
+
+	IsConst   bool
+	IsPointer bool // if its Type is a pointer type
 	Identity
 	FileLine
 	Type    *Identity `json:",omitempty"`
