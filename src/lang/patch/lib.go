@@ -15,6 +15,7 @@
 package patch
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -47,7 +48,33 @@ type Patcher struct {
 	Options
 	repo    *uniast.Repository
 	patches map[string][]patchNode
-	ps      map[uniast.Language]uniast.Writer
+}
+
+func (p Patcher) SaveTo(dir string, saveRepo bool) {
+	if saveRepo {
+		js, err := json.Marshal(p.repo)
+		if err != nil {
+			fmt.Printf("marshal repo failed: %v", err)
+		} else {
+			rfilepath := filepath.Join(dir, "repo.json")
+			if err := os.WriteFile(rfilepath, js, 0644); err != nil {
+				fmt.Printf("save repo failed: %v", err)
+			}
+		}
+	}
+
+	patches := p.patches
+	if patches == nil {
+		return
+	}
+	js, err := json.Marshal(patches)
+	if err != nil {
+		fmt.Printf("marshal patches failed: %v", err)
+	}
+	pfilepath := filepath.Join(dir, "patches.json")
+	if err := os.WriteFile(pfilepath, js, 0644); err != nil {
+		fmt.Printf("save patches failed: %v", err)
+	}
 }
 
 type Options struct {

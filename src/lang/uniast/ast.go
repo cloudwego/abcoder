@@ -67,6 +67,23 @@ type Import struct {
 	Path  string
 }
 
+func NewImport(alias *string, path string) Import {
+	return Import{
+		Alias: alias,
+		Path:  path,
+	}
+}
+
+func (i Import) Equals(other Import) bool {
+	if i.Alias == nil && other.Alias == nil {
+		return i.Path == other.Path
+	}
+	if i.Alias == nil || other.Alias == nil {
+		return false
+	}
+	return *i.Alias == *other.Alias && i.Path == other.Path
+}
+
 func NewFile(path string) *File {
 	// abs, _ := filepath.Abs(path)
 	ret := File{
