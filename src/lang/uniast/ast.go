@@ -37,6 +37,16 @@ type Repository struct {
 	Graph   map[string]*Node
 }
 
+func (r Repository) InternalModules() []*Module {
+	var ret []*Module
+	for k, v := range r.Modules {
+		if !IsExternalModule(k) {
+			ret = append(ret, v)
+		}
+	}
+	return ret
+}
+
 func NewRepository(name string) Repository {
 	ret := Repository{
 		Name:    name,
@@ -82,6 +92,7 @@ type Module struct {
 	Packages     map[PkgPath]*Package // pkage import path => Package
 	Dependencies map[string]string    // module name => module_path@version
 	Files        map[string]*File     // relative path => file info
+	CompressData *string              `json:"compress_data,omitempty"` // module compress info
 }
 
 func (r Repository) GetFileById(id Identity) *File {
@@ -164,9 +175,10 @@ func ModPathName(mod ModPath) string {
 
 // Identity holds identity information about a third party declaration
 type Identity struct {
-	ModPath        // ModPath is the module which the package belongs to
-	PkgPath        // Import Path of the third party package
-	Name    string // Unique Name of declaration (FunctionName, TypeName.MethodName, InterfaceName<TypeName>.MethodName, or TypeName)
+	ModPath `json:"ModPath" jsonschema:"description=the compiling module of the ast node, the format is {ModName} or {ModName}@{Version}"` // ModPath is the module which the package belongs to
+	PkgPath `json:"PkgPath" jsonschema:"description=the namespace of the ast node"`                                                        // Import Path of the third party package
+
+	Name string `json:"Name" jsonschema:"description=unique name of the ast node, the format is one of {FunctionName}, {TypeName}.{MethodName}, {InterfaceName}<{TypeName}>.{MethodName}, {TypeName}"` // Unique Name of declaration (FunctionName, TypeName.MethodName, InterfaceName<TypeName>.MethodName, or TypeName)
 }
 
 func NewIdentity(mod, pkg, name string) Identity {

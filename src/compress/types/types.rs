@@ -239,6 +239,7 @@ impl Repository {
                 self.modules.insert(mod_name.clone(), _mod.clone());
             }
         }
+        self.graph = other.graph.clone();
     }
 
     pub fn save_to_cache(&self) {
@@ -357,9 +358,29 @@ pub struct Module {
     #[serde(rename = "Packages")]
     pub packages: HashMap<String, Package>,
     #[serde(rename = "Files")]
-    pub files: HashMap<String, File>,
-    #[serde(rename = "Language")]
+    pub files: Option<HashMap<String, File>>,
+    #[serde(rename = "Language", default)]
     pub language: String,
+    #[serde(rename = "compress_data")]
+    pub compress_data: Option<String>,
+}
+
+impl Module {
+    pub fn to_compress(&self) -> ToCompressModule {
+        let mut packages = Vec::new();
+        for (_, p) in self.packages.iter() {
+            packages.push(Description {
+                name: &p.id,
+                description: p.compress_data.as_ref().unwrap(),
+            });
+        }
+
+        ToCompressModule {
+            name: &self.name,
+            dir: &self.dir,
+            packages: Some(packages),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -767,6 +788,16 @@ pub(crate) struct ToCompressPkg<'a> {
     pub(crate) types: Option<Vec<Description<'a>>>,
     #[serde(rename = "Variables")]
     pub(crate) vars: Option<Vec<Description<'a>>>,
+}
+
+#[derive(Serialize, Debug)]
+pub(crate) struct ToCompressModule<'a> {
+    #[serde(rename = "Name")]
+    pub(crate) name: &'a str,
+    #[serde(rename = "Dir")]
+    pub(crate) dir: &'a str,
+    #[serde(rename = "Packages")]
+    pub(crate) packages: Option<Vec<Description<'a>>>,
 }
 
 #[derive(Serialize, Debug)]

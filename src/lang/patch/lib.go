@@ -55,9 +55,10 @@ type Options struct {
 	OutDir  string
 }
 
-func NewPatcher(opts Options) *Patcher {
+func NewPatcher(repo *uniast.Repository, opts Options) *Patcher {
 	return &Patcher{
 		Options: opts,
+		repo:    repo,
 	}
 }
 
@@ -98,6 +99,7 @@ next_dep:
 		})
 	}
 	n := patchNode{
+		Identity: patch.Id,
 		FileLine: node.FileLine(),
 		Codes:    patch.Codes,
 		File:     f,
@@ -174,7 +176,7 @@ func (p *Patcher) Flush() error {
 	}
 
 	// write origins
-	for _, mod := range p.repo.Modules {
+	for _, mod := range p.repo.InternalModules() {
 		for _, f := range mod.Files {
 			if p.patches[f.Path] != nil {
 				continue

@@ -14,10 +14,6 @@
 
 package uniast
 
-import (
-	"fmt"
-)
-
 func (r *Repository) GetNode(id Identity) *Node {
 	key := id.Full()
 	node, ok := r.Graph[key]
@@ -55,6 +51,7 @@ func (r *Repository) SetNode(id Identity, typ NodeType) *Node {
 		node = &Node{
 			Identity: id,
 			Type:     typ,
+			Repo:     r,
 		}
 		r.Graph[key] = node
 	}
@@ -89,6 +86,7 @@ func (r *Repository) AddRelation(node *Node, dep Identity) {
 	if !ok {
 		nd = &Node{
 			Identity: dep,
+			Repo:     r,
 		}
 		r.Graph[key] = nd
 	}
@@ -209,9 +207,6 @@ func (t NodeType) MarshalJSON() ([]byte, error) {
 
 func (t *NodeType) UnmarshalJSON(b []byte) error {
 	typ := NewNodeType(string(b))
-	if typ == UNKNOWN {
-		return fmt.Errorf("unknown node type: %s", b)
-	}
 	*t = typ
 	return nil
 }

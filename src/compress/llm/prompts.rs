@@ -30,6 +30,9 @@ macro_rules! choose_prompt_lang {
 
 pub fn make_compress_prompt(to_compress: &ToCompress) -> String {
     match to_compress {
+        ToCompress::ToCompressModule(f) => {
+            choose_prompt_lang!(PROMPT_COMPRESS_MOD).replace("{{DATA}}", f)
+        }
         ToCompress::ToCompressType(t) => {
             choose_prompt_lang!(PROMPT_COMPRESS_TYPE).replace("{{DATA}}", t)
         }
@@ -462,7 +465,7 @@ bufferSizeLimit is an integer variable with an initial value of integer 1024 tha
 
 const PROMPT_COMPRESS_PKG_ZH: &str = r##"
 # 角色
-你是一名经验丰富的工程师，专门研究lang，并深入了解其各种包。你的主要职责是利用其他开发人员提供的有关公共函数和类型的数据，简化并总结lang包的基本功能。你的目标是通过使这些包更易理解，帮助对这些包了解较少的工程师。
+你是一名经验丰富的工程师，并深入了解其各种包。你的主要职责是利用其他开发人员提供的有关公共函数和类型的数据，简化并总结包的基本功能。你的目标是通过使这些包更易理解，帮助对这些包了解较少的工程师。
 
 # 提示
 
@@ -654,4 +657,125 @@ Key global variables:
 
 {{DATA}}
 
+"##;
+
+const PROMPT_COMPRESS_MOD_ZH: &str = r##"
+# 角色
+你是一名经验丰富的工程师，并深入了解其各种模块。你的主要职责是利用其他开发人员提供的有关公共函数和类型的数据，简化并总结模块的基本功能。你的目标是通过使这些包更易理解，帮助对这些包了解较少的工程师。
+
+# 提示
+
+## 输入格式(JSON)
+包含 一个具体的类型定义 及 其依赖的其他语言符号描述：
+- "Name": 模块名称
+- "Dir": 模块所处的相对仓库位置
+    - "Description": 该方法的代码或总结, 格式为字符串
+- "Packages": 格式为数组。该数组中的每个对象表示此模块内每个子包描述：
+    - "Name": 使用该包的名称，格式为字符串
+    - "Description": 该包的总结，格式为字符串
+
+
+## 输出格式（text）
+直接输出总结内容。不要输出JSON（IMPORTANT）！
+
+## 总结内容
+- 该模块的主要功能和用途
+- 该模块的一些关键函数和类型的描述
+
+
+# 约束
+- 专注于高度总结模块的基本功能，避免深入具体实现细节。
+- 编写简短且易于理解的总结，供其他工程师参考。
+- 保持与提供的输入数据一致的技术术语。
+- 输出字符限制为2000字符。
+
+
+# 示例
+
+## 输入
+{
+    "Name": "github.com/cloudwego/localsession",
+    "Dir": ".",
+    "Packages": [
+        {
+            "Description": "该包用于管理会话上下文，并定义了通用的Session接口",
+            "Name": "github.com/cloudwego/localsession",
+        },
+        {
+            "Description": "该包用于处理具体的上下文的metainfo等信息的兜底方式",
+            "Name": "github.com/cloudwego/localsession/backup",
+        }
+    ]
+}
+
+## 输出
+此模块位于当前目录，为应用中的会话管理提供工具，特别关注会话上下文的备份和恢复机制。它包括创建、备份、恢复和清除会话上下文的功能，以及默认的上下文兜底方式。
+关键包：
+    - github.com/cloudwego/localsession: 该包用于管理会话上下文，并定义了通用的Session接口
+    - github.com/cloudwego/localsession/backup: 该包用于处理具体的上下文的metainfo等信息的兜底方式
+
+
+# 现在，请开始处理如下输入：
+
+{{DATA}}
+
+"##;
+
+const PROMPT_COMPRESS_MOD_EN: &str = r##"
+# Character
+You are an experienced engineer and have in-depth knowledge of its various modules. Your primary responsibility is to simplify and summarize the basic functionality of the module using data about common functions and types provided by other developers. Your goal is to help engineers who know less about these packages by making them easier to understand.
+
+# Tips
+
+## Input format (JSON)
+Contains a specific type definition and descriptions of other language symbols on which it depends:
+- Name: indicates the module name
+- "Dir": indicates the relative repository location of the module
+- "Description": indicates the code or summary of the method. The format is a string
+- "Packages": in array format. Each object in this array represents each subpackage description within this module:
+- "Name": indicates the name of the package. The format is a string
+- "Description": indicates the summary of the package. The format is a string
+
+
+## Output format (text)
+Output summary content directly. Do not output JSON (IMPORTANT)!
+
+## Summarize the content
+- Main functions and uses of the module
+- Description of some of the key functions and types of the module
+
+
+# Constraint
+- Focus on the basic functions of highly summarized modules and avoid delving into specific implementation details.
+- Write short and easy to understand summaries for other engineers to refer to.
+- Technical terms that are consistent with the input data provided.
+- The output character limit is 2000 characters.
+
+
+# Examples
+
+## Input
+{
+    "Name": "github.com/cloudwego/localsession",
+    "Dir": ".",
+    "Packages": [
+            {
+                "Description": "This package manages the Session context and defines the generic session interface ",
+                "Name": "github.com/cloudwego/localsession",
+            },
+            {
+                "Description": "This package is used to handle the specific context of metainfo and other information in the back of the way ",
+                "Name": "github.com/cloudwego/localsession/backup",
+            }
+        ]
+}
+
+## Output
+This module is located in the current directory and provides tools for session management in the application, with a special focus on backup and recovery mechanisms for session context. It includes the ability to create, back up, restore, and clear session context, as well as the default context bypass.
+Key package:
+- github.com/cloudwego/localsession: this package is used to manage Session context, and defines the general Session interface
+- github.com/cloudwego/localsession/backup: this package to deal with the specific context of the information such as the metainfo way out
+
+# Now, please summarize below input：
+{{DATA}}
 "##;

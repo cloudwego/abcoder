@@ -24,6 +24,7 @@ pub enum ToCompress {
     ToCompressType(String),
     ToCompressVar(String),
     ToCompressPkg(String),
+    ToCompressModule(String),
     ToMergeRustPkg(String),
     ToValidateRust(String),
 }
