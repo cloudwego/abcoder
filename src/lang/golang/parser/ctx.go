@@ -52,9 +52,12 @@ func isExternalID(id *Identity, curmod string) bool {
 		strings.Contains(id.PkgPath, "/kitex_gen/") || strings.Contains(id.PkgPath, "/hertz_gen/")
 }
 
-func newModule(mod string, dir string) *Module {
-	ret := uniast.NewModule(mod, dir)
-	ret.Language = Golang
+const (
+	StdLanguage = "go"
+)
+
+func newModule(mod string, dir string) (ret *Module) {
+	ret = uniast.NewModule(mod, dir, Golang)
 	return ret
 }
 

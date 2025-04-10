@@ -46,7 +46,6 @@ func TestWriter_WriteRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				Options: Options{
-					OutDir:    "../../../../tmp/localsession2",
 					GoVersion: "1.18",
 				},
 			},
@@ -57,7 +56,7 @@ func TestWriter_WriteRepo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := NewWriter(tt.fields.Options)
-			if err := w.WriteRepo(tt.args.repo); (err != nil) != tt.wantErr {
+			if err := w.WriteRepo(tt.args.repo, "../../../../tmp/localsession2"); (err != nil) != tt.wantErr {
 				t.Errorf("Writer.WriteRepo() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -156,11 +155,14 @@ import "fmt"
 		},
 	}
 	for _, tt := range tests {
-		p := NewWriter(Options{
-			RepoDir: "../../../../tmp/localsession",
-		})
+		p := NewWriter(Options{})
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := p.PatchImports(tt.args.file)
+			old, err := os.ReadFile(tt.args.file.Path)
+			if err != nil {
+				t.Errorf("fail read file %v", err)
+				return
+			}
+			got, err := p.PatchImports(tt.args.file.Imports, old)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Patcher.PatchImports() error = %v, wantErr %v", err, tt.wantErr)
 				return

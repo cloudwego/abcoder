@@ -32,12 +32,11 @@ func TestPatcher(t *testing.T) {
 	}
 
 	// Create patcher with options
-	patcher := NewPatcher(Options{
-		RepoDir: root + "/localsession",
-		OutDir:  root + "/localsession2",
+	patcher := NewPatcher(repo, Options{
+		RepoDir:        root + "/localsession",
+		OutDir:         root + "/localsession2",
+		DefaultLanuage: uniast.Golang,
 	})
-
-	patcher.SetRepo(repo)
 
 	// Create a test patch
 	testPatches := []Patch{
@@ -47,11 +46,15 @@ func TestPatcher(t *testing.T) {
 	ret := Options{
 		Enable:         false,
 		ManagerOptions: localsession.DefaultManagerOptions(),
+		SonicConfig:    sonic.ConfigDefault,
 	}
 	return ret
 }`,
 			File: "backup/metainfo.go",
 			Type: uniast.FUNC,
+			AddedDeps: []uniast.Identity{
+				{ModPath: "github.com/bytedance/sonic@v1.12.1", PkgPath: "github.com/bytedance/sonic", Name: "ConfigDefault"},
+			},
 		},
 		{
 			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "DefaultOptions2"},
@@ -66,14 +69,22 @@ func TestPatcher(t *testing.T) {
 			Type: uniast.FUNC,
 		},
 		{
-			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "Options"},
-			Codes: `type Options struct {
-	Enable bool
-	localsession.ManagerOptions
-	Test bool
-}`,
-			File: "backup/metainfo.go",
+			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "TestCase"},
+			Codes: `type TestCase struct {
+				Enable bool
+			}`,
+			File: "backup/abcoder_test.go",
+			Type: uniast.TYPE,
+		},
+		{
+			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "TestFunc"},
+			Codes: `
+			func TestFunc(t *testing.T) {}`,
+			File: "backup/abcoder_test.go",
 			Type: uniast.FUNC,
+			AddedDeps: []uniast.Identity{
+				{ModPath: "", PkgPath: "testing", Name: "T"},
+			},
 		},
 	}
 

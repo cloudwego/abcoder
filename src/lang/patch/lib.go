@@ -78,8 +78,9 @@ func (p Patcher) SaveTo(dir string, saveRepo bool) {
 }
 
 type Options struct {
-	RepoDir string
-	OutDir  string
+	RepoDir        string
+	OutDir         string
+	DefaultLanuage uniast.Language
 }
 
 func NewPatcher(repo *uniast.Repository, opts Options) *Patcher {
@@ -111,23 +112,43 @@ next_dep:
 			Kind:     uniast.DEPENDENCY,
 		})
 	}
-	f := p.repo.GetFileById(patch.Id)
+
+	mod := p.repo.GetModule(patch.Id.ModPath)
+	if mod == nil {
+		mod = uniast.NewModule(patch.Id.ModPath, "", p.DefaultLanuage)
+		p.repo.SetModule(patch.Id.ModPath, mod)
+	}
+
+	f := mod.GetFile(patch.File)
 	if f == nil {
-		mod := p.repo.GetModule(patch.Id.ModPath)
 		f = uniast.NewFile(patch.File)
 		mod.SetFile(patch.File, f)
-		node.SetFile(patch.File)
+	}
+
+	fl := node.FileLine()
+	if fl.File != patch.File {
+		node.SetFileLine(uniast.FileLine{
+			File: patch.File,
+			Line: 0,
+		})
+		fl = node.FileLine()
+	}
+
+	w := p.getLangWriter(mod.Language)
+	if w == nil {
+		return fmt.Errorf("unsupported language %s writer", mod.Language)
 	}
 
 	for _, dep := range patch.AddedDeps {
-		f.Imports = uniast.InserImport(f.Imports, uniast.Import{
-			Alias: nil,
-			Path:  dep.PkgPath,
-		})
+		impt, err := w.IdToImport(dep)
+		if err != nil {
+			return fmt.Errorf("convert identity %s to import failed: %v", dep.Full(), err)
+		}
+		f.Imports = uniast.InserImport(f.Imports, impt)
 	}
 	n := patchNode{
 		Identity: patch.Id,
-		FileLine: node.FileLine(),
+		FileLine: fl,
 		Codes:    patch.Codes,
 		File:     f,
 	}
@@ -151,11 +172,22 @@ func (p *Patcher) patch(n patchNode) error {
 func (p *Patcher) Flush() error {
 	// write pathes
 	for fpath, ns := range p.patches {
+		if len(ns) == 0 {
+			continue
+		}
+		mod := p.repo.GetModule(ns[0].Identity.ModPath)
+		writer := p.getLangWriter(mod.Language)
+		if writer == nil {
+			return fmt.Errorf("unsupported language %s writer", mod.Language)
+		}
 
-		path := filepath.Join(p.RepoDir, fpath)
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(filepath.Join(p.RepoDir, fpath))
 		if err != nil {
-			return fmt.Errorf("read file %s failed: %v", path, err)
+			fi := mod.GetFile(fpath)
+			data, err = writer.CreateFile(fi, mod)
+			if err != nil {
+				return fmt.Errorf("create file %s failed: %v", fpath, err)
+			}
 		}
 
 		// sort by offset
@@ -185,14 +217,7 @@ func (p *Patcher) Flush() error {
 			if mod == nil {
 				return fmt.Errorf("module %s not found", n.Identity.ModPath)
 			}
-			ip := p.getLangPatcher(mod.Language)
-			if ip == nil {
-				return fmt.Errorf("unsupported language %s", mod.Language)
-			}
-			data, err := ip.PatchImports(&uniast.File{
-				Path:    fpath,
-				Imports: n.File.Imports,
-			})
+			data, err := writer.PatchImports(n.File.Imports, data)
 			if err != nil {
 				return fmt.Errorf("patch imports failed: %v", err)
 			}
@@ -222,12 +247,13 @@ func (p *Patcher) Flush() error {
 	return nil
 }
 
-func (p *Patcher) getLangPatcher(lang uniast.Language) uniast.Writer {
+func (p *Patcher) getLangWriter(lang uniast.Language) uniast.Writer {
+	if lang == "" || lang == uniast.Unknown {
+		lang = p.DefaultLanuage
+	}
 	switch lang {
 	case uniast.Golang:
-		return writer.NewWriter(writer.Options{
-			RepoDir: p.RepoDir,
-		})
+		return writer.NewWriter(writer.Options{})
 	default:
 		return nil
 	}

@@ -23,16 +23,12 @@ func (r *Repository) GetNode(id Identity) *Node {
 	return node
 }
 
-func (r *Repository) GetPackage(id Identity) *Package {
-	mod, ok := r.Modules[id.ModPath]
+func (r *Repository) GetPackage(mod ModPath, pkg PkgPath) *Package {
+	m, ok := r.Modules[mod]
 	if !ok {
 		return nil
 	}
-	pkg, ok := mod.Packages[id.PkgPath]
-	if !ok {
-		return nil
-	}
-	return pkg
+	return m.Packages[pkg]
 }
 
 func (r *Repository) GetModule(mod ModPath) *Module {
@@ -374,23 +370,23 @@ func (n Node) FileLine() FileLine {
 	}
 }
 
-func (n Node) SetFile(file string) {
+func (n Node) SetFileLine(file FileLine) {
 	if n.Repo == nil {
 		return
 	}
 	switch n.Type {
 	case FUNC:
 		if f := n.Repo.GetFunction(n.Identity); f != nil {
-			f.FileLine.File = file
+			f.FileLine = file
 		}
 	case TYPE:
 		if f := n.Repo.GetType(n.Identity); f != nil {
-			f.FileLine.File = file
+			f.FileLine = file
 
 		}
 	case VAR:
 		if f := n.Repo.GetVar(n.Identity); f != nil {
-			f.FileLine.File = file
+			f.FileLine = file
 		}
 	default:
 		return

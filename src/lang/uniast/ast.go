@@ -26,9 +26,26 @@ import (
 type Language string
 
 const (
-	Golang Language = "go"
-	Rust   Language = "rust"
+	Golang  Language = "go"
+	Rust    Language = "rust"
+	Unknown Language = "unknown"
 )
+
+func NewLanguage(lang string) (l Language) {
+	// sp := strings.Split(lang, "@")
+	// if len(sp) > 1 {
+	// 	lang = sp[0]
+	// 	version = sp[1]
+	// }
+	switch strings.ToLower(lang) {
+	case "go", "golang":
+		return Golang
+	case "rust":
+		return Rust
+	default:
+		return Unknown
+	}
+}
 
 // Repository
 type Repository struct {
@@ -60,6 +77,7 @@ type File struct {
 	Name    string
 	Imports []Import
 	Path    string
+	Package *PkgPath
 }
 
 type Import struct {
@@ -104,6 +122,7 @@ func (m Module) SetFile(path string, file *File) {
 
 type Module struct {
 	Language     Language
+	Version      string
 	Name         string               // go module name
 	Dir          string               // relative path to repo
 	Packages     map[PkgPath]*Package // pkage import path => Package
@@ -112,27 +131,36 @@ type Module struct {
 	CompressData *string              `json:"compress_data,omitempty"` // module compress info
 }
 
-func (r Repository) GetFileById(id Identity) *File {
-	mod := r.Modules[id.ModPath]
-	if mod == nil {
-		return nil
-	}
-	node := r.GetNode(id)
-	if node == nil {
-		return nil
-	}
-	return mod.Files[node.FileLine().File]
+// func (r Repository) GetFileById(id Identity) *File {
+// 	mod := r.Modules[id.ModPath]
+// 	if mod == nil {
+// 		return nil
+// 	}
+// 	node := r.GetNode(id)
+// 	if node == nil {
+// 		return nil
+// 	}
+// 	return mod.Files[node.FileLine().File]
+// }
+
+func (m Module) GetFile(path string) *File {
+	return m.Files[path]
 }
 
 func IsExternalModule(modpath string) bool {
 	return modpath == "" || strings.Contains(modpath, "@")
 }
 
-func NewModule(name string, dir string) *Module {
-	if strings.Contains(name, "@") {
-		name = strings.Split(name, "@")[0]
+func NewModule(name string, dir string, language Language) *Module {
+	var v string
+	sp := strings.Split(name, "@")
+	name = sp[0]
+	if len(sp) > 1 {
+		v = sp[1]
 	}
 	ret := Module{
+		Version:      v,
+		Language:     language,
 		Name:         name,
 		Dir:          dir,
 		Packages:     map[PkgPath]*Package{},
@@ -242,8 +270,7 @@ func (p Repository) GetFunction(id Identity) *Function {
 func (p *Repository) SetFunction(id Identity, f *Function) *Function {
 	lib := p.Modules[id.ModPath]
 	if lib == nil {
-		lib = NewModule(id.ModPath, "")
-		p.Modules[id.ModPath] = lib
+		panic(fmt.Sprintf("must set module before set func"))
 	}
 	pp, ok := lib.Packages[id.PkgPath]
 	if !ok {
@@ -257,6 +284,13 @@ func (p *Repository) SetFunction(id Identity, f *Function) *Function {
 		pp.IsMain = true
 	}
 	return pp.Functions[id.Name]
+}
+
+func (p *Repository) SetModule(path string, mod *Module) {
+	if p.Modules == nil {
+		p.Modules = map[string]*Module{}
+	}
+	p.Modules[path] = mod
 }
 
 func (p Repository) GetType(id Identity) *Type {
@@ -273,8 +307,7 @@ func (p Repository) GetType(id Identity) *Type {
 func (p *Repository) SetType(id Identity, f *Type) *Type {
 	lib := p.Modules[id.ModPath]
 	if lib == nil {
-		lib = NewModule(id.ModPath, "")
-		p.Modules[id.ModPath] = lib
+		panic(fmt.Sprintf("must set module before set type"))
 	}
 	pp, ok := lib.Packages[id.PkgPath]
 	if !ok {
@@ -301,8 +334,7 @@ func (p *Repository) GetVar(id Identity) *Var {
 func (p *Repository) SetVar(id Identity, v *Var) *Var {
 	lib := p.Modules[id.ModPath]
 	if lib == nil {
-		lib = NewModule(id.ModPath, "")
-		p.Modules[id.ModPath] = lib
+		panic(fmt.Sprintf("must set module before set var"))
 	}
 	pp, ok := lib.Packages[id.PkgPath]
 	if !ok {
