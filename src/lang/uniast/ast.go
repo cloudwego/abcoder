@@ -75,9 +75,9 @@ func NewRepository(name string) Repository {
 
 type File struct {
 	Name    string
-	Imports []Import
 	Path    string
-	Package *PkgPath
+	Imports []Import `json:",omitempty"`
+	Package *PkgPath `json:",omitempty"`
 }
 
 type Import struct {
