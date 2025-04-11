@@ -75,7 +75,7 @@ impl Config {
     }
 
     pub fn parse_from_env() -> Self {
-        let s = Self {
+        let mut s = Self {
             work_dir: std::env::var("WORK_DIR").unwrap_or_else(|_| default_work_dir()),
             parser_dir: std::env::var("PARSER_DIR").unwrap_or_else(|_| default_parser_dir()),
             api_type: std::env::var("API_TYPE").unwrap_or_else(|_| default_api_type()),
@@ -96,6 +96,14 @@ impl Config {
                 })
                 .unwrap_or(Language::Chinese),
         };
+        // if work_dir is not absolute path, make it absolute path
+        if !Path::new(&s.work_dir).is_absolute() {
+            s.work_dir = PathBuf::from(std::env::current_dir().unwrap())
+                .join(s.work_dir)
+                .to_str()
+                .unwrap()
+                .to_string();
+        }
         s
     }
 }

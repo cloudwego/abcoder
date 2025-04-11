@@ -77,7 +77,10 @@ pub fn get_repo(repo_path: &String, opts: &CompressOptions) -> Result<Repository
         parse_repo(&path, opts)?
     };
 
-    match compress::from_json(&repo_path, String::from_utf8(data).unwrap().as_str()) {
+    match compress::from_json(
+        &path.to_str().unwrap(),
+        String::from_utf8(data).unwrap().as_str(),
+    ) {
         Ok(repo) => Ok(repo),
         Err(err) => Err(Error::Parse(err.to_string())),
     }
