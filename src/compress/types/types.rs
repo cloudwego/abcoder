@@ -78,7 +78,9 @@ pub struct Relation {
     #[serde(rename = "Kind")]
     pub(crate) kind: RelationKind,
     #[serde(rename = "Desc")]
-    pub(crate) desc: String,
+    pub(crate) desc: Option<String>,
+    #[serde(rename = "Codes")]
+    pub(crate) codes: Option<String>,
 }
 
 impl Relation {

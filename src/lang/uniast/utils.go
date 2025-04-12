@@ -48,8 +48,6 @@ func LoadRepo(path string) (*Repository, error) {
 	if err := json.Unmarshal(bs, &repo); err != nil {
 		return nil, err
 	}
-	if err := repo.BuildGraph(); err != nil {
-		return nil, err
-	}
+	repo.AllNodesSetRepo()
 	return &repo, nil
 }

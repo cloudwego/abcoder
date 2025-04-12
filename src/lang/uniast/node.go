@@ -14,6 +14,8 @@
 
 package uniast
 
+import "strconv"
+
 func (r *Repository) GetNode(id Identity) *Node {
 	key := id.Full()
 	node, ok := r.Graph[key]
@@ -75,8 +77,21 @@ func (r *Repository) SetNode(id Identity, typ NodeType) *Node {
 	return node
 }
 
-func (r *Repository) AddRelation(node *Node, dep Identity) {
-	node.Dependencies = append(node.Dependencies, Relation{Identity: dep, Kind: DEPENDENCY})
+func calOffset(ref, dep FileLine) int {
+	refLine := dep.Line - ref.Line
+	if refLine < 0 {
+		return -1
+	}
+	return refLine
+}
+
+func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine) {
+	line := calOffset(node.FileLine(), depFl)
+	node.Dependencies = append(node.Dependencies, Relation{
+		Identity: dep,
+		Kind:     DEPENDENCY,
+		Line:     line,
+	})
 	key := dep.Full()
 	nd, ok := r.Graph[key]
 	if !ok {
@@ -89,6 +104,7 @@ func (r *Repository) AddRelation(node *Node, dep Identity) {
 	nd.References = append(nd.References, Relation{
 		Identity: node.Identity,
 		Kind:     REFERENCE,
+		Line:     line,
 	})
 	if f := r.GetFunction(dep); f != nil {
 		nd.Type = FUNC
@@ -102,6 +118,12 @@ func (r *Repository) AddRelation(node *Node, dep Identity) {
 	nd.Repo = r
 }
 
+func (r *Repository) AllNodesSetRepo() {
+	for _, node := range r.Graph {
+		node.Repo = r
+	}
+}
+
 func (r *Repository) BuildGraph() error {
 	r.Graph = make(map[string]*Node)
 	for mpath, mod := range r.Modules {
@@ -112,33 +134,33 @@ func (r *Repository) BuildGraph() error {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
 				for _, dep := range f.FunctionCalls {
-					r.AddRelation(n, dep.Identity)
+					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
 				for _, dep := range f.MethodCalls {
-					r.AddRelation(n, dep.Identity)
+					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
 				for _, dep := range f.Types {
-					r.AddRelation(n, dep.Identity)
+					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
 				for _, dep := range f.GlobalVars {
-					r.AddRelation(n, dep.Identity)
+					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
 			}
 
 			for _, t := range pkg.Types {
 				n := r.SetNode(t.Identity, TYPE)
 				for _, dep := range t.SubStruct {
-					r.AddRelation(n, dep.Identity)
+					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
 				for _, dep := range t.InlineStruct {
-					r.AddRelation(n, dep.Identity)
+					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
 			}
 
 			for _, v := range pkg.Vars {
 				n := r.SetNode(v.Identity, VAR)
 				if v.Type != nil {
-					r.AddRelation(n, *v.Type)
+					r.AddRelation(n, *v.Type, v.FileLine)
 				}
 			}
 		}
@@ -154,9 +176,11 @@ const (
 )
 
 type Relation struct {
-	Identity // target node
 	Kind     RelationKind
-	Desc     string
+	Identity // target node
+	Line     int
+	Desc     *string `json:",omitempty"`
+	Codes    *string `json:",omitempty"`
 }
 
 // type marshalerRelation struct {
@@ -202,7 +226,11 @@ func (t NodeType) MarshalJSON() ([]byte, error) {
 }
 
 func (t *NodeType) UnmarshalJSON(b []byte) error {
-	typ := NewNodeType(string(b))
+	v, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	typ := NewNodeType(v)
 	*t = typ
 	return nil
 }
@@ -226,6 +254,15 @@ type Node struct {
 	Dependencies []Relation
 	References   []Relation
 	Repo         *Repository `json:"-"`
+}
+
+func (n Node) GetDependency(id Identity) *Relation {
+	for i, dep := range n.Dependencies {
+		if dep.Identity == id {
+			return &n.Dependencies[i]
+		}
+	}
+	return nil
 }
 
 func NewNode(id Identity, typ NodeType, repo *Repository) *Node {

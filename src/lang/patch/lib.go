@@ -15,7 +15,6 @@
 package patch
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -37,7 +36,7 @@ type Patch struct {
 	AddedDeps []uniast.Identity
 }
 
-type patchNode struct {
+type PatchNode struct {
 	uniast.Identity
 	uniast.FileLine
 	Codes string
@@ -47,34 +46,17 @@ type patchNode struct {
 type Patcher struct {
 	Options
 	repo    *uniast.Repository
-	patches map[string][]patchNode
+	patches Patches
 }
 
-func (p Patcher) SaveTo(dir string, saveRepo bool) {
-	if saveRepo {
-		js, err := json.Marshal(p.repo)
-		if err != nil {
-			fmt.Printf("marshal repo failed: %v", err)
-		} else {
-			rfilepath := filepath.Join(dir, "repo.json")
-			if err := os.WriteFile(rfilepath, js, 0644); err != nil {
-				fmt.Printf("save repo failed: %v", err)
-			}
-		}
-	}
+type Patches map[string][]PatchNode
 
-	patches := p.patches
-	if patches == nil {
-		return
-	}
-	js, err := json.Marshal(patches)
-	if err != nil {
-		fmt.Printf("marshal patches failed: %v", err)
-	}
-	pfilepath := filepath.Join(dir, "patches.json")
-	if err := os.WriteFile(pfilepath, js, 0644); err != nil {
-		fmt.Printf("save patches failed: %v", err)
-	}
+func (p *Patcher) GetPatchNodes() Patches {
+	return p.patches
+}
+
+func (p *Patcher) SetPatchNodes(ps Patches) {
+	p.patches = ps
 }
 
 type Options struct {
@@ -146,7 +128,7 @@ next_dep:
 		}
 		f.Imports = uniast.InserImport(f.Imports, impt)
 	}
-	n := patchNode{
+	n := PatchNode{
 		Identity: patch.Id,
 		FileLine: fl,
 		Codes:    patch.Codes,
@@ -158,9 +140,9 @@ next_dep:
 	return nil
 }
 
-func (p *Patcher) patch(n patchNode) error {
+func (p *Patcher) patch(n PatchNode) error {
 	if p.patches == nil {
-		p.patches = make(map[string][]patchNode)
+		p.patches = make(map[string][]PatchNode)
 	}
 	if n.StartOffset < 1 {
 		n.StartOffset = math.MaxInt
