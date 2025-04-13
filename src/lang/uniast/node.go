@@ -14,7 +14,10 @@
 
 package uniast
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 func (r *Repository) GetNode(id Identity) *Node {
 	key := id.Full()
@@ -126,8 +129,8 @@ func (r *Repository) AllNodesSetRepo() {
 
 func (r *Repository) BuildGraph() error {
 	r.Graph = make(map[string]*Node)
-	for mpath, mod := range r.Modules {
-		if IsExternalModule(mpath) {
+	for _, mod := range r.Modules {
+		if mod.IsExternal() {
 			continue
 		}
 		for _, pkg := range mod.Packages {
@@ -236,12 +239,12 @@ func (t *NodeType) UnmarshalJSON(b []byte) error {
 }
 
 func NewNodeType(typ string) NodeType {
-	switch typ {
-	case "FUNC", "func", "FUNCTION", "function":
+	switch strings.ToLower(typ) {
+	case "func", "function":
 		return FUNC
-	case "TYPE", "type", "struct", "STRUCT":
+	case "type", "struct":
 		return TYPE
-	case "VAR", "var", "VARIABLE", "VARIANT", "variable", "variant", "const", "CONST":
+	case "var", "variable", "variant", "const":
 		return VAR
 	default:
 		return UNKNOWN

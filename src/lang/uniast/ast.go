@@ -54,10 +54,14 @@ type Repository struct {
 	Graph   map[string]*Node
 }
 
+func (r Repository) ID() string {
+	return r.Name
+}
+
 func (r Repository) InternalModules() []*Module {
 	var ret []*Module
-	for k, v := range r.Modules {
-		if !IsExternalModule(k) {
+	for _, v := range r.Modules {
+		if !v.IsExternal() {
 			ret = append(ret, v)
 		}
 	}
@@ -147,8 +151,8 @@ func (m Module) GetFile(path string) *File {
 	return m.Files[path]
 }
 
-func IsExternalModule(modpath string) bool {
-	return modpath == "" || strings.Contains(modpath, "@")
+func (m Module) IsExternal() bool {
+	return m.Dir == ""
 }
 
 func NewModule(name string, dir string, language Language) *Module {

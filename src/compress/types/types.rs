@@ -93,7 +93,7 @@ impl Relation {
     }
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum NodeType {
     #[default]
     Unknown,
@@ -110,6 +110,15 @@ impl NodeType {
             NodeType::Var => "VAR".to_string(),
             _ => "UNKNOWN".to_string(),
         }
+    }
+}
+
+impl Serialize for NodeType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 
