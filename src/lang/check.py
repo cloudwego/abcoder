@@ -5,13 +5,16 @@
     # 应当成功，尤其应当是 --zero_linebase（行号从 0 开始）
     $ python3 check.py --json lang.json --base . --zero_linebase
 
-"""
+检查 rust 项目
 
+    $ ./lang -d -v --no-need-comment collect rust ../../testdata/rust2 > rust2.json
+    $ python3 check.py --json lang.json --base . --zero_linebase --implheads
+"""
 import json
 import os
 import argparse
-from collections import defaultdict
 import sys
+from collections import defaultdict
 
 
 def trim_multiline(s, max_lines=5):
@@ -35,6 +38,7 @@ def verify_function_content(
     filter_files=None,
     filter_funcs=None,
     zero_linebase=False,
+    implheads=False,
 ):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -72,7 +76,6 @@ def verify_function_content(
                 actual_bytes = content_bytes[start:end]
                 actual_content = safe_decode(actual_bytes)
 
-                # Line check
                 line_number = func["Line"]
                 content_str = safe_decode(content_bytes)
                 file_lines = content_str.splitlines()
@@ -85,12 +88,20 @@ def verify_function_content(
                 except IndexError:
                     actual_line_content = "<out of range>"
 
-                expected_line_start = (
-                    expected_content.splitlines()[0].strip() if expected_content else ""
-                )
-
-                offset_match = actual_content == expected_content
-                line_match = actual_line_content == expected_line_start
+                if implheads:
+                    offset_match = actual_content in expected_content
+                    line_match = any(
+                        line.strip() == actual_line_content.strip()
+                        for line in expected_content.splitlines()
+                    )
+                else:
+                    offset_match = actual_content == expected_content
+                    expected_line_start = (
+                        expected_content.splitlines()[0].strip()
+                        if expected_content
+                        else ""
+                    )
+                    line_match = actual_line_content == expected_line_start
 
                 print(f"[{module_name}/{package_name}] Checking function: {func_name}")
                 if not offset_match:
@@ -100,8 +111,13 @@ def verify_function_content(
                 if not line_match:
                     display_line_number = line_number if zero_linebase else line_number
                     print(f"  [Mismatch] Line {display_line_number} mismatch:")
-                    print(f"  Expected line: {expected_line_start}")
-                    print(f"  Actual line:   {actual_line_content}")
+                    print(f"  Expected line (from JSON content):")
+                    if implheads:
+                        print(f"    Any line in expected content matching actual line:")
+                    else:
+                        print(f"    {expected_line_start}")
+                    print(f"  Actual line:")
+                    print(f"    {actual_line_content}")
                 if not offset_match or not line_match:
                     errors[file_name].append(func_name)
                     if bail_on_error:
@@ -149,6 +165,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Line numbers in JSON are 0-based instead of 1-based",
     )
+    parser.add_argument(
+        "--implheads",
+        action="store_true",
+        help="Allow actual content to be a substring of expected content and lines to match any line",
+    )
 
     args = parser.parse_args()
     filter_files = set(args.filter_file.split(",")) if args.filter_file else None
@@ -161,4 +182,5 @@ if __name__ == "__main__":
         filter_files=filter_files,
         filter_funcs=filter_funcs,
         zero_linebase=args.zero_linebase,
+        implheads=args.implheads,
     )
