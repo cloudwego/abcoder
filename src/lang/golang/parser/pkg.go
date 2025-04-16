@@ -152,22 +152,26 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s", mod.Name, dir, pkgPath)
+	fset := token.NewFileSet()
 	loadCount++
 	// slow-path: load packages in the dir, including sub pakcages
 	opts := packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
-	if p.opts.ReferCodeDepth != 0 {
-		opts |= packages.NeedDeps
-	}
-	fset := token.NewFileSet()
-	pkgs, err := packages.Load(&packages.Config{
+	cfg := &packages.Config{
 		Mode: opts,
 		Fset: fset,
 		Dir:  dir,
-	}, pkgPath)
+	}
+	if p.opts.ReferCodeDepth != 0 {
+		opts |= packages.NeedDeps
+	}
+	if p.opts.NeedTest {
+		opts |= packages.NeedForTest
+		cfg.Tests = true
+	}
+	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
 		return fmt.Errorf("load path '%s' failed: %v", dir, err)
 	}
-
 	for _, pkg := range pkgs {
 		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
 			continue
@@ -207,6 +211,8 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				f = NewFile(relpath)
 				mod.Files[relpath] = f
 			}
+			pkgid := pkg.ID
+			f.Package = &pkgid
 			f.Imports = imports.Origins
 			if err := p.parseFile(ctx, file); err != nil {
 				return err
@@ -221,7 +227,17 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			// 	obj.Dependencies = append(obj.Dependencies, imp.ID)
 			// }
 			obj.PkgPath = pkg.ID
+			if strings.HasSuffix(obj.PkgPath, ".test]") {
+				obj.IsTest = true
+			}
+			if strings.HasSuffix(obj.PkgPath, ".test") {
+				delete(mod.Packages, obj.PkgPath)
+			}
 		}
 	}
 	return
+}
+
+func IsTestPackage(pkgPath string) bool {
+	return strings.HasSuffix(pkgPath, ".test") || strings.HasSuffix(pkgPath, ".test]")
 }

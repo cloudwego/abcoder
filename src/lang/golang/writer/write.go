@@ -34,8 +34,8 @@ import (
 var _ uniast.Writer = (*Writer)(nil)
 
 type Options struct {
-	RepoDir   string
-	OutDir    string
+	// RepoDir   string
+	// OutDir    string
 	GoVersion string
 }
 
@@ -61,19 +61,19 @@ func NewWriter(opts Options) *Writer {
 	}
 }
 
-func (w *Writer) WriteRepo(repo *uniast.Repository) error {
+func (w *Writer) WriteRepo(repo *uniast.Repository, outDir string) error {
 	for m, mod := range repo.Modules {
 		if strings.Contains(m, "@") {
 			continue
 		}
-		if err := w.WriteModule(repo, m); err != nil {
+		if err := w.WriteModule(repo, m, outDir); err != nil {
 			return fmt.Errorf("write module %s failed: %v", mod.Name, err)
 		}
 	}
 	return nil
 }
 
-func (w *Writer) WriteModule(repo *uniast.Repository, modPath string) error {
+func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir string) error {
 	mod := repo.Modules[modPath]
 	if mod == nil {
 		return fmt.Errorf("module %s not found", modPath)
@@ -84,7 +84,7 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string) error {
 		}
 	}
 
-	outdir := filepath.Join(w.Options.OutDir, mod.Dir)
+	outdir := filepath.Join(outDir, mod.Dir)
 	for dir, pkg := range w.visited {
 		rel := strings.TrimPrefix(dir, mod.Name)
 		pkgDir := filepath.Join(outdir, rel)
@@ -260,16 +260,12 @@ func (w *Writer) IdToImport(id uniast.Identity) (uniast.Import, error) {
 	return uniast.Import{Path: strconv.Quote(id.PkgPath)}, nil
 }
 
-func (p *Writer) PatchImports(file *uniast.File) ([]byte, error) {
-	bs, err := os.ReadFile(filepath.Join(p.Options.RepoDir, file.Path))
-	if err != nil {
-		return nil, utils.WrapError(err, "fail read file %s", file.Path)
-	}
+func (p *Writer) PatchImports(impts []uniast.Import, file []byte) ([]byte, error) {
 
 	fs := token.NewFileSet()
-	f, err := parser.ParseFile(fs, file.Path, bs, parser.ImportsOnly)
+	f, err := parser.ParseFile(fs, "default.go", file, parser.ImportsOnly)
 	if err != nil {
-		return nil, utils.WrapError(err, "fail parse file %s", file.Path)
+		return nil, utils.WrapError(err, "fail parse file %s", file)
 	}
 
 	old := make([]uniast.Import, 0, len(f.Imports))
@@ -284,9 +280,9 @@ func (p *Writer) PatchImports(file *uniast.File) ([]byte, error) {
 		old = append(old, i)
 	}
 
-	impts := mergeImports(old, file.Imports)
+	impts = mergeImports(old, impts)
 	if len(impts) == len(old) {
-		return bs, nil
+		return file, nil
 	}
 
 	var sb strings.Builder
@@ -295,19 +291,47 @@ func (p *Writer) PatchImports(file *uniast.File) ([]byte, error) {
 
 	imptStart := fs.Position(f.Name.End()).Offset + 1
 	if len(f.Imports) > 0 {
-		for imptStart < len(bs) && bs[imptStart] != 'i' {
+		for imptStart < len(file) && file[imptStart] != 'i' {
 			imptStart++
 		}
 	}
 	imptEnd := imptStart
 	if len(f.Imports) > 1 {
 		imptEnd = fs.Position(f.Imports[len(f.Imports)-1].End()).Offset
-		for len(old) > 1 && imptEnd < len(bs) && (bs[imptEnd] != ')') {
+		for len(old) > 1 && imptEnd < len(file) && (file[imptEnd] != ')') {
 			imptEnd++
 		}
 		imptEnd += 2 // for `)`
 	}
-	r1 := append(bs[:imptStart:imptStart], final...)
-	ret := append(r1, bs[imptEnd:]...)
+	r1 := append(file[:imptStart:imptStart], final...)
+	ret := append(r1, file[imptEnd:]...)
 	return ret, nil
+}
+
+func (p *Writer) CreateFile(fi *uniast.File, mod *uniast.Module) ([]byte, error) {
+	var sb strings.Builder
+	sb.WriteString("package ")
+	pkgName := filepath.Base(filepath.Dir(fi.Path))
+	if fi.Package != nil {
+		pkg := mod.Packages[*fi.Package]
+		if pkg != nil {
+			if pkg.IsMain {
+				pkgName = "main"
+			} else {
+				pkgName = filepath.Base(pkg.PkgPath)
+			}
+		}
+	}
+	if pkgName == "" {
+		return nil, fmt.Errorf("package name is empty")
+	}
+	sb.WriteString(pkgName)
+	sb.WriteString("\n\n")
+
+	if len(fi.Imports) > 0 {
+		writeImport(&sb, fi.Imports)
+	}
+
+	bs := sb.String()
+	return []byte(bs), nil
 }

@@ -32,6 +32,7 @@ type CollectOption struct {
 	LoadExternalSymbol bool
 	NeedStdSymbol      bool
 	NoNeedComment      bool
+	NeedTest           bool
 	Language           lsp.Language
 	Excludes           []string
 }

@@ -18,7 +18,10 @@ package uniast
 
 type Writer interface {
 	// write a module onto Options.OutDir.
-	WriteModule(repo *Repository, modPath string) error
+	WriteModule(repo *Repository, modPath string, outDir string) error
+
+	// CreateFile will create a file bytes with the given file info.
+	CreateFile(fi *File, mod *Module) ([]byte, error)
 
 	// SplitImportsAndCodes will split the imports and codes from the src.
 	// the src has only codes, just return the src.
@@ -28,5 +31,5 @@ type Writer interface {
 	IdToImport(id Identity) (Import, error)
 
 	// PatchImports patches the imports into file content
-	PatchImports(file *File) ([]byte, error)
+	PatchImports(impts []Import, file []byte) ([]byte, error)
 }

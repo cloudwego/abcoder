@@ -49,8 +49,7 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 }
 
 func newModule(name string, dir string) *uniast.Module {
-	ret := uniast.NewModule(name, dir)
-	ret.Language = uniast.Rust
+	ret := uniast.NewModule(name, dir, uniast.Rust)
 	return ret
 }
 

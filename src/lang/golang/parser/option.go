@@ -24,6 +24,7 @@ type Options struct {
 	ReferCodeDepth int
 	Excludes       []string
 	CollectComment bool
+	NeedTest       bool
 }
 
 // type Option func(options *Options)

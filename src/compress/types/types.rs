@@ -78,7 +78,9 @@ pub struct Relation {
     #[serde(rename = "Kind")]
     pub(crate) kind: RelationKind,
     #[serde(rename = "Desc")]
-    pub(crate) desc: String,
+    pub(crate) desc: Option<String>,
+    #[serde(rename = "Codes")]
+    pub(crate) codes: Option<String>,
 }
 
 impl Relation {
@@ -91,7 +93,7 @@ impl Relation {
     }
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum NodeType {
     #[default]
     Unknown,
@@ -108,6 +110,15 @@ impl NodeType {
             NodeType::Var => "VAR".to_string(),
             _ => "UNKNOWN".to_string(),
         }
+    }
+}
+
+impl Serialize for NodeType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 

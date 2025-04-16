@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -51,9 +52,12 @@ func isExternalID(id *Identity, curmod string) bool {
 		strings.Contains(id.PkgPath, "/kitex_gen/") || strings.Contains(id.PkgPath, "/hertz_gen/")
 }
 
-func newModule(mod string, dir string) *Module {
-	ret := uniast.NewModule(mod, dir)
-	ret.Language = Golang
+const (
+	StdLanguage = "go"
+)
+
+func newModule(mod string, dir string) (ret *Module) {
+	ret = uniast.NewModule(mod, dir, Golang)
 	return ret
 }
 
@@ -82,9 +86,12 @@ func (p *GoParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	if pkg == nil {
 		return fmt.Errorf("cannot find package %s", id.PkgPath)
 	}
-	for i, fpath := range pkg.GoFiles {
-		file := pkg.Syntax[i]
+	for _, fpath := range pkg.GoFiles {
 		bs := p.getFileBytes(fpath)
+		file, err := parser.ParseFile(pkg.Fset, fpath, bs, parser.ParseComments)
+		if err != nil {
+			return err
+		}
 		impts, e := p.parseImports(pkg.Fset, bs, mod, file.Imports)
 		if e != nil {
 			err = e

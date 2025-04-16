@@ -32,6 +32,9 @@ func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOpti
 	if !opts.NoNeedComment {
 		goopts.CollectComment = true
 	}
+	if opts.NeedTest {
+		goopts.NeedTest = true
+	}
 	goopts.Excludes = opts.Excludes
 	p := parser.NewParser(repoPath, repoPath, goopts)
 	repo, err := p.ParseRepo()
