@@ -250,10 +250,6 @@ func (c *Collector) Collect(ctx context.Context) error {
 				log.Error("dep token %v not found: %v\n", token, err)
 				continue
 			}
-			// remove self
-			if sym.Location.Include(dep.Location) {
-				continue
-			}
 
 			// NOTICE: some internal symbols may not been get by DocumentSymbols, thus we let Unknown symbol pass
 			if dep.Kind == SKUnknown && c.internal(dep.Location) {
@@ -264,6 +260,14 @@ func (c *Collector) Collect(ctx context.Context) error {
 					dep.Name = token.Text
 				}
 			}
+
+			// remove local symbols
+			if sym.Location.Include(dep.Location) {
+				continue
+			} else {
+				c.syms[dep.Location] = dep
+			}
+
 			c.deps[sym] = append(c.deps[sym], dependency{
 				Location: token.Location,
 				Symbol:   dep,

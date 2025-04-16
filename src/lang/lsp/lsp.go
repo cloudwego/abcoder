@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -127,6 +128,9 @@ func (l DocumentURI) File() string {
 }
 
 func NewURI(file string) DocumentURI {
+	if !filepath.IsAbs(file) {
+		file, _ = filepath.Abs(file)
+	}
 	return DocumentURI("file://" + file)
 }
 

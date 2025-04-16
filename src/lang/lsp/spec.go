@@ -76,6 +76,9 @@ type LanguageSpec interface {
 
 	// if a symbol is a Function or Method symbol,  return the token index of Receiver (-1 means not found),TypeParameters, InputParameters and Outputs
 	FunctionSymbol(sym DocumentSymbol) (int, []int, []int, []int)
+
+	// Handle a unloaded internal symbol, like `lazy_static!` in rust
+	GetUnloadedSymbol(from Token, define Location) (string, error)
 }
 
 // Patcher is used to patch the AST of a module

@@ -1,11 +1,11 @@
 // Copyright 2025 CloudWeGo Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     https://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -50,7 +50,7 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 		return nil, err
 	}
 
-	cli, err := initLSPClient(context.Background(), svr, "file://"+repo, opts.Verbose)
+	cli, err := initLSPClient(context.Background(), svr, lsp.DocumentURI(NewURI(repo)), opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ type initializeResult struct {
 	Capabilities interface{} `json:"capabilities,omitempty"`
 }
 
-func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir string, verbose bool) (*LSPClient, error) {
+func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir lsp.DocumentURI, verbose bool) (*LSPClient, error) {
 	h := newLSPHandler()
 	stream := jsonrpc2.NewBufferedStream(svr, jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, h)
@@ -131,7 +131,7 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir string, verb
 
 	initParams := initializeParams{
 		ProcessID:    os.Getpid(),
-		RootURI:      lsp.DocumentURI(dir),
+		RootURI:      dir,
 		Capabilities: cs,
 		Trace:        lsp.Trace(trace),
 		ClientInfo:   lsp.ClientInfo{Name: "vscode"},

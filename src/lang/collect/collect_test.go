@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,8 +32,10 @@ var testroot = "../../../testdata"
 
 func TestCollector_Collect(t *testing.T) {
 	root := testroot + "/rust2"
+
+	root, _ = filepath.Abs(root)
 	log.SetLogLevel(log.DebugLevel)
-	rustLSP, err := lsp.NewLSPClient(root, root+"/src/main.rs", time.Second*15, lsp.ClientOptions{
+	rustLSP, err := lsp.NewLSPClient(root, root+"/src/main.rs", time.Second*5, lsp.ClientOptions{
 		Server:   "rust-analyzer",
 		Language: "rust",
 		Verbose:  true,

@@ -70,6 +70,9 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		repo.Modules[name] = newModule(name, rel)
 	}
 
+	// not allow local symbols inside another symbol
+	c.filterLocalSymbols()
+
 	// export symbols
 	for _, symbol := range c.syms {
 		visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
@@ -88,6 +91,23 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	}
 
 	return &repo, nil
+}
+
+// NOTICE: for rust and golang, each entity has separate location
+// TODO: some language may allow local symbols inside another symbol,
+func (c *Collector) filterLocalSymbols() {
+	// filter symbols
+	for loc1 := range c.syms {
+		for loc2 := range c.syms {
+			if loc1 == loc2 {
+				continue
+			}
+			if loc2.Include(loc1) {
+				delete(c.syms, loc1)
+				break
+			}
+		}
+	}
 }
 
 func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol, refName string, visited map[*DocumentSymbol]*uniast.Identity) (*uniast.Identity, error) {
