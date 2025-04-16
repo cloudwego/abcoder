@@ -32,207 +32,85 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"flag"
+	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"time"
+	"strings"
 
-	"github.com/cloudwego/abcoder/lang/collect"
+	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
-	"github.com/cloudwego/abcoder/lang/rust"
-	"github.com/cloudwego/abcoder/lang/uniast"
-	"github.com/spf13/cobra"
 )
 
-func main() {
-	var client *lsp.LSPClient
-	var repoPath string
-	var lang lsp.Language
-
-	// Define flags
-	var flagLsp string
-	var flagVerbose, flagDebug bool
-	var excludes *[]string
-	var opts collect.CollectOption
-
-	var rootCmd = &cobra.Command{
-		Use: `lang <Action> <Language> <RepoPath>
+const Usage = `abcoder <Action> <Language> <RepoPath> [Flags]
 Action:
-   collect		Parse repo and export AST
+   parse		Parse the whole repo and export AST
 Language:
    rust			For rust codes
-   go  			For go codes`,
-		Short: "Lang: An universal language analyzer based on Language-Server-Protocol",
-		Args:  cobra.ExactArgs(3),
+   go  			For go codes
+RepoPath:
+   The directory path of the repo to parse
+`
 
-		PreRun: func(cmd *cobra.Command, args []string) {
-			// validate arguments
-			checkVerbose(flagVerbose, flagDebug)
-			var err error
-			repoPath, err = filepath.Abs(args[2])
-			if err != nil {
-				log.Error("Failed to get absolute path of repository: %v\n", err)
-				os.Exit(1)
-			}
-			l, lspPath := checkLSP(args[1], flagLsp)
-			lang = l
-			openfile, opentime := checkRepoPath(repoPath, l)
-			if lang == lsp.Golang {
-				return
-			}
-			// Initialize the LSP client
-			log.Info("start initialize LSP server %s...\n", lspPath)
-			client, err = lsp.NewLSPClient(repoPath, openfile, opentime, lsp.ClientOptions{
-				Server:   lspPath,
-				Language: l,
-				Verbose:  flagVerbose || flagDebug,
-			})
-			if err != nil {
-				log.Error("failed to initialize LSP server: %v\n", err)
-				os.Exit(2)
-			}
-			log.Info("end initialize LSP server")
-		},
-
-		Run: func(cmd *cobra.Command, args []string) {
-			action := args[0]
-			log.Info("start %s repository %s...\n", action, repoPath)
-			// Perform the action
-			ctx := context.Background()
-			switch action {
-			case "collect":
-				if excludes != nil {
-					opts.Excludes = *excludes
-				}
-				opts.Language = lang
-				repo, err := collectSymbol(ctx, client, repoPath, opts)
-				if err != nil {
-					log.Error("Failed to collect symbols: %v\n", err)
-					os.Exit(3)
-				}
-				log.Info("all symbols collected, start writing to stdout...\n")
-				out, err := json.Marshal(repo)
-				if err != nil {
-					log.Error("Failed to marshal repository: %v\n", err)
-					return
-				}
-				for n := 0; n < len(out); {
-					i, err := os.Stdout.Write(out)
-					if err != nil {
-						log.Error("Failed to write to stdout: %v\n", err)
-						return
-					}
-					n += i
-				}
-				return
-			default:
-				log.Error("Unsupported action: %s\n", action)
-				os.Exit(1)
-			}
-		},
+func main() {
+	flags := flag.NewFlagSet("abcoder", flag.ExitOnError)
+	flags.Usage = func() {
+		fmt.Fprintf(os.Stderr, Usage)
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		flags.PrintDefaults()
 	}
 
-	rootCmd.Flags().StringVar(&flagLsp, "lsp", "", "Specify the language server path.")
-	rootCmd.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "Verbose mode.")
-	rootCmd.Flags().BoolVarP(&flagDebug, "debug", "d", false, "Debug mode.")
-	rootCmd.Flags().BoolVarP(&opts.LoadExternalSymbol, "load-external-symbol", "", false, "load external symbols into results")
-	excludes = rootCmd.Flags().StringSlice("exclude", []string{}, "exclude files or directories")
-	rootCmd.Flags().BoolVarP(&opts.NoNeedComment, "no-need-comment", "", false, "do not need comment (only works for Go now)")
-	rootCmd.Flags().BoolVarP(&opts.NeedTest, "need-test", "", false, "need parse test files (only works for Go now)")
-
-	// Execute the command
-	if err := rootCmd.Execute(); err != nil {
-		log.Error("Failed to execute command: %v\n", err)
+	if len(os.Args) < 4 {
+		fmt.Fprintf(os.Stderr, Usage)
 		os.Exit(1)
 	}
-}
 
-func checkRepoPath(repoPath string, language lsp.Language) (openfile string, wait time.Duration) {
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		log.Error("Repository not found: %s\n", repoPath)
+	action := os.Args[1]
+	language := lsp.NewLanguage(os.Args[2])
+	if language == lsp.Unknown {
+		fmt.Fprintf(os.Stderr, "unsupported language: %s\n", os.Args[2])
 		os.Exit(1)
 	}
-	switch language {
-	case lsp.Rust:
-		// NOTICE: open the Cargo.toml file is required for Rust projects
-		openfile, wait = rust.CheckRepo(repoPath)
-	default:
-		openfile = ""
-		wait = 0
-	}
+	repoPath := os.Args[3]
 
-	log.Info("open file '%s' and wait for %d seconds for initialize workspace\n", openfile, wait/time.Second)
-	return
+	var flagLsp string
+	var flagVerbose bool
+	flags.StringVar(&flagLsp, "lsp", "", "Specify the language server path.")
+	flags.BoolVar(&flagVerbose, "verbose", false, "Verbose mode.")
+
+	switch action {
+	case "parse":
+		var opts lang.ParseOptions
+		flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
+		flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
+		flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
+		flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
+
+		flags.Parse(os.Args[4:])
+		if flagVerbose {
+			log.SetLogLevel(log.DebugLevel)
+		}
+
+		opts.Language = language
+		opts.LSP = flagLsp
+		opts.Verbose = flagVerbose
+
+		out, err := lang.Parse(context.Background(), repoPath, opts)
+		if err != nil {
+			log.Error("Failed to parse: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stdout, "%s\n", out)
+	}
 }
 
-func checkVerbose(verbose bool, debug bool) {
-	if debug {
-		log.SetLogLevel(log.DebugLevel)
-	} else if verbose {
-		log.SetLogLevel(log.InfoLevel)
-	} else {
-		log.SetLogLevel(log.ErrorLevel)
-	}
+type StringArray []string
+
+func (s *StringArray) Set(value string) error {
+	*s = append(*s, value)
+	return nil
 }
 
-func checkLSP(language string, lspPath string) (l lsp.Language, s string) {
-	switch language {
-	case "rust":
-		l, s = rust.GetDefaultLSP()
-	case "golang", "go":
-		l = lsp.Golang
-		s = ""
-		if _, err := exec.LookPath("go"); err != nil {
-			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
-				log.Error("Go compiler not found, please make it excutable!\n", lspPath)
-				os.Exit(1)
-			}
-		}
-		return
-	default:
-		log.Error("Unsupported language: %s\n", language)
-		os.Exit(1)
-	}
-	// check if lsp excutable
-	if lspPath != "" {
-		if _, err := exec.LookPath(lspPath); err != nil {
-			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
-				log.Error("Language server %s not found, please make it excutable!\n", lspPath)
-				os.Exit(1)
-			}
-		}
-		s = lspPath
-	}
-
-	return
-}
-
-func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (repo *uniast.Repository, err error) {
-	if opts.Language == lsp.Golang {
-		repo, err = callGoParser(ctx, repoPath, opts)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		collector := collect.NewCollector(repoPath, cli)
-		collector.CollectOption = opts
-		log.Info("start collecting symbols...\n")
-		err = collector.Collect(ctx)
-		if err != nil {
-			return nil, err
-		}
-		log.Info("all symbols collected.\n")
-		log.Info("start exporting symbols...\n")
-		repo, err = collector.Export(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if err := repo.BuildGraph(); err != nil {
-		return nil, err
-	}
-	return repo, nil
+func (s *StringArray) String() string {
+	return strings.Join(*s, ",")
 }

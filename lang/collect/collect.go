@@ -29,11 +29,11 @@ import (
 )
 
 type CollectOption struct {
+	Language           lsp.Language
 	LoadExternalSymbol bool
 	NeedStdSymbol      bool
 	NoNeedComment      bool
 	NeedTest           bool
-	Language           lsp.Language
 	Excludes           []string
 }
 
