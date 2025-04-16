@@ -72,7 +72,7 @@ COZE_BOT_ID={YOUR_COZE_BOT_ID}
 
 2. compile the parsers
 ```
-sh ./script/make_parser.sh
+./script/make_parser.sh
 ```
 
 3. compile and run ABCoder

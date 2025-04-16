@@ -1,4 +1,6 @@
 """检查 json 中诸符号的 StartOffset, EndOffset, Line, Content 的一致性
+（假设本文件在 src/lang 中）
+
 例如检查本项目：
 
     $ ./lang -d -v --no-need-comment collect go . > lang.json

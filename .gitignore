@@ -68,6 +68,7 @@ __pycache__
 rust-analyzer-x86_64-unknown-linux-gnu
 
 testdata/test
+testdata/jsons
 
 src/lang/testdata
 *.json
