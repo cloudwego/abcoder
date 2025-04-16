@@ -27,7 +27,10 @@ type RustModulePatcher struct {
 }
 
 func (p *RustModulePatcher) Patch(ast *uniast.Module) {
-	filepath.Walk(p.Root, func(path string, info os.FileInfo, err error) error {
+	if ast.Dir == "" {
+		return
+	}
+	filepath.Walk(filepath.Join(p.Root, ast.Dir), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

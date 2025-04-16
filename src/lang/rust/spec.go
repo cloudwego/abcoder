@@ -26,6 +26,8 @@ import (
 	"github.com/cloudwego/abcoder/src/lang/utils"
 )
 
+var _ lsp.LanguageSpec = (*RustSpec)(nil)
+
 type RustSpec struct {
 	repo   string
 	crates []Module // path => name
@@ -586,4 +588,9 @@ func (c *RustSpec) collect(i *int, lines []string, path string, rets map[string]
 		// }
 	}
 	return nil
+}
+
+func (c *RustSpec) GetUnloadedSymbol(from lsp.Token, loc lsp.Location) (string, error) {
+	// TODO: may need handle more cases
+	return ExtractLazyStaticeSymbol(loc)
 }

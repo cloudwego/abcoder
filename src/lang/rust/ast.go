@@ -17,9 +17,12 @@ package rust
 import (
 	"bufio"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/cloudwego/abcoder/src/lang/lsp"
 	"github.com/cloudwego/abcoder/src/lang/uniast"
+	"github.com/cloudwego/abcoder/src/lang/utils"
 )
 
 // UseNode represents a module node in the dependency tree
@@ -280,4 +283,48 @@ func GetRustContentDefine(name, fileContent string) (string, error) {
 	}
 
 	return buffer.String(), nil
+}
+
+func ExtractLazyStaticeSymbol(loc lsp.Location) (string, error) {
+	file := loc.URI.File()
+	bs, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	src := string(bs)
+	lines := utils.CountLines(src)
+	is := false
+	for i := loc.Range.Start.Line; i >= 0; i-- {
+		if strings.Contains(src[lines[i]:], "lazy_static::") || strings.Contains(src[lines[i]:], "lazy_static!") {
+			is = true
+			break
+		}
+	}
+	if !is {
+		return "", fmt.Errorf("not found lazy_static")
+	}
+	// find first `;` outside code block
+	i := lines[loc.Range.Start.Line]
+	count := 0
+	codes := ""
+	ss := src[i:]
+	for x, c := range ss {
+		if c == '{' {
+			count++
+		}
+		if c == '}' {
+			count--
+		}
+		if c == ';' && count == 0 {
+			if x >= len(ss) {
+				x = len(ss) - 1
+			}
+			codes = strings.TrimSpace(ss[:x+1])
+			break
+		}
+	}
+	if codes != "" {
+		codes = fmt.Sprintf("lazy_static::lazy_static! {\n%s\n}", codes)
+	}
+	return codes, nil
 }

@@ -220,7 +220,7 @@ func TestRust(t *testing.T) {
 
 	// definition
 	t.Run("definition", func(t *testing.T) {
-		uri := NewURI("/root/codes/abcoder/testdata/rust2/src/main.rs")
+		uri := NewURI(rootDir + "/rust2/src/main.rs")
 		definition, err := rustLSP.Definition(context.Background(), uri, Position{9, 27})
 		if err != nil {
 			t.Fatalf("Find Definition failed: %v", err)
