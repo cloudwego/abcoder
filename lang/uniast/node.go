@@ -201,13 +201,16 @@ type Relation struct {
 // 	return json.Marshal(rr)
 // }
 
-// Node 类型
+// Node Type
 type NodeType int
 
 const (
 	UNKNOWN NodeType = iota
+	// top Function、 methods
 	FUNC
+	// Struct、TypeAlias、Enum...
 	TYPE
+	// Global Varable or Global Const
 	VAR
 )
 
@@ -251,12 +254,18 @@ func NewNodeType(typ string) NodeType {
 	}
 }
 
+// an Entity in a language
 type Node struct {
+	// unique identity of the node
 	Identity
-	Type         NodeType
+	// Node Type, must be one of FUNC, TYPE, VAR
+	Type NodeType
+	// other nodes that  depends on this node
 	Dependencies []Relation
-	References   []Relation
-	Repo         *Repository `json:"-"`
+	// other nodes that reference this node
+	References []Relation
+	// the repo that this node belongs to
+	Repo *Repository `json:"-"`
 }
 
 func (n Node) GetDependency(id Identity) *Relation {

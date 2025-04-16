@@ -47,11 +47,15 @@ func NewLanguage(lang string) (l Language) {
 	}
 }
 
+// Node ID (string) => Node
+// Node ID comes from Identity.Full()
+type NodeGraph map[string]*Node
+
 // Repository
 type Repository struct {
 	Name    string             `json:"id"` // module name
-	Modules map[string]*Module // module name => Library
-	Graph   map[string]*Node
+	Modules map[string]*Module // module name => module
+	Graph   NodeGraph          // node id => node
 }
 
 func (r Repository) ID() string {
@@ -223,12 +227,16 @@ func ModPathName(mod ModPath) string {
 	return mod
 }
 
-// Identity holds identity information about a third party declaration
+// Identity is the universal-unique for an ast node.
 type Identity struct {
-	ModPath `json:"ModPath" jsonschema:"description=the compiling module of the ast node, the format is {ModName} or {ModName}@{Version}"` // ModPath is the module which the package belongs to
-	PkgPath `json:"PkgPath" jsonschema:"description=the namespace of the ast node"`                                                        // Import Path of the third party package
+	// module id, must be unique within a repo
+	ModPath `json:"ModPath" jsonschema:"description=the compiling module of the ast node, the format is {ModName} or {ModName}@{Version}"`
 
-	Name string `json:"Name" jsonschema:"description=unique name of the ast node, the format is one of {FunctionName}, {TypeName}.{MethodName}, {InterfaceName}<{TypeName}>.{MethodName}, {TypeName}"` // Unique Name of declaration (FunctionName, TypeName.MethodName, InterfaceName<TypeName>.MethodName, or TypeName)
+	// path id, must be unique within a module
+	PkgPath `json:"PkgPath" jsonschema:"description=the namespace of the ast node"`
+
+	// symbol id , must be unique within a package
+	Name string `json:"Name" jsonschema:"description=unique name of the ast node, the format is one of {FunctionName}, {TypeName}.{MethodName}, {InterfaceName}<{TypeName}>.{MethodName}, {TypeName}"`
 }
 
 func NewIdentity(mod, pkg, name string) Identity {
