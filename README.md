@@ -1,34 +1,22 @@
-<!--
- Copyright 2025 CloudWeGo Authors
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
-     https://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
--->
-
 # ABCoder: AI-Based Coder(AKA: A Brand-new Coder)
 
 ![ABCoder](images/ABCoder.png)
 
-ABCoder, an AI-oriented code-processing tool, is designed to enhance coding-context for Large-Language-Model (LLM), simplify AI-assisted-coding process.
+ABCoder, an AI-oriented code-processing SDK, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-coding workflow.
 
 ## Features
 
--  Universal Abstract Syntax Tree (UniAST), an language-independent and AI-friendly  coding-context AST specfication, providing ample and recursive code information for both AI and hunman.
+-  Universal Abstract Syntax Tree (UniAST), an language-independent, AI-friendly code-struct specfication, providing flexible and structrual coding-context for both AI and hunman.
   
 -  Universal Parser, parses abitary languages to UniAST.
 
 -  Univeral Writer, transforms UniAST back to codes.
+  
+- (Comming Soon) Univeral Iterator, provides a set of interfaces and tools to help developers to implement their agents without deep knowledge of the UniAST structure.
 
-Based on these features, developers can easily implement or enhance their AI-assisted-coding agent or workflow, such as reviewing, optimizing, translating...
+- (Comming Soon) Code RAG, provides a set of tools to help the LLM understand your codes much deeper than ever.
+
+Based on these features, developers can easily implement or enhance their AI-assisted-coding workflows (or agents), such as reviewing, optimizing, translating...
 
 ## Getting Started
 
@@ -67,7 +55,6 @@ ABCoder currently supports the following languages:
 
 We encourage developers to contribute and make this tool more powerful. If you are interested in contributing to ABCoder
 project, kindly check out our Getting Involved Guide:
-- [Parser Extension](docs/parser_extension-zh.md)
-- [Writer Extension](docs/writer_extension-zh.md)
+- [Parser Extension](docs/parser-zh.md)
 
 > Note: This is a dynamic README and is subject to changes as the project evolves.

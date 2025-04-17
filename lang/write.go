@@ -35,6 +35,9 @@ type WriteOptions struct {
 // Write writes the AST to the output directory.
 func Write(ctx context.Context, repo *uniast.Repository, args WriteOptions) error {
 	for mpath, m := range repo.Modules {
+		if m.IsExternal() {
+			continue
+		}
 		var w uniast.Writer
 		switch m.Language {
 		case uniast.Golang:

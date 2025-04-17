@@ -140,7 +140,6 @@ import "fmt"
 			name: "add",
 			args: args{
 				file: &uniast.File{
-					Name: "gls.go",
 					Imports: []uniast.Import{
 						{
 							Path:  `"runtime"`,

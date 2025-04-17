@@ -171,19 +171,28 @@ func (r *Repository) BuildGraph() error {
 	return nil
 }
 
+// RelationKind
 type RelationKind string
 
 const (
+	// DEPENDENCY: the target node is a dependency of the current node
 	DEPENDENCY RelationKind = "Dependency"
-	REFERENCE  RelationKind = "Reference"
+	// REFERENCE: the target node is a reference of the current node
+	REFERENCE RelationKind = "Reference"
 )
 
+// Relation between two nodes
 type Relation struct {
-	Kind     RelationKind
-	Identity // target node
-	Line     int
-	Desc     *string `json:",omitempty"`
-	Codes    *string `json:",omitempty"`
+	// Kind of the relation
+	Kind RelationKind
+	// target node
+	Identity
+	// start line-offset of the target token related to the current node's codes
+	Line int
+	// information about this relation
+	Desc *string `json:",omitempty"`
+	// related codes representing this relation, comming from current node's codes
+	Codes *string `json:",omitempty"`
 }
 
 // type marshalerRelation struct {

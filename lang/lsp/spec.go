@@ -18,6 +18,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
+// Detailed implementation used for collect LSP symbols and transform them to UniAST
 type LanguageSpec interface {
 	// initialize a root workspace, and return all modules [modulename=>abs-path] inside
 	WorkSpace(root string) (map[string]string, error)
@@ -65,7 +66,8 @@ type LanguageSpec interface {
 	GetUnloadedSymbol(from Token, define Location) (string, error)
 }
 
-// Patcher is used to patch the AST of a module
+// ModulePatcher supplements some information for module
 type ModulePatcher interface {
+	// Patch is called after collect all symbol
 	Patch(ast *uniast.Module)
 }

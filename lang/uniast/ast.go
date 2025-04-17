@@ -93,7 +93,6 @@ func NewRepository(name string) Repository {
 }
 
 type File struct {
-	Name    string
 	Path    string
 	Imports []Import `json:",omitempty"`
 	Package *PkgPath `json:",omitempty"`
@@ -124,7 +123,6 @@ func (i Import) Equals(other Import) bool {
 func NewFile(path string) *File {
 	// abs, _ := filepath.Abs(path)
 	ret := File{
-		Name: filepath.Base(path),
 		Path: path,
 	}
 	return &ret
