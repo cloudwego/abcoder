@@ -15,40 +15,8 @@
 package lsp
 
 import (
-	"strings"
-
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
-
-type Language string
-
-const (
-	Rust    Language = "rust"
-	Golang  Language = "golang"
-	Unknown Language = ""
-)
-
-func NewLanguage(l string) Language {
-	switch strings.ToLower(l) {
-	case "rust":
-		return Rust
-	case "go", "golang":
-		return Golang
-	default:
-		return Unknown
-	}
-}
-
-func (l Language) String() string {
-	switch l {
-	case Rust:
-		return "rust"
-	case Golang:
-		return "go"
-	default:
-		return "unknown"
-	}
-}
 
 type LanguageSpec interface {
 	// initialize a root workspace, and return all modules [modulename=>abs-path] inside

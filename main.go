@@ -35,21 +35,25 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
-	"github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/uniast"
+	"github.com/cloudwego/abcoder/lang/utils"
 )
 
-const Usage = `abcoder <Action> <Language> <RepoPath> [Flags]
+const Usage = `abcoder <Action> <Language> <URI> [Flags]
 Action:
-   parse		Parse the whole repo and export AST
+   parse		parse the whole repo and output UniAST
+   write        write the UniAST to the output directory
 Language:
-   rust			For rust codes
-   go  			For go codes
-RepoPath:
-   The directory path of the repo to parse
+   rust			for rust codes
+   go  			for golang codes
+URI:
+   for action parse: the directory path of the repo
+   for action write: the file path of the UniAST for writer
 `
 
 func main() {
@@ -65,42 +69,78 @@ func main() {
 		os.Exit(1)
 	}
 
-	action := os.Args[1]
-	language := lsp.NewLanguage(os.Args[2])
-	if language == lsp.Unknown {
+	action := strings.ToLower(os.Args[1])
+	language := uniast.NewLanguage(os.Args[2])
+	if language == uniast.Unknown {
 		fmt.Fprintf(os.Stderr, "unsupported language: %s\n", os.Args[2])
 		os.Exit(1)
 	}
-	repoPath := os.Args[3]
 
-	var flagLsp string
-	var flagVerbose bool
-	flags.StringVar(&flagLsp, "lsp", "", "Specify the language server path.")
-	flags.BoolVar(&flagVerbose, "verbose", false, "Verbose mode.")
+	uri := os.Args[3]
+
+	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
+
+	flagOutput := flags.String("o", "", "Output path.")
 
 	switch action {
 	case "parse":
 		var opts lang.ParseOptions
+
 		flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
 		flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
 		flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
 		flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
+		flagLsp := flags.String("lsp", "", "Specify the language server path.")
 
 		flags.Parse(os.Args[4:])
-		if flagVerbose {
+		if flagVerbose != nil && *flagVerbose {
 			log.SetLogLevel(log.DebugLevel)
+			opts.Verbose = true
 		}
 
 		opts.Language = language
-		opts.LSP = flagLsp
-		opts.Verbose = flagVerbose
+		if flagLsp != nil {
+			opts.LSP = *flagLsp
+		}
 
-		out, err := lang.Parse(context.Background(), repoPath, opts)
+		out, err := lang.Parse(context.Background(), uri, opts)
 		if err != nil {
 			log.Error("Failed to parse: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stdout, "%s\n", out)
+
+		if flagOutput != nil && *flagOutput != "" {
+			if err := utils.MustWriteFile(*flagOutput, out); err != nil {
+				log.Error("Failed to write output: %v\n", err)
+			}
+		} else {
+			fmt.Fprintf(os.Stdout, "%s\n", out)
+		}
+	case "write":
+		repo, err := uniast.LoadRepo(uri)
+		if err != nil {
+			log.Error("Failed to load repo: %v\n", err)
+			os.Exit(1)
+		}
+
+		var opts lang.WriteOptions
+		flags.StringVar(&opts.Compiler, "compiler", "", "destination compiler path.")
+
+		flags.Parse(os.Args[4:])
+
+		if flagVerbose != nil && *flagVerbose {
+			log.SetLogLevel(log.DebugLevel)
+		}
+		if flagOutput != nil && *flagOutput != "" {
+			opts.OutputDir = *flagOutput
+		} else {
+			opts.OutputDir = filepath.Base(repo.Name)
+		}
+
+		if err := lang.Write(context.Background(), repo, opts); err != nil {
+			log.Error("Failed to write: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 

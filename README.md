@@ -18,20 +18,17 @@
 
 ![ABCoder](images/ABCoder.png)
 
-ABCoder, an AI-oriented code handling tool, is designed to enhance coding-context for Large-Language-Model (LLM).
-
+ABCoder, an AI-oriented code-processing tool, is designed to enhance coding-context for Large-Language-Model (LLM), simplify AI-assisted-coding process.
 
 ## Features
 
--  Universal Abstract Syntax Tree (UniAST), an language-independent and AI-friendly  coding-context, provides ample and recursive code information for AI or programs.
+-  Universal Abstract Syntax Tree (UniAST), an language-independent and AI-friendly  coding-context AST specfication, providing ample and recursive code information for both AI and hunman.
   
 -  Universal Parser, parses abitary languages to UniAST.
 
 -  Univeral Writer, transforms UniAST back to codes.
 
-- (WIP) Code Understanding and Semantic Querying, which can be used to retrieve codes with natural language for either human or AI.
-  
-Based on these features, ABCoder can help developers to easily implement or enhance many AI-assisted coding applications, such as code reviewer, IDE copilot and so on.
+Based on these features, developers can easily implement or enhance their AI-assisted-coding agent or workflow, such as reviewing, optimizing, translating...
 
 ## Getting Started
 
@@ -41,11 +38,12 @@ go install github.com/cloudwego/abcoder@latest
 ```
 2. Use ABCoder to parse a repository to UniAST (JSON)
 ```bash
-abcoder parse <language> <repo-path> > <AST-path>
+abcoder parse {language} {repo-path} > ast.json
 ```
-3. Use ABCoder as a writer
+3. Do your magic with UniAST...
+4. Use ABCoder to write a UniAST back to codes
 ```bash
-abcoder write <AST-path>
+abcoder write {language} ast.json
 ```
 
 ## Universal-Abstract-Syntax-Tree Specification
@@ -57,11 +55,12 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 ABCoder currently supports the following languages:
 
-| Language | Parser | Writer |
-| -------- | ------ | ------ |
-| Go       | ✅      | ✅      |
-| Rust     | ✅      | WIP    |
-| C        | WIP    | ❌      |
+| Language | Parser      | Writer      |
+| -------- | ----------- | ----------- |
+| Go       | ✅           | ✅           |
+| Rust     | ✅           | Coming Soon |
+| Kotlin   | Coming Soon | ❌           |
+| C        | WIP         | ❌           |
 
 
 ## Getting Involved

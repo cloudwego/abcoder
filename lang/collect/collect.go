@@ -23,13 +23,13 @@ import (
 	"unicode"
 
 	"github.com/cloudwego/abcoder/lang/log"
-	"github.com/cloudwego/abcoder/lang/lsp"
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/rust"
+	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
 type CollectOption struct {
-	Language           lsp.Language
+	Language           uniast.Language
 	LoadExternalSymbol bool
 	NeedStdSymbol      bool
 	NoNeedComment      bool
@@ -75,9 +75,9 @@ type functionInfo struct {
 	OutputsSorted    []dependency       `json:"-"`
 }
 
-func switchSpec(l lsp.Language) lsp.LanguageSpec {
+func switchSpec(l uniast.Language) LanguageSpec {
 	switch l {
-	case Rust:
+	case uniast.Rust:
 		return &rust.RustSpec{}
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
@@ -94,7 +94,7 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 		deps:  map[*DocumentSymbol][]dependency{},
 		vars:  map[*DocumentSymbol]dependency{},
 	}
-	if cli.Language == Rust {
+	if cli.Language == uniast.Rust {
 		ret.modPatcher = &rust.RustModulePatcher{Root: repo}
 	}
 	return ret
@@ -522,7 +522,7 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 	}
 	var impl string
 	if fn > 0 && fn < len(sym.Tokens) {
-		impl = lsp.ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
+		impl = ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
 	}
 	if impl == "" || len(impl) < len(sym.Name) {
 		impl = sym.Name

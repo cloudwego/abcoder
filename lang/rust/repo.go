@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
-	"github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
 
@@ -73,8 +73,8 @@ next:
 	return openfile, wait
 }
 
-func GetDefaultLSP() (lang lsp.Language, name string) {
-	return lsp.Rust, "rust-analyzer"
+func GetDefaultLSP() (lang uniast.Language, name string) {
+	return uniast.Rust, "rust-analyzer"
 }
 
 func GetLastCommitTime(repo string) time.Time {

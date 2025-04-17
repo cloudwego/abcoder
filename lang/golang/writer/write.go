@@ -22,11 +22,14 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
@@ -36,7 +39,7 @@ var _ uniast.Writer = (*Writer)(nil)
 type Options struct {
 	// RepoDir   string
 	// OutDir    string
-	GoVersion string
+	CompilerPath string
 }
 
 type Writer struct {
@@ -55,6 +58,9 @@ type chunk struct {
 }
 
 func NewWriter(opts Options) *Writer {
+	if opts.CompilerPath == "" {
+		opts.CompilerPath = "go"
+	}
 	return &Writer{
 		Options: opts,
 		visited: make(map[string]map[string]*fileNode),
@@ -126,12 +132,16 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir str
 		}
 	}
 
-	// go mod
+	// create go mod
 	var bs strings.Builder
 	bs.WriteString("module ")
 	bs.WriteString(mod.Name)
 	bs.WriteString("\n\ngo ")
-	bs.WriteString(w.Options.GoVersion)
+	goVersion, err := w.GetGoVersion()
+	if err != nil {
+		goVersion = "1.21"
+	}
+	bs.WriteString(goVersion)
 	bs.WriteString("\n\n")
 	if len(mod.Dependencies) > 0 {
 		bs.WriteString("require (\n")
@@ -151,7 +161,29 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir str
 		return fmt.Errorf("write go.mod failed: %v", err)
 	}
 
+	// go mod tidy
+	cmd := exec.Command(w.Options.CompilerPath, "mod", "tidy")
+	cmd.Dir = outdir
+	if err := cmd.Run(); err != nil {
+		log.Error("go mod tidy failed: %v", err)
+	}
 	return nil
+}
+
+var goVersionRegex = regexp.MustCompile(`go(\d+\.\d+(\.\d+)?)`)
+
+func (w *Writer) GetGoVersion() (string, error) {
+	cmd := exec.Command(w.Options.CompilerPath, "version")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("get go version failed: %v", err)
+	}
+	// extract with regexp
+	matches := goVersionRegex.FindStringSubmatch(string(out))
+	if len(matches) == 0 {
+		return "", fmt.Errorf("get go version failed: %v", err)
+	}
+	return matches[1], nil
 }
 
 func (w *Writer) appendPackage(repo *uniast.Repository, pkg *uniast.Package) error {

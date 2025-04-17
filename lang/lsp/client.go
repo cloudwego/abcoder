@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
+	"github.com/cloudwego/abcoder/lang/uniast"
 	lsp "github.com/sourcegraph/go-lsp"
 	"github.com/sourcegraph/jsonrpc2"
 )
@@ -39,7 +40,7 @@ type LSPClient struct {
 
 type ClientOptions struct {
 	Server string
-	Language
+	uniast.Language
 	Verbose bool
 }
 

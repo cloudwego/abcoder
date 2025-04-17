@@ -28,8 +28,19 @@ type Language string
 const (
 	Golang  Language = "go"
 	Rust    Language = "rust"
-	Unknown Language = "unknown"
+	Unknown Language = ""
 )
+
+func (l Language) String() string {
+	switch l {
+	case Rust:
+		return "rust"
+	case Golang:
+		return "go"
+	default:
+		return string(l)
+	}
+}
 
 func NewLanguage(lang string) (l Language) {
 	// sp := strings.Split(lang, "@")

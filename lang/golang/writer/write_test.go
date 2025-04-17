@@ -46,7 +46,7 @@ func TestWriter_WriteRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				Options: Options{
-					GoVersion: "1.18",
+					CompilerPath: "1.18",
 				},
 			},
 			args:    args{repo: repo},

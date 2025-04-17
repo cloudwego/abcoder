@@ -33,8 +33,11 @@ import (
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
+// ParseOptions is the options for parsing the repo.
 type ParseOptions struct {
-	LSP     string
+	// LSP sever executable path
+	LSP string
+	// Language of the repo
 	Verbose bool
 	collect.CollectOption
 }
@@ -43,7 +46,10 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	if !filepath.IsAbs(uri) {
 		uri, _ = filepath.Abs(uri)
 	}
-	l, lspPath := checkLSP(args.Language, args.LSP)
+	l, lspPath, err := checkLSP(args.Language, args.LSP)
+	if err != nil {
+		return nil, err
+	}
 	openfile, opentime, err := checkRepoPath(uri, l)
 	if err != nil {
 		return nil, err
@@ -80,12 +86,12 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	return out, nil
 }
 
-func checkRepoPath(repoPath string, language lsp.Language) (openfile string, wait time.Duration, err error) {
+func checkRepoPath(repoPath string, language uniast.Language) (openfile string, wait time.Duration, err error) {
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		return "", 0, fmt.Errorf("repository not found: %s", repoPath)
 	}
 	switch language {
-	case lsp.Rust:
+	case uniast.Rust:
 		// NOTICE: open the Cargo.toml file is required for Rust projects
 		openfile, wait = rust.CheckRepo(repoPath)
 	default:
@@ -97,40 +103,29 @@ func checkRepoPath(repoPath string, language lsp.Language) (openfile string, wai
 	return
 }
 
-func checkVerbose(verbose bool, debug bool) {
-	if debug {
-
-	} else if verbose {
-		log.SetLogLevel(log.InfoLevel)
-	} else {
-		log.SetLogLevel(log.ErrorLevel)
-	}
-}
-
-func checkLSP(language lsp.Language, lspPath string) (l lsp.Language, s string) {
+func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s string, err error) {
 	switch language {
-	case lsp.Rust:
+	case uniast.Rust:
 		l, s = rust.GetDefaultLSP()
-	case lsp.Golang:
-		l = lsp.Golang
+	case uniast.Golang:
+		l = uniast.Golang
 		s = ""
 		if _, err := exec.LookPath("go"); err != nil {
 			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
 				log.Error("Go compiler not found, please make it excutable!\n", lspPath)
-				os.Exit(1)
+				return uniast.Unknown, "", err
 			}
 		}
 		return
 	default:
-		log.Error("Unsupported language: %s\n", language)
-		os.Exit(1)
+		return uniast.Unknown, "", fmt.Errorf("unsupported language: %s", language)
 	}
 	// check if lsp excutable
 	if lspPath != "" {
 		if _, err := exec.LookPath(lspPath); err != nil {
 			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
 				log.Error("Language server %s not found, please make it excutable!\n", lspPath)
-				os.Exit(1)
+				return uniast.Unknown, "", err
 			}
 		}
 		s = lspPath
@@ -140,7 +135,7 @@ func checkLSP(language lsp.Language, lspPath string) (l lsp.Language, s string) 
 }
 
 func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (repo *uniast.Repository, err error) {
-	if opts.Language == lsp.Golang {
+	if opts.Language == uniast.Golang {
 		repo, err = callGoParser(ctx, repoPath, opts)
 		if err != nil {
 			return nil, err
