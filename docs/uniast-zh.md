@@ -1442,7 +1442,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 ```json
 {
-    "Name": "github.com/cloudwego/localsession"
+    "Name": "github.com/cloudwego/localsession",
     "Language": "go",
     "Version": "",
     "Name": "github.com/cloudwego/localsession",
@@ -1450,7 +1450,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
     "Packages": {
         "github.com/cloudwego/localsession": {},
         "github.com/cloudwego/localsession/backup": {}
-    }
+    },
     "Dependencies": {
         "github.com/bytedance/gopkg": "github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b"
     },
@@ -1991,16 +1991,16 @@ const (
 
 	- 命令：` git clone https://github.com/cloudwego/localsession.git && abcoder parse go ./localsession -load-external-symbol`
 
-	- 输出  
+	- 输出 [localsession.json](localsession.json)
 
 
 - https://github.com/cloudwego/metainfo
 
 	- 命令`git clone https://github.com/cloudwego/metainfo.git && abcoder parse rust ./metainfo -load-external-symbol`
 
-	- 输出 
+	- 输出 [metainfo.json](metainfo.json)
 
 
 ## 扩展其它语言 Parser
 
-当前ABCoder/src/lang 已经支持通过LSP来进行第三方语言解析，但是由于LSP对各个语言特性（主要是函数签名和Import）没有统一规范，因此需要扩展实现一些接口才能适配。详见 [ABCoder-Language Plugin 开发规范](parser_extension-zh.md)
+当前ABCoder/src/lang 已经支持通过LSP来进行第三方语言解析，但是由于LSP对各个语言特性（主要是函数签名和Import）没有统一规范，因此需要扩展实现一些接口才能适配。详见 [ABCoder-Language Plugin 开发规范](parser-zh.md)
