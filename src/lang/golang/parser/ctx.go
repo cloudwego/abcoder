@@ -169,7 +169,7 @@ func (ctx *fileContext) FileLine(node ast.Node) FileLine {
 	pos := ctx.fset.Position((node).Pos())
 	rel, _ := filepath.Rel(ctx.repoDir, pos.Filename)
 	end := ctx.fset.Position((node).End())
-	ret := FileLine{File: rel, Line: pos.Line, StartOffset: pos.Offset, EndOffset: end.Offset}
+	ret := FileLine{File: rel, Line: pos.Line - 1, StartOffset: pos.Offset, EndOffset: end.Offset}
 	if _, ok := node.(*ast.TypeSpec); ok {
 		// NOTICE: type spec is not the start of the type definition
 		// so we need to adjust the offset = len("type ")
@@ -305,7 +305,7 @@ func (p *GoParser) mockTypes(typ ast.Expr, m map[string]Identity, file []byte, f
 			st := p.newType(id.ModPath, id.PkgPath, id.Name)
 			st.Exported = isUpperCase(id.Name[0])
 			st.File = fpath
-			st.Line = fset.Position(typ.Pos()).Line // not real
+			st.Line = fset.Position(typ.Pos()).Line - 1 // not real
 			// FIXME: cannot get specific entity's definition unless load the whole package
 			st.Content = "type " + id.Name + " struct{}"
 		}

@@ -99,7 +99,7 @@ type Location struct {
 }
 
 func (l Location) String() string {
-	return fmt.Sprintf("%s:%d:%d-%d:%d", l.URI, l.Range.Start.Line+1, l.Range.Start.Character+1, l.Range.End.Line+1, l.Range.End.Character+1)
+	return fmt.Sprintf("%s:%d:%d-%d:%d", l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
 }
 
 var locationMarshalJSONInline = true

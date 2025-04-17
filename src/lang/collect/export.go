@@ -42,7 +42,7 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	text := c.cli.GetFile(loc.URI).Text
 	return uniast.FileLine{
 		File:        rel,
-		Line:        loc.Range.Start.Line + 1,
+		Line:        loc.Range.Start.Line,
 		StartOffset: lsp.PositionOffset(text, loc.Range.Start),
 		EndOffset:   lsp.PositionOffset(text, loc.Range.End),
 	}

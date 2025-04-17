@@ -60,12 +60,12 @@ func RelativePostionWithLines(lines []int, textPos Position, pos Position) int {
 }
 
 func PositionOffset(text string, pos Position) int {
-	if pos.Line < 1 || pos.Character < 1 {
+	if pos.Line < 0 || pos.Character < 0 {
 		log.Error("invalid text position: %+v", pos)
 		return -1
 	}
 	lines := utils.CountLinesCached(text)
 	defer utils.PutCount(lines)
 
-	return RelativePostionWithLines(*lines, Position{Line: 1, Character: 1}, pos)
+	return RelativePostionWithLines(*lines, Position{Line: 0, Character: 0}, pos)
 }
