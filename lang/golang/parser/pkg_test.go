@@ -40,7 +40,7 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				modName:     "github.com/cloudwego/localsession",
-				homePageDir: "../../../../tmp/localsession",
+				homePageDir: "../../../tmp/localsession",
 			},
 		},
 	}
@@ -93,7 +93,7 @@ func Test_goParser_ParseDirs(t *testing.T) {
 		{
 			name: "test",
 			args: args{
-				homePageDir: "../../../../testdata/golang",
+				homePageDir: "../../../testdata/golang",
 				modName:     "a.b/c",
 				pkg:         "a.b/c/cmd",
 				opts: Options{
@@ -166,7 +166,7 @@ func Test_goParser_ParseNode(t *testing.T) {
 			name: "test",
 			fields: fields{
 				modName:     "github.com/cloudwego/localsession",
-				homePageDir: "../../../../../tmp/localsession",
+				homePageDir: "../../../tmp/localsession",
 			},
 			args: args{
 				pkgPath: "github.com/modern-go/gls",

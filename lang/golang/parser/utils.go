@@ -186,7 +186,9 @@ func getTypeKind(n ast.Expr) TypeKind {
 func getNamedType(typ types.Type) (ty types.Object, isPointer bool) {
 	if pt, ok := typ.(*types.Pointer); ok {
 		typ = pt.Elem()
-	} else if name, ok := typ.(*types.Named); ok {
+		isPointer = true
+	}
+	if name, ok := typ.(*types.Named); ok {
 		return name.Obj(), isPointer
 	}
 	return nil, isPointer

@@ -20,68 +20,8 @@ import (
 	"testing"
 
 	. "github.com/cloudwego/abcoder/lang/uniast"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 )
-
-func Test_goParser_GeMainOnDepends(t *testing.T) {
-	type fields struct {
-		modName     string
-		homePageDir string
-		opts        Options
-	}
-	tests := []struct {
-		name   string
-		fields fields
-	}{
-		{
-			name: "test",
-			fields: fields{
-				homePageDir: "../../../../../tmp/cloudwego/kitex",
-				opts: Options{
-					ReferCodeDepth: 1,
-					CollectComment: true,
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, tt.fields.opts)
-			n, err := p.getNode(NewIdentity("github.com/cloudwego/kitex", "github.com/cloudwego/kitex/pkg/generic", "ParseContent"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if n == nil {
-				t.Fatal("nil get node")
-			}
-			spew.Dump(p)
-			pj, err := json.MarshalIndent(n, "", "  ")
-			if err != nil {
-				t.Fatal(err)
-			}
-			println(string(pj))
-			ids, err := p.searchName("main")
-			if err != nil {
-				t.Log(err.Error())
-			}
-			if len(ids) == 0 {
-				t.Fatal("not found")
-			}
-			spew.Dump(ids)
-			dep, e := p.getNode(Identity{"github.com/cloudwego/kitex", "github.com/cloudwego/kitex/pkg/generic", "BinaryThriftGeneric"})
-			if e != nil {
-				t.Fatal(e)
-			}
-			spew.Dump(dep.(*Function).Content)
-			var repo = NewRepository(tt.fields.modName)
-			for _, id := range ids {
-				loadNode(p, id.PkgPath, id.Name, &repo)
-			}
-			spew.Dump(repo)
-		})
-	}
-}
 
 func TestCases(t *testing.T) {
 	type fields struct {

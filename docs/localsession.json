@@ -121,7 +121,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.BindSession",
+                                    "Name": "SessionManager.BindSession",
                                     "File": "gls.go",
                                     "Line": 118,
                                     "StartOffset": 3422,
@@ -189,7 +189,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.GetSession",
+                                    "Name": "SessionManager.GetSession",
                                     "File": "gls.go",
                                     "Line": 107,
                                     "StartOffset": 3153,
@@ -413,7 +413,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.Close",
+                                    "Name": "SessionManager.Close",
                                     "File": "gls.go",
                                     "Line": 69,
                                     "StartOffset": 2200,
@@ -663,7 +663,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.Disable",
+                                    "Name": "SessionMap.Disable",
                                     "File": "session.go",
                                     "Line": 116,
                                     "StartOffset": 3162,
@@ -892,7 +892,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.Store",
+                                    "Name": "shard.Store",
                                     "File": "manager.go",
                                     "Line": 136,
                                     "StartOffset": 3485,
@@ -1030,7 +1030,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.Load",
+                                    "Name": "shard.Load",
                                     "File": "manager.go",
                                     "Line": 116,
                                     "StartOffset": 3030,
@@ -1116,7 +1116,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.Load",
+                                    "Name": "shard.Load",
                                     "File": "manager.go",
                                     "Line": 151,
                                     "StartOffset": 3902,
@@ -1125,7 +1125,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.Delete",
+                                    "Name": "shard.Delete",
                                     "File": "manager.go",
                                     "Line": 153,
                                     "StartOffset": 3928,
@@ -1157,7 +1157,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.GC",
+                                    "Name": "SessionManager.GC",
                                     "File": "manager.go",
                                     "Line": 193,
                                     "StartOffset": 4857,
@@ -1308,7 +1308,7 @@
                                 {
                                     "ModPath": "github.com/cloudwego/localsession",
                                     "PkgPath": "github.com/cloudwego/localsession",
-                                    "Name": "com/cloudwego/localsession.UnbindSession",
+                                    "Name": "SessionManager.UnbindSession",
                                     "File": "gls.go",
                                     "Line": 132,
                                     "StartOffset": 3832,
@@ -2726,7 +2726,7 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.BindSession",
+                    "Name": "SessionManager.BindSession",
                     "Line": 4
                 },
                 {
@@ -2778,7 +2778,7 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.GetSession",
+                    "Name": "SessionManager.GetSession",
                     "Line": 4
                 },
                 {
@@ -2939,7 +2939,7 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.Close",
+                    "Name": "SessionManager.Close",
                     "Line": 6
                 },
                 {
@@ -3130,7 +3130,7 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.Disable",
+                    "Name": "SessionMap.Disable",
                     "Line": 4
                 }
             ],
@@ -3147,8 +3147,8 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "transmitSessionID",
-                    "Line": 9
+                    "Name": "clearSessionID",
+                    "Line": 5
                 },
                 {
                     "Kind": "Reference",
@@ -3161,8 +3161,8 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "clearSessionID",
-                    "Line": 5
+                    "Name": "transmitSessionID",
+                    "Line": 9
                 }
             ]
         },
@@ -3193,15 +3193,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.GC",
-                    "Line": 8
+                    "Name": "newShard",
+                    "Line": 2
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "newShard",
-                    "Line": 2
+                    "Name": "SessionManager.GC",
+                    "Line": 8
                 }
             ]
         },
@@ -3248,15 +3248,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionCtx.WithValue",
-                    "Line": 2
+                    "Name": "NewSessionCtx",
+                    "Line": 3
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "NewSessionCtx",
-                    "Line": 3
+                    "Name": "SessionCtx.WithValue",
+                    "Line": 2
                 },
                 {
                     "Kind": "Reference",
@@ -3342,6 +3342,13 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "BindSession",
+                    "Line": 4
+                },
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
                     "Name": "getSessionID",
                     "Line": 12
                 },
@@ -3356,14 +3363,7 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.GC",
-                    "Line": 8
-                },
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "BindSession",
+                    "Name": "UnbindSession",
                     "Line": 4
                 },
                 {
@@ -3377,8 +3377,8 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "UnbindSession",
-                    "Line": 4
+                    "Name": "SessionManager.GC",
+                    "Line": 8
                 }
             ]
         },
@@ -3430,11 +3430,19 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.Store",
+                    "Name": "shard.Store",
                     "Line": 3
                 }
             ],
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "BindSession",
+                    "Line": 4
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#SessionManager.Close": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -3442,7 +3450,15 @@
             "Name": "SessionManager.Close",
             "Type": "FUNC",
             "Dependencies": null,
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "InitDefaultManager",
+                    "Line": 6
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#SessionManager.GC": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -3472,7 +3488,15 @@
                     "Line": 8
                 }
             ],
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "SessionManager.startGC",
+                    "Line": 7
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#SessionManager.GetSession": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -3491,11 +3515,19 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.Load",
+                    "Name": "shard.Load",
                     "Line": 2
                 }
             ],
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "CurSession",
+                    "Line": 4
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#SessionManager.Options": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -3522,18 +3554,26 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.Load",
+                    "Name": "shard.Load",
                     "Line": 3
                 },
                 {
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.Delete",
+                    "Name": "shard.Delete",
                     "Line": 5
                 }
             ],
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "UnbindSession",
+                    "Line": 4
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#SessionManager.startGC": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -3545,7 +3585,7 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.GC",
+                    "Name": "SessionManager.GC",
                     "Line": 7
                 }
             ],
@@ -3581,7 +3621,15 @@
             "Name": "SessionMap.Disable",
             "Type": "FUNC",
             "Dependencies": null,
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "NewSessionMapWithTimeout",
+                    "Line": 4
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#SessionMap.Export": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -3632,7 +3680,7 @@
                     "Kind": "Dependency",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "com/cloudwego/localsession.UnbindSession",
+                    "Name": "SessionManager.UnbindSession",
                     "Line": 4
                 },
                 {
@@ -3736,157 +3784,6 @@
                 }
             ]
         },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.BindSession": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.BindSession",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "BindSession",
-                    "Line": 4
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.Close": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.Close",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "InitDefaultManager",
-                    "Line": 6
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.Delete": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.Delete",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.UnbindSession",
-                    "Line": 5
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.Disable": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.Disable",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "NewSessionMapWithTimeout",
-                    "Line": 4
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.GC": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.GC",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.startGC",
-                    "Line": 7
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.GetSession": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.GetSession",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "CurSession",
-                    "Line": 4
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.Load": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.Load",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.GetSession",
-                    "Line": 2
-                },
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.UnbindSession",
-                    "Line": 3
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.Store": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.Store",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.BindSession",
-                    "Line": 3
-                }
-            ]
-        },
-        "github.com/cloudwego/localsession?github.com/cloudwego/localsession#com/cloudwego/localsession.UnbindSession": {
-            "ModPath": "github.com/cloudwego/localsession",
-            "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.UnbindSession",
-            "Type": "UNKNOWN",
-            "Dependencies": null,
-            "References": [
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "UnbindSession",
-                    "Line": 4
-                }
-            ]
-        },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#defaultManagerObj": {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
@@ -3913,13 +3810,6 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "CurSession",
-                    "Line": 1
-                },
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
                     "Name": "BindSession",
                     "Line": 1
                 },
@@ -3929,6 +3819,13 @@
                     "PkgPath": "github.com/cloudwego/localsession",
                     "Name": "InitDefaultManager",
                     "Line": 5
+                },
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "CurSession",
+                    "Line": 1
                 },
                 {
                     "Kind": "Reference",
@@ -3990,7 +3887,7 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "transmitSessionID",
+                    "Name": "clearSessionID",
                     "Line": 1
                 },
                 {
@@ -4004,7 +3901,7 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "clearSessionID",
+                    "Name": "transmitSessionID",
                     "Line": 1
                 }
             ]
@@ -4066,14 +3963,14 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "CurSession",
+                    "Name": "BindSession",
                     "Line": 4
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "BindSession",
+                    "Name": "CurSession",
                     "Line": 4
                 },
                 {
@@ -4096,15 +3993,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "transmitSessionID",
-                    "Line": 3
+                    "Name": "clearSessionID",
+                    "Line": 8
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "clearSessionID",
-                    "Line": 8
+                    "Name": "transmitSessionID",
+                    "Line": 3
                 }
             ]
         },
@@ -4164,15 +4061,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "transmitSessionID",
-                    "Line": 16
+                    "Name": "clearSessionID",
+                    "Line": 14
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "clearSessionID",
-                    "Line": 14
+                    "Name": "transmitSessionID",
+                    "Line": 16
                 }
             ]
         },
@@ -4205,7 +4102,15 @@
             "Name": "shard.Delete",
             "Type": "FUNC",
             "Dependencies": null,
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "SessionManager.UnbindSession",
+                    "Line": 5
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#shard.Load": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -4213,7 +4118,22 @@
             "Name": "shard.Load",
             "Type": "FUNC",
             "Dependencies": null,
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "SessionManager.GetSession",
+                    "Line": 2
+                },
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "SessionManager.UnbindSession",
+                    "Line": 3
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#shard.Store": {
             "ModPath": "github.com/cloudwego/localsession",
@@ -4221,7 +4141,15 @@
             "Name": "shard.Store",
             "Type": "FUNC",
             "Dependencies": null,
-            "References": null
+            "References": [
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "SessionManager.BindSession",
+                    "Line": 3
+                }
+            ]
         },
         "github.com/cloudwego/localsession?github.com/cloudwego/localsession#transmitSessionID": {
             "ModPath": "github.com/cloudwego/localsession",

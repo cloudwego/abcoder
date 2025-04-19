@@ -1623,10 +1623,10 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
     "PkgPath": "github.com/cloudwego/localsession",
     "Name": "SessionManager.BindSession",
     "File": "manager.go",
-    "Line": 134,
+    "Line": 133,
     "StartOffset": 3290,
     "EndOffset": 3573,
-    "Content": "// BindSession binds the session with current goroutine\nfunc (self *SessionManager) BindSession(Identity SessionIdentity, s Session) {\n\tshard := self.shards[uint64(Identity)%uint64(self.opts.ShardNumber)]\n\n\tshard.Store(Identity, s)\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\ttransmitSessionIdentity(Identity)\n\t}\n}",
+    "Content": "// BindSession binds the session with current goroutine\nfunc (self *SessionManager) BindSession(id SessionID, s Session) {\n\tshard := self.shards[uint64(id)%uint64(self.opts.ShardNumber)]\n\n\tshard.Store(id, s)\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\ttransmitSessionID(id)\n\t}\n}",
     "Receiver": {
         "IsPointer": true,
         "Type": {
@@ -1639,9 +1639,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
         {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "SessionIdentity",
+            "Name": "SessionID",
             "File": "manager.go",
-            "Line": 134,
+            "Line": 133,
             "StartOffset": 3386,
             "EndOffset": 3398
         },
@@ -1650,7 +1650,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
             "PkgPath": "github.com/cloudwego/localsession",
             "Name": "Session",
             "File": "manager.go",
-            "Line": 134,
+            "Line": 133,
             "StartOffset": 3400,
             "EndOffset": 3409
         }
@@ -1659,9 +1659,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
         {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "transmitSessionIdentity",
+            "Name": "transmitSessionID",
             "File": "manager.go",
-            "Line": 140,
+            "Line": 139,
             "StartOffset": 3547,
             "EndOffset": 3564
         }
@@ -1670,9 +1670,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
         {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "com/cloudwego/localsession.Store",
+            "Name": "shard.Store",
             "File": "manager.go",
-            "Line": 137,
+            "Line": 136,
             "StartOffset": 3485,
             "EndOffset": 3490
         }
