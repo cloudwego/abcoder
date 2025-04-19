@@ -256,6 +256,21 @@ func NewIdentity(mod, pkg, name string) Identity {
 	return Identity{ModPath: mod, PkgPath: pkg, Name: name}
 }
 
+func NewIdentityFromString(str string) (ret Identity) {
+	sp := strings.Split(str, "?")
+	if len(sp) == 2 {
+		ret.ModPath = sp[0]
+		str = sp[1]
+	}
+	sp = strings.Split(str, "#")
+	if len(sp) == 2 {
+		ret.PkgPath = sp[0]
+		str = sp[1]
+	}
+	ret.Name = str
+	return ret
+}
+
 // return full packagepath.name
 func (i Identity) String() string {
 	return i.PkgPath + "#" + i.Name
