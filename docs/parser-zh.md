@@ -9,14 +9,13 @@
 - uniast：统一 AST 结构的 golang 定义
 - lsp：LSP 协议处理 client，提供了 文件解析、引用查找、语法树解析、定义查找等接口，以及**通用的语言规范 LanguageSpec 接口**
 - collect：负责基于 LSP 符号收集和导出 UniAST，是核心运算逻辑
-- rust：主体是对 lsp#Spec 接口的 rust 语言规范实现。此外还有具体 lsp（rust-analyzer）的一些具体调用逻辑，以及针对按 id 查找的实现
-- go: go 的 parser 和 writer 实现
+- {language}：主体是对 lsp#Spec 接口的对应 {language} 规范的实现。此外还有具体 LSP server 的一些具体调用逻辑
 
 ## 运算过程
 
 ![lang-parser](../images/lang-parser.png)
 
-1. 通过命令行参数识别语言启动对应 lsp server，并传入初始化参数
+1. 通过命令行参数识别语言启动对应 LSP server，并传入初始化参数
 2. 遍历仓库文件，调用 `textDocument/documentSymbol` 方法获取每个文件的所有符号。对于每个符号
    1. 调用 `textDocument/semanticTokens/range` 方法获取符号代码中的 tokens
    2. 识别出有效实体的 token，调用 `textDocument/definition` 跳转到对应符号位置，从而建立节点依赖关系
@@ -26,15 +25,15 @@
 
 由于 UniAST 并不完全等价 LSP， 因此需要实现一些特定语言专属的行为接口才能进行转换。参考 lang/rust 包，大体需要实现以下能力：
 
-- GetDefaultLSP()：映射用户输入 language 到具体的 lsp.Language，以及对应的 lsp 名称
-- CheckRepo()：检查用户仓库情况，根据各语言规范额处理工具链等问题，并返回默认打开的第一个文件（用于触发 lsp-server），以及等候 sever 初始化完成的时间（根据仓库大小来决定）
+- GetDefaultLSP()：映射用户输入 language 到具体的 lsp.Language，以及对应的 LSP 名称
+- CheckRepo()：检查用户仓库情况，根据各语言规范额处理工具链等问题，并返回默认打开的第一个文件（用于触发 LSP server），以及等候 sever 初始化完成的时间（根据仓库大小来决定）
 - **LanguageSpec interface**: 核心模块，用于处理非 LSP 通用的语法信息、比如判断一个 token 是否是标准库的符号、函数签名解析等：
-- ModulePatcher: 后处理模块，用于处理语言特殊的信息收集。比如 rust 的 use 符号收集（lsp 不收集）。可以不实现
+- ModulePatcher: 后处理模块，用于处理语言特殊的信息收集。比如 rust 的 use 符号收集（LSP 不收集）。可以不实现
 
 ### LaunguageSpec
 
 ```
-用于在 lsp 符号收集过程中转换为 UniAST 所需信息，并且这些信息非 LSP 通用定义
+用于在 LSP 符号收集过程中转换为 UniAST 所需信息，并且这些信息非 LSP 通用定义
 
 ```go
 

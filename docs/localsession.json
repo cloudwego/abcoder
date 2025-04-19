@@ -20,7 +20,7 @@
                             "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                             "Name": "CountPersistentValues",
                             "File": "../../../../pkg/mod/github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b/cloud/metainfo/info.go",
-                            "Line": 215,
+                            "Line": 214,
                             "StartOffset": 0,
                             "EndOffset": 0,
                             "Content": "// CountPersistentValues counts the length of persisten KV pairs\nfunc CountPersistentValues(ctx context.Context) int {\n\tif n := getNode(ctx); n == nil {\n\t\treturn 0\n\t} else {\n\t\treturn len(n.persistent)\n\t}\n}"
@@ -33,7 +33,7 @@
                             "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                             "Name": "GetAllPersistentValues",
                             "File": "../../../../pkg/mod/github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b/cloud/metainfo/info.go",
-                            "Line": 147,
+                            "Line": 146,
                             "StartOffset": 0,
                             "EndOffset": 0,
                             "Content": "// GetAllPersistentValues retrieves all persistent values.\nfunc GetAllPersistentValues(ctx context.Context) (m map[string]string) {\n\tif n := getNode(ctx); n != nil {\n\t\tif cnt := len(n.persistent); cnt \u003e 0 {\n\t\t\tm = make(map[string]string, cnt)\n\t\t\tfor _, kv := range n.persistent {\n\t\t\t\tm[kv.key] = kv.val\n\t\t\t}\n\t\t}\n\t}\n\treturn\n}"
@@ -46,7 +46,7 @@
                             "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                             "Name": "RangePersistentValues",
                             "File": "../../../../pkg/mod/github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b/cloud/metainfo/info.go",
-                            "Line": 161,
+                            "Line": 160,
                             "StartOffset": 0,
                             "EndOffset": 0,
                             "Content": "// RangePersistentValues calls f sequentially for each persistent kv.\n// If f returns false, range stops the iteration.\nfunc RangePersistentValues(ctx context.Context, f func(k, v string) bool) {\n\tn := getNode(ctx)\n\tif n == nil {\n\t\treturn\n\t}\n\n\tfor _, kv := range n.persistent {\n\t\tif !f(kv.key, kv.val) {\n\t\t\tbreak\n\t\t}\n\t}\n}"
@@ -59,7 +59,7 @@
                             "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                             "Name": "WithPersistentValues",
                             "File": "../../../../pkg/mod/github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b/cloud/metainfo/info.go",
-                            "Line": 234,
+                            "Line": 233,
                             "StartOffset": 0,
                             "EndOffset": 0,
                             "Content": "// WithPersistentValues sets the values into the context by the given keys.\n// This value will be propagated to the services along the RPC call chain.\nfunc WithPersistentValues(ctx context.Context, kvs ...string) context.Context {\n\tif len(kvs)%2 != 0 {\n\t\tpanic(\"len(kvs) must be even\")\n\t}\n\n\tkvLen := len(kvs) / 2\n\n\tif ctx == nil || len(kvs) == 0 {\n\t\treturn ctx\n\t}\n\n\tvar n *node\n\tif m := getNode(ctx); m != nil {\n\t\tnn := *m\n\t\tn = \u0026nn\n\t\tn.persistent = make([]kv, len(m.persistent), len(m.persistent)+kvLen)\n\t\tcopy(n.persistent, m.persistent)\n\t} else {\n\t\tn = \u0026node{\n\t\t\tpersistent: make([]kv, 0, kvLen),\n\t\t}\n\t}\n\n\tfor i := 0; i \u003c kvLen; i++ {\n\t\tkey := getKey(kvs, i)\n\t\tval := getValue(kvs, i)\n\n\t\tif len(key) == 0 || len(val) == 0 {\n\t\t\tcontinue\n\t\t}\n\n\t\tif idx, ok := search(n.persistent, key); ok {\n\t\t\tif n.persistent[idx].val != val {\n\t\t\t\tn.persistent[idx].val = val\n\t\t\t}\n\t\t} else {\n\t\t\tn.persistent = append(n.persistent, kv{key: key, val: val})\n\t\t}\n\t}\n\n\treturn withNode(ctx, n)\n}"
@@ -91,7 +91,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "BindSession",
                             "File": "gls.go",
-                            "Line": 115,
+                            "Line": 114,
                             "StartOffset": 3200,
                             "EndOffset": 3457,
                             "Content": "// BindSession binds the session with current goroutine\n//\n// NOTICE: MUST call `InitDefaultManager()` once before using this API\nfunc BindSession(s Session) {\n\tif defaultManagerObj == nil {\n\t\treturn\n\t}\n\tdefaultManagerObj.BindSession(SessionID(goID()), s)\n}",
@@ -101,7 +101,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "gls.go",
-                                    "Line": 115,
+                                    "Line": 114,
                                     "StartOffset": 3347,
                                     "EndOffset": 3356
                                 }
@@ -112,7 +112,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "goID",
                                     "File": "gls.go",
-                                    "Line": 119,
+                                    "Line": 118,
                                     "StartOffset": 3444,
                                     "EndOffset": 3448
                                 }
@@ -123,7 +123,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.BindSession",
                                     "File": "gls.go",
-                                    "Line": 119,
+                                    "Line": 118,
                                     "StartOffset": 3422,
                                     "EndOffset": 3433
                                 }
@@ -134,7 +134,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "gls.go",
-                                    "Line": 119,
+                                    "Line": 118,
                                     "StartOffset": 3434,
                                     "EndOffset": 3443
                                 }
@@ -145,7 +145,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "defaultManagerObj",
                                     "File": "gls.go",
-                                    "Line": 116,
+                                    "Line": 115,
                                     "StartOffset": 3364,
                                     "EndOffset": 3381
                                 }
@@ -159,7 +159,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "CurSession",
                             "File": "gls.go",
-                            "Line": 104,
+                            "Line": 103,
                             "StartOffset": 2908,
                             "EndOffset": 3198,
                             "Content": "// CurSession gets the session for current goroutine\n//\n// NOTICE: MUST call `InitDefaultManager()` once before using this API\nfunc CurSession() (Session, bool) {\n\tif defaultManagerObj == nil {\n\t\treturn nil, false\n\t}\n\ts, ok := defaultManagerObj.GetSession(SessionID(goID()))\n\treturn s, ok\n}",
@@ -169,7 +169,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "gls.go",
-                                    "Line": 104,
+                                    "Line": 103,
                                     "StartOffset": 3054,
                                     "EndOffset": 3061
                                 }
@@ -180,7 +180,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "goID",
                                     "File": "gls.go",
-                                    "Line": 108,
+                                    "Line": 107,
                                     "StartOffset": 3174,
                                     "EndOffset": 3178
                                 }
@@ -191,7 +191,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.GetSession",
                                     "File": "gls.go",
-                                    "Line": 108,
+                                    "Line": 107,
                                     "StartOffset": 3153,
                                     "EndOffset": 3163
                                 }
@@ -202,7 +202,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "gls.go",
-                                    "Line": 108,
+                                    "Line": 107,
                                     "StartOffset": 3164,
                                     "EndOffset": 3173
                                 }
@@ -213,7 +213,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "defaultManagerObj",
                                     "File": "gls.go",
-                                    "Line": 105,
+                                    "Line": 104,
                                     "StartOffset": 3075,
                                     "EndOffset": 3092
                                 }
@@ -227,7 +227,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "DefaultManagerOptions",
                             "File": "gls.go",
-                            "Line": 42,
+                            "Line": 41,
                             "StartOffset": 1270,
                             "EndOffset": 1546,
                             "Content": "// DefaultManagerOptions returns default options for the default manager\nfunc DefaultManagerOptions() ManagerOptions {\n\treturn ManagerOptions{\n\t\tShardNumber:                   100,\n\t\tGCInterval:                    time.Minute * 10,\n\t\tEnableImplicitlyTransmitAsync: false,\n\t}\n}",
@@ -237,7 +237,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "gls.go",
-                                    "Line": 42,
+                                    "Line": 41,
                                     "StartOffset": 1372,
                                     "EndOffset": 1386
                                 }
@@ -248,7 +248,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "gls.go",
-                                    "Line": 43,
+                                    "Line": 42,
                                     "StartOffset": 1397,
                                     "EndOffset": 1411
                                 }
@@ -262,7 +262,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "GetDefaultManager",
                             "File": "gls.go",
-                            "Line": 51,
+                            "Line": 50,
                             "StartOffset": 1548,
                             "EndOffset": 1667,
                             "Content": "// GetDefaultManager returns the default manager\nfunc GetDefaultManager() *SessionManager {\n\treturn defaultManagerObj\n}",
@@ -272,7 +272,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionManager",
                                     "File": "gls.go",
-                                    "Line": 51,
+                                    "Line": 50,
                                     "StartOffset": 1622,
                                     "EndOffset": 1637
                                 }
@@ -283,7 +283,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "defaultManagerObj",
                                     "File": "gls.go",
-                                    "Line": 52,
+                                    "Line": 51,
                                     "StartOffset": 1648,
                                     "EndOffset": 1665
                                 }
@@ -297,7 +297,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "Go",
                             "File": "gls.go",
-                            "Line": 137,
+                            "Line": 136,
                             "StartOffset": 3868,
                             "EndOffset": 4049,
                             "Content": "// Go calls f asynchronously and pass caller's session to the new goroutine\nfunc Go(f func()) {\n\ts, ok := CurSession()\n\tif !ok {\n\t\tGoSession(nil, f)\n\t} else {\n\t\tGoSession(s, f)\n\t}\n}",
@@ -307,7 +307,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "CurSession",
                                     "File": "gls.go",
-                                    "Line": 138,
+                                    "Line": 137,
                                     "StartOffset": 3974,
                                     "EndOffset": 3984
                                 },
@@ -316,7 +316,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "GoSession",
                                     "File": "gls.go",
-                                    "Line": 140,
+                                    "Line": 139,
                                     "StartOffset": 3999,
                                     "EndOffset": 4008
                                 }
@@ -330,7 +330,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "GoSession",
                             "File": "gls.go",
-                            "Line": 147,
+                            "Line": 146,
                             "StartOffset": 4051,
                             "EndOffset": 4361,
                             "Content": "// SessionGo calls f asynchronously and pass s session to the new goroutine\nfunc GoSession(s Session, f func()) {\n\tgo func() {\n\t\tdefer func() {\n\t\t\tif v := recover(); v != nil {\n\t\t\t\tprintln(fmt.Sprintf(\"GoSession recover: %v\", v))\n\t\t\t}\n\t\t\tUnbindSession()\n\t\t}()\n\t\tif s != nil {\n\t\t\tBindSession(s)\n\t\t}\n\t\tf()\n\t}()\n}",
@@ -340,7 +340,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "gls.go",
-                                    "Line": 147,
+                                    "Line": 146,
                                     "StartOffset": 4142,
                                     "EndOffset": 4151
                                 }
@@ -351,7 +351,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "UnbindSession",
                                     "File": "gls.go",
-                                    "Line": 153,
+                                    "Line": 152,
                                     "StartOffset": 4289,
                                     "EndOffset": 4302
                                 },
@@ -360,7 +360,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "BindSession",
                                     "File": "gls.go",
-                                    "Line": 156,
+                                    "Line": 155,
                                     "StartOffset": 4330,
                                     "EndOffset": 4341
                                 }
@@ -374,7 +374,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "InitDefaultManager",
                             "File": "gls.go",
-                            "Line": 64,
+                            "Line": 63,
                             "StartOffset": 1669,
                             "EndOffset": 2277,
                             "Content": "// InitDefaultManager update and restart default manager.\n// It accept argument opts and env config both.\n//\n// NOTICE:\n//   - It use env SESSION_CONFIG_KEY prior to argument opts;\n//   - If both env and opts are empty, it won't reset manager;\n//   - For concurrent safety, you can only successfully reset manager ONCE.\n//\n//go:nocheckptr\nfunc InitDefaultManager(opts ManagerOptions) {\n\tdefaultManagerOnce.Do(func() {\n\t\t// env config has high priority\n\t\tcheckEnvOptions(\u0026opts)\n\n\t\tif defaultManagerObj != nil {\n\t\t\tdefaultManagerObj.Close()\n\t\t}\n\t\tobj := NewSessionManager(opts)\n\t\tdefaultManagerObj = \u0026obj\n\t})\n}",
@@ -384,7 +384,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "gls.go",
-                                    "Line": 64,
+                                    "Line": 63,
                                     "StartOffset": 2032,
                                     "EndOffset": 2051
                                 }
@@ -395,7 +395,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "checkEnvOptions",
                                     "File": "gls.go",
-                                    "Line": 67,
+                                    "Line": 66,
                                     "StartOffset": 2123,
                                     "EndOffset": 2138
                                 },
@@ -404,7 +404,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "NewSessionManager",
                                     "File": "gls.go",
-                                    "Line": 72,
+                                    "Line": 71,
                                     "StartOffset": 2221,
                                     "EndOffset": 2238
                                 }
@@ -415,7 +415,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.Close",
                                     "File": "gls.go",
-                                    "Line": 70,
+                                    "Line": 69,
                                     "StartOffset": 2200,
                                     "EndOffset": 2205
                                 }
@@ -426,7 +426,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "defaultManagerObj",
                                     "File": "gls.go",
-                                    "Line": 69,
+                                    "Line": 68,
                                     "StartOffset": 2152,
                                     "EndOffset": 2169
                                 }
@@ -440,7 +440,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "NewSessionCtx",
                             "File": "session.go",
-                            "Line": 44,
+                            "Line": 43,
                             "StartOffset": 1225,
                             "EndOffset": 1436,
                             "Content": "// NewSessionCtx creates and enables a SessionCtx\nfunc NewSessionCtx(ctx context.Context) SessionCtx {\n\tvar enabled atomic.Value\n\tenabled.Store(true)\n\treturn SessionCtx{\n\t\tenabled: \u0026enabled,\n\t\tstorage: ctx,\n\t}\n}",
@@ -450,7 +450,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx",
                                     "File": "session.go",
-                                    "Line": 44,
+                                    "Line": 43,
                                     "StartOffset": 1315,
                                     "EndOffset": 1325
                                 }
@@ -461,7 +461,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx",
                                     "File": "session.go",
-                                    "Line": 47,
+                                    "Line": 46,
                                     "StartOffset": 1383,
                                     "EndOffset": 1393
                                 }
@@ -475,7 +475,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "NewSessionCtxWithTimeout",
                             "File": "session.go",
-                            "Line": 55,
+                            "Line": 54,
                             "StartOffset": 1438,
                             "EndOffset": 1720,
                             "Content": "// NewSessionCtx creates and enables a SessionCtx,\n// and disable the session after timeout\nfunc NewSessionCtxWithTimeout(ctx context.Context, timeout time.Duration) SessionCtx {\n\tret := NewSessionCtx(ctx)\n\tgo func() {\n\t\t\u003c-time.NewTimer(timeout).C\n\t\tret.Disable()\n\t}()\n\treturn ret\n}",
@@ -485,7 +485,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx",
                                     "File": "session.go",
-                                    "Line": 55,
+                                    "Line": 54,
                                     "StartOffset": 1604,
                                     "EndOffset": 1614
                                 }
@@ -496,7 +496,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "NewSessionCtx",
                                     "File": "session.go",
-                                    "Line": 56,
+                                    "Line": 55,
                                     "StartOffset": 1625,
                                     "EndOffset": 1638
                                 }
@@ -507,7 +507,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx.Disable",
                                     "File": "session.go",
-                                    "Line": 59,
+                                    "Line": 58,
                                     "StartOffset": 1692,
                                     "EndOffset": 1699
                                 }
@@ -521,7 +521,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "NewSessionManager",
                             "File": "manager.go",
-                            "Line": 63,
+                            "Line": 62,
                             "StartOffset": 1636,
                             "EndOffset": 2138,
                             "Content": "// NewSessionManager creates a SessionManager with default containers\n// If opts.GCInterval \u003e 0, it will start scheduled GC() loop automatically\nfunc NewSessionManager(opts ManagerOptions) SessionManager {\n\tif opts.ShardNumber \u003c= 0 {\n\t\tpanic(\"ShardNumber must be larger than zero\")\n\t}\n\tshards := make([]*shard, opts.ShardNumber)\n\tfor i := range shards {\n\t\tshards[i] = newShard()\n\t}\n\tret := SessionManager{\n\t\tshards: shards,\n\t\topts:   opts,\n\t}\n\n\tif opts.GCInterval \u003e 0 {\n\t\tret.startGC()\n\t}\n\treturn ret\n}",
@@ -531,7 +531,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "manager.go",
-                                    "Line": 63,
+                                    "Line": 62,
                                     "StartOffset": 1804,
                                     "EndOffset": 1823
                                 }
@@ -542,7 +542,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionManager",
                                     "File": "manager.go",
-                                    "Line": 63,
+                                    "Line": 62,
                                     "StartOffset": 1825,
                                     "EndOffset": 1839
                                 }
@@ -553,7 +553,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "newShard",
                                     "File": "manager.go",
-                                    "Line": 69,
+                                    "Line": 68,
                                     "StartOffset": 2004,
                                     "EndOffset": 2012
                                 }
@@ -564,7 +564,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionManager.startGC",
                                     "File": "manager.go",
-                                    "Line": 77,
+                                    "Line": 76,
                                     "StartOffset": 2112,
                                     "EndOffset": 2119
                                 }
@@ -575,7 +575,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "shard",
                                     "File": "manager.go",
-                                    "Line": 67,
+                                    "Line": 66,
                                     "StartOffset": 1940,
                                     "EndOffset": 1945
                                 },
@@ -584,7 +584,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionManager",
                                     "File": "manager.go",
-                                    "Line": 71,
+                                    "Line": 70,
                                     "StartOffset": 2026,
                                     "EndOffset": 2040
                                 }
@@ -598,7 +598,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "NewSessionMap",
                             "File": "session.go",
-                            "Line": 102,
+                            "Line": 101,
                             "StartOffset": 2676,
                             "EndOffset": 2897,
                             "Content": "// NewSessionMap creates and enables a SessionMap\nfunc NewSessionMap(m map[interface{}]interface{}) *SessionMap {\n\tvar enabled atomic.Value\n\tenabled.Store(true)\n\treturn \u0026SessionMap{\n\t\tenabled: \u0026enabled,\n\t\tstorage: m,\n\t}\n}",
@@ -608,7 +608,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionMap",
                                     "File": "session.go",
-                                    "Line": 102,
+                                    "Line": 101,
                                     "StartOffset": 2776,
                                     "EndOffset": 2787
                                 }
@@ -619,7 +619,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionMap",
                                     "File": "session.go",
-                                    "Line": 105,
+                                    "Line": 104,
                                     "StartOffset": 2846,
                                     "EndOffset": 2856
                                 }
@@ -633,7 +633,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "NewSessionMapWithTimeout",
                             "File": "session.go",
-                            "Line": 113,
+                            "Line": 112,
                             "StartOffset": 2899,
                             "EndOffset": 3190,
                             "Content": "// NewSessionCtx creates and enables a SessionCtx,\n// and disable the session after timeout\nfunc NewSessionMapWithTimeout(m map[interface{}]interface{}, timeout time.Duration) *SessionMap {\n\tret := NewSessionMap(m)\n\tgo func() {\n\t\t\u003c-time.NewTimer(timeout).C\n\t\tret.Disable()\n\t}()\n\treturn ret\n}",
@@ -643,7 +643,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionMap",
                                     "File": "session.go",
-                                    "Line": 113,
+                                    "Line": 112,
                                     "StartOffset": 3075,
                                     "EndOffset": 3086
                                 }
@@ -654,7 +654,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "NewSessionMap",
                                     "File": "session.go",
-                                    "Line": 114,
+                                    "Line": 113,
                                     "StartOffset": 3097,
                                     "EndOffset": 3110
                                 }
@@ -665,7 +665,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.Disable",
                                     "File": "session.go",
-                                    "Line": 117,
+                                    "Line": 116,
                                     "StartOffset": 3162,
                                     "EndOffset": 3169
                                 }
@@ -679,7 +679,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "Session.Get",
                             "File": "session.go",
-                            "Line": 30,
+                            "Line": 29,
                             "StartOffset": 821,
                             "EndOffset": 892,
                             "Content": "// Get returns value for specific key\nGet(key interface{}) interface{}"
@@ -692,7 +692,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "Session.IsValid",
                             "File": "session.go",
-                            "Line": 27,
+                            "Line": 26,
                             "StartOffset": 751,
                             "EndOffset": 818,
                             "Content": "// IsValid tells if the session is valid at present\nIsValid() bool"
@@ -705,7 +705,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "Session.WithValue",
                             "File": "session.go",
-                            "Line": 33,
+                            "Line": 32,
                             "StartOffset": 895,
                             "EndOffset": 1025,
                             "Content": "// WithValue sets value for specific key，and return newly effective session\nWithValue(key interface{}, val interface{}) Session"
@@ -718,7 +718,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionCtx.Disable",
                             "File": "session.go",
-                            "Line": 65,
+                            "Line": 64,
                             "StartOffset": 1722,
                             "EndOffset": 1813,
                             "Content": "// Disable ends the session\nfunc (self SessionCtx) Disable() {\n\tself.enabled.Store(false)\n}",
@@ -739,7 +739,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionCtx.Export",
                             "File": "session.go",
-                            "Line": 70,
+                            "Line": 69,
                             "StartOffset": 1815,
                             "EndOffset": 1924,
                             "Content": "// Export exports underlying context\nfunc (self SessionCtx) Export() context.Context {\n\treturn self.storage\n}",
@@ -760,7 +760,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionCtx.Get",
                             "File": "session.go",
-                            "Line": 80,
+                            "Line": 79,
                             "StartOffset": 2056,
                             "EndOffset": 2177,
                             "Content": "// Get value for specific key\nfunc (self SessionCtx) Get(key interface{}) interface{} {\n\treturn self.storage.Value(key)\n}",
@@ -781,7 +781,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionCtx.IsValid",
                             "File": "session.go",
-                            "Line": 75,
+                            "Line": 74,
                             "StartOffset": 1926,
                             "EndOffset": 2054,
                             "Content": "// IsValid tells if the session is valid at present\nfunc (self SessionCtx) IsValid() bool {\n\treturn self.enabled.Load().(bool)\n}",
@@ -802,7 +802,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionCtx.WithValue",
                             "File": "session.go",
-                            "Line": 85,
+                            "Line": 84,
                             "StartOffset": 2179,
                             "EndOffset": 2438,
                             "Content": "// Set value for specific key，and return newly effective session\nfunc (self SessionCtx) WithValue(key interface{}, val interface{}) Session {\n\tctx := context.WithValue(self.storage, key, val)\n\treturn SessionCtx{\n\t\tenabled: self.enabled,\n\t\tstorage: ctx,\n\t}\n}",
@@ -820,7 +820,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "session.go",
-                                    "Line": 85,
+                                    "Line": 84,
                                     "StartOffset": 2313,
                                     "EndOffset": 2320
                                 }
@@ -831,7 +831,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx",
                                     "File": "session.go",
-                                    "Line": 87,
+                                    "Line": 86,
                                     "StartOffset": 2381,
                                     "EndOffset": 2391
                                 }
@@ -845,7 +845,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.BindSession",
                             "File": "manager.go",
-                            "Line": 134,
+                            "Line": 133,
                             "StartOffset": 3290,
                             "EndOffset": 3573,
                             "Content": "// BindSession binds the session with current goroutine\nfunc (self *SessionManager) BindSession(id SessionID, s Session) {\n\tshard := self.shards[uint64(id)%uint64(self.opts.ShardNumber)]\n\n\tshard.Store(id, s)\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\ttransmitSessionID(id)\n\t}\n}",
@@ -863,7 +863,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 134,
+                                    "Line": 133,
                                     "StartOffset": 3386,
                                     "EndOffset": 3398
                                 },
@@ -872,7 +872,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "manager.go",
-                                    "Line": 134,
+                                    "Line": 133,
                                     "StartOffset": 3400,
                                     "EndOffset": 3409
                                 }
@@ -883,7 +883,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "transmitSessionID",
                                     "File": "manager.go",
-                                    "Line": 140,
+                                    "Line": 139,
                                     "StartOffset": 3547,
                                     "EndOffset": 3564
                                 }
@@ -894,7 +894,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.Store",
                                     "File": "manager.go",
-                                    "Line": 137,
+                                    "Line": 136,
                                     "StartOffset": 3485,
                                     "EndOffset": 3490
                                 }
@@ -908,7 +908,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.Close",
                             "File": "manager.go",
-                            "Line": 200,
+                            "Line": 199,
                             "StartOffset": 4874,
                             "EndOffset": 5010,
                             "Content": "// Close stop persistent work for the manager, like GC\nfunc (self SessionManager) Close() {\n\tif self.tik != nil {\n\t\tself.tik.Stop()\n\t}\n}",
@@ -929,7 +929,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.GC",
                             "File": "manager.go",
-                            "Line": 163,
+                            "Line": 162,
                             "StartOffset": 4014,
                             "EndOffset": 4549,
                             "Content": "// GC sweep invalid sessions and release unused memory\nfunc (self SessionManager) GC() {\n\tif !atomic.CompareAndSwapUint32(\u0026self.inGC, 0, 1) {\n\t\treturn\n\t}\n\n\tfor _, shard := range self.shards {\n\t\tshard.lock.Lock()\n\t\tn := shard.m\n\t\tm := make(map[SessionID]Session, len(n))\n\t\tfor id, s := range n {\n\t\t\t// Warning: may panic here?\n\t\t\tif s.IsValid() {\n\t\t\t\tm[id] = s\n\t\t\t}\n\t\t}\n\t\t// atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(\u0026shard.m)), unsafe.Pointer(\u0026m))\n\t\tshard.m = m\n\t\tshard.lock.Unlock()\n\t}\n\n\tatomic.StoreUint32(\u0026self.inGC, 0)\n}",
@@ -947,7 +947,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session.IsValid",
                                     "File": "manager.go",
-                                    "Line": 174,
+                                    "Line": 173,
                                     "StartOffset": 4348,
                                     "EndOffset": 4355
                                 }
@@ -958,7 +958,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 171,
+                                    "Line": 170,
                                     "StartOffset": 4257,
                                     "EndOffset": 4266
                                 },
@@ -967,7 +967,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "manager.go",
-                                    "Line": 171,
+                                    "Line": 170,
                                     "StartOffset": 4267,
                                     "EndOffset": 4274
                                 }
@@ -981,7 +981,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.GetSession",
                             "File": "manager.go",
-                            "Line": 115,
+                            "Line": 114,
                             "StartOffset": 2768,
                             "EndOffset": 3288,
                             "Content": "// Get gets specific session\n// or get inherited session if option EnableImplicitlyTransmitAsync is true\nfunc (self *SessionManager) GetSession(id SessionID) (Session, bool) {\n\tshard := self.shards[uint64(id)%uint64(self.opts.ShardNumber)]\n\tsession, ok := shard.Load(id)\n\tif ok {\n\t\treturn session, ok\n\t}\n\tif !self.opts.EnableImplicitlyTransmitAsync {\n\t\treturn nil, false\n\t}\n\n\tid, ok = getSessionID()\n\tif !ok {\n\t\treturn nil, false\n\t}\n\tshard = self.shards[uint64(id)%uint64(self.opts.ShardNumber)]\n\treturn shard.Load(id)\n}",
@@ -999,7 +999,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 115,
+                                    "Line": 114,
                                     "StartOffset": 2912,
                                     "EndOffset": 2924
                                 }
@@ -1010,7 +1010,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "manager.go",
-                                    "Line": 115,
+                                    "Line": 114,
                                     "StartOffset": 2927,
                                     "EndOffset": 2934
                                 }
@@ -1021,7 +1021,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "getSessionID",
                                     "File": "manager.go",
-                                    "Line": 125,
+                                    "Line": 124,
                                     "StartOffset": 3153,
                                     "EndOffset": 3165
                                 }
@@ -1032,7 +1032,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.Load",
                                     "File": "manager.go",
-                                    "Line": 117,
+                                    "Line": 116,
                                     "StartOffset": 3030,
                                     "EndOffset": 3034
                                 }
@@ -1046,7 +1046,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.Options",
                             "File": "manager.go",
-                            "Line": 83,
+                            "Line": 82,
                             "StartOffset": 2140,
                             "EndOffset": 2252,
                             "Content": "// Options shows the manager's Options\nfunc (self SessionManager) Options() ManagerOptions {\n\treturn self.opts\n}",
@@ -1064,7 +1064,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "manager.go",
-                                    "Line": 83,
+                                    "Line": 82,
                                     "StartOffset": 2216,
                                     "EndOffset": 2230
                                 }
@@ -1078,7 +1078,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.UnbindSession",
                             "File": "manager.go",
-                            "Line": 149,
+                            "Line": 148,
                             "StartOffset": 3575,
                             "EndOffset": 4012,
                             "Content": "// UnbindSession clears current session\n//\n// Notice: If you want to end the session,\n// please call `Disable()` (or whatever make the session invalid)\n// on your session's implementation\nfunc (self *SessionManager) UnbindSession(id SessionID) {\n\tshard := self.shards[uint64(id)%uint64(self.opts.ShardNumber)]\n\n\t_, ok := shard.Load(id)\n\tif ok {\n\t\tshard.Delete(id)\n\t}\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\tclearSessionID()\n\t}\n}",
@@ -1096,7 +1096,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 149,
+                                    "Line": 148,
                                     "StartOffset": 3805,
                                     "EndOffset": 3817
                                 }
@@ -1107,7 +1107,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "clearSessionID",
                                     "File": "manager.go",
-                                    "Line": 158,
+                                    "Line": 157,
                                     "StartOffset": 3991,
                                     "EndOffset": 4005
                                 }
@@ -1118,7 +1118,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.Load",
                                     "File": "manager.go",
-                                    "Line": 152,
+                                    "Line": 151,
                                     "StartOffset": 3902,
                                     "EndOffset": 3906
                                 },
@@ -1127,7 +1127,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.Delete",
                                     "File": "manager.go",
-                                    "Line": 154,
+                                    "Line": 153,
                                     "StartOffset": 3928,
                                     "EndOffset": 3934
                                 }
@@ -1141,7 +1141,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager.startGC",
                             "File": "manager.go",
-                            "Line": 187,
+                            "Line": 186,
                             "StartOffset": 4551,
                             "EndOffset": 4872,
                             "Content": "// startGC start a scheduled goroutine to call GC() according to GCInterval\nfunc (self *SessionManager) startGC() {\n\tif self.opts.GCInterval \u003c time.Second {\n\t\tpanic(\"GCInterval must be larger than 1 second\")\n\t}\n\tself.tik = time.NewTicker(self.opts.GCInterval)\n\tgo func() {\n\t\tfor range self.tik.C {\n\t\t\tself.GC()\n\t\t}\n\t}()\n}",
@@ -1159,7 +1159,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.GC",
                                     "File": "manager.go",
-                                    "Line": 194,
+                                    "Line": 193,
                                     "StartOffset": 4857,
                                     "EndOffset": 4859
                                 }
@@ -1173,7 +1173,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionMap.Disable",
                             "File": "session.go",
-                            "Line": 131,
+                            "Line": 130,
                             "StartOffset": 3359,
                             "EndOffset": 3481,
                             "Content": "// Disable ends the session\nfunc (self *SessionMap) Disable() {\n\tif self == nil {\n\t\treturn\n\t}\n\tself.enabled.Store(false)\n}",
@@ -1194,7 +1194,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionMap.Export",
                             "File": "session.go",
-                            "Line": 139,
+                            "Line": 138,
                             "StartOffset": 3483,
                             "EndOffset": 3782,
                             "Content": "// Export COPIES and exports underlying map\nfunc (self *SessionMap) Export() map[interface{}]interface{} {\n\tif self == nil {\n\t\treturn nil\n\t}\n\tm := make(map[interface{}]interface{}, len(self.storage))\n\tself.lock.RLock()\n\tfor k, v := range self.storage {\n\t\tm[k] = v\n\t}\n\tself.lock.RUnlock()\n\treturn m\n}",
@@ -1215,7 +1215,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionMap.Get",
                             "File": "session.go",
-                            "Line": 153,
+                            "Line": 152,
                             "StartOffset": 3784,
                             "EndOffset": 3986,
                             "Content": "// Get value for specific key\nfunc (self *SessionMap) Get(key interface{}) interface{} {\n\tif self == nil {\n\t\treturn nil\n\t}\n\tself.lock.RLock()\n\tval := self.storage[key]\n\tself.lock.RUnlock()\n\treturn val\n}",
@@ -1236,7 +1236,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionMap.IsValid",
                             "File": "session.go",
-                            "Line": 123,
+                            "Line": 122,
                             "StartOffset": 3192,
                             "EndOffset": 3357,
                             "Content": "// IsValid tells if the session is valid at present\nfunc (self *SessionMap) IsValid() bool {\n\tif self == nil {\n\t\treturn false\n\t}\n\treturn self.enabled.Load().(bool)\n}",
@@ -1257,7 +1257,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionMap.WithValue",
                             "File": "session.go",
-                            "Line": 164,
+                            "Line": 163,
                             "StartOffset": 3988,
                             "EndOffset": 4215,
                             "Content": "// Set value for specific key，and return itself\nfunc (self *SessionMap) WithValue(key, val interface{}) Session {\n\tif self == nil {\n\t\treturn nil\n\t}\n\tself.lock.Lock()\n\tself.storage[key] = val\n\tself.lock.Unlock()\n\treturn self\n}",
@@ -1275,7 +1275,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "session.go",
-                                    "Line": 164,
+                                    "Line": 163,
                                     "StartOffset": 4094,
                                     "EndOffset": 4101
                                 }
@@ -1289,7 +1289,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "UnbindSession",
                             "File": "gls.go",
-                            "Line": 129,
+                            "Line": 128,
                             "StartOffset": 3459,
                             "EndOffset": 3866,
                             "Content": "// UnbindSession unbind a session (if any) with current goroutine\n//\n// NOTICE: If you want to end the session,\n// please call `Disable()` (or whatever make the session invalid)\n// on your session's implementation\n//\n// NOTICE: MUST call `InitDefaultManager()` once before using this API\nfunc UnbindSession() {\n\tif defaultManagerObj == nil {\n\t\treturn\n\t}\n\tdefaultManagerObj.UnbindSession(SessionID(goID()))\n}",
@@ -1299,7 +1299,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "goID",
                                     "File": "gls.go",
-                                    "Line": 133,
+                                    "Line": 132,
                                     "StartOffset": 3856,
                                     "EndOffset": 3860
                                 }
@@ -1310,7 +1310,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "com/cloudwego/localsession.UnbindSession",
                                     "File": "gls.go",
-                                    "Line": 133,
+                                    "Line": 132,
                                     "StartOffset": 3832,
                                     "EndOffset": 3845
                                 }
@@ -1321,7 +1321,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "gls.go",
-                                    "Line": 133,
+                                    "Line": 132,
                                     "StartOffset": 3846,
                                     "EndOffset": 3855
                                 }
@@ -1332,7 +1332,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "defaultManagerObj",
                                     "File": "gls.go",
-                                    "Line": 130,
+                                    "Line": 129,
                                     "StartOffset": 3774,
                                     "EndOffset": 3791
                                 }
@@ -1346,7 +1346,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "checkEnvOptions",
                             "File": "gls.go",
-                            "Line": 77,
+                            "Line": 76,
                             "StartOffset": 2279,
                             "EndOffset": 2906,
                             "Content": "func checkEnvOptions(opts *ManagerOptions) {\n\tif env := os.Getenv(SESSION_CONFIG_KEY); env != \"\" {\n\t\tenvs := strings.Split(env, \",\")\n\t\t// parse first option as EnableTransparentTransmitAsync\n\t\tif strings.ToLower(envs[0]) == \"true\" {\n\t\t\topts.EnableImplicitlyTransmitAsync = true\n\t\t}\n\n\t\t// parse first option as ShardNumber\n\t\tif len(envs) \u003e 1 {\n\t\t\tif opt, err := strconv.Atoi(envs[1]); err == nil {\n\t\t\t\topts.ShardNumber = opt\n\t\t\t}\n\t\t}\n\n\t\t// parse third option as EnableTransparentTransmitAsync\n\t\tif len(envs) \u003e 2 {\n\t\t\tif d, err := time.ParseDuration(envs[2]); err == nil \u0026\u0026 d \u003e time.Second {\n\t\t\t\topts.GCInterval = d\n\t\t\t}\n\t\t}\n\t}\n}",
@@ -1356,7 +1356,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "gls.go",
-                                    "Line": 77,
+                                    "Line": 76,
                                     "StartOffset": 2300,
                                     "EndOffset": 2320
                                 }
@@ -1367,7 +1367,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SESSION_CONFIG_KEY",
                                     "File": "gls.go",
-                                    "Line": 78,
+                                    "Line": 77,
                                     "StartOffset": 2345,
                                     "EndOffset": 2363
                                 }
@@ -1381,7 +1381,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "clearSessionID",
                             "File": "stubs.go",
-                            "Line": 73,
+                            "Line": 72,
                             "StartOffset": 1629,
                             "EndOffset": 1891,
                             "Content": "func clearSessionID() {\n\tm := getPproLabel()\n\tif m == nil {\n\t\treturn \n\t}\n\tif _, ok := (*m)[Pprof_Label_Session_ID]; !ok {\n\t\treturn\n\t}\n\tn := make(labelMap, len(*m))\n\tfor k, v := range *m {\n\t\tif k != Pprof_Label_Session_ID {\n\t\t\tn[k] = v\n\t\t}\n\t}\n\tsetPprofLabel(\u0026n)\n}",
@@ -1391,7 +1391,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "getPproLabel",
                                     "File": "stubs.go",
-                                    "Line": 74,
+                                    "Line": 73,
                                     "StartOffset": 1659,
                                     "EndOffset": 1671
                                 },
@@ -1400,7 +1400,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "setPprofLabel",
                                     "File": "stubs.go",
-                                    "Line": 87,
+                                    "Line": 86,
                                     "StartOffset": 1872,
                                     "EndOffset": 1885
                                 }
@@ -1411,7 +1411,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "labelMap",
                                     "File": "stubs.go",
-                                    "Line": 81,
+                                    "Line": 80,
                                     "StartOffset": 1774,
                                     "EndOffset": 1782
                                 }
@@ -1422,7 +1422,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Pprof_Label_Session_ID",
                                     "File": "stubs.go",
-                                    "Line": 78,
+                                    "Line": 77,
                                     "StartOffset": 1720,
                                     "EndOffset": 1742
                                 }
@@ -1436,7 +1436,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "getPproLabel",
                             "File": "stubs.go",
-                            "Line": 34,
+                            "Line": 33,
                             "StartOffset": 872,
                             "EndOffset": 963,
                             "Content": "//go:linkname getPproLabel runtime/pprof.runtime_getProfLabel\nfunc getPproLabel() *labelMap",
@@ -1446,7 +1446,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "labelMap",
                                     "File": "stubs.go",
-                                    "Line": 34,
+                                    "Line": 33,
                                     "StartOffset": 954,
                                     "EndOffset": 963
                                 }
@@ -1460,7 +1460,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "getSessionID",
                             "File": "stubs.go",
-                            "Line": 57,
+                            "Line": 56,
                             "StartOffset": 1338,
                             "EndOffset": 1627,
                             "Content": "func getSessionID() (SessionID, bool) {\n\tm := getPproLabel()\n\tif m == nil {\n\t\treturn 0, false\n\t}\n\tif v, ok := (*m)[Pprof_Label_Session_ID]; !ok {\n\t\treturn 0, false\n\t} else {\n\t\tid, err := strconv.ParseInt(v, 10, 64)\n\t\tif err != nil {\n\t\t\treturn 0, false\n\t\t}\n\t\treturn SessionID(id), true\n\t}\n}",
@@ -1470,7 +1470,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "stubs.go",
-                                    "Line": 57,
+                                    "Line": 56,
                                     "StartOffset": 1359,
                                     "EndOffset": 1368
                                 }
@@ -1481,7 +1481,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "getPproLabel",
                                     "File": "stubs.go",
-                                    "Line": 58,
+                                    "Line": 57,
                                     "StartOffset": 1384,
                                     "EndOffset": 1396
                                 }
@@ -1492,7 +1492,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "stubs.go",
-                                    "Line": 69,
+                                    "Line": 68,
                                     "StartOffset": 1603,
                                     "EndOffset": 1612
                                 }
@@ -1503,7 +1503,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Pprof_Label_Session_ID",
                                     "File": "stubs.go",
-                                    "Line": 62,
+                                    "Line": 61,
                                     "StartOffset": 1453,
                                     "EndOffset": 1475
                                 }
@@ -1517,7 +1517,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "goID",
                             "File": "stubs.go",
-                            "Line": 24,
+                            "Line": 23,
                             "StartOffset": 676,
                             "EndOffset": 741,
                             "Content": "//go:nocheckptr\nfunc goID() uint64 {\n\treturn uint64(gls.GoID())\n}",
@@ -1527,7 +1527,7 @@
                                     "PkgPath": "github.com/modern-go/gls",
                                     "Name": "GoID",
                                     "File": "stubs.go",
-                                    "Line": 25,
+                                    "Line": 24,
                                     "StartOffset": 732,
                                     "EndOffset": 736
                                 }
@@ -1541,7 +1541,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "newShard",
                             "File": "manager.go",
-                            "Line": 55,
+                            "Line": 54,
                             "StartOffset": 1523,
                             "EndOffset": 1634,
                             "Content": "func newShard() *shard {\n\tret := new(shard)\n\tret.m = make(map[SessionID]Session, defaultShardCap)\n\treturn ret\n}",
@@ -1551,7 +1551,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "shard",
                                     "File": "manager.go",
-                                    "Line": 55,
+                                    "Line": 54,
                                     "StartOffset": 1539,
                                     "EndOffset": 1545
                                 }
@@ -1562,7 +1562,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "shard",
                                     "File": "manager.go",
-                                    "Line": 56,
+                                    "Line": 55,
                                     "StartOffset": 1560,
                                     "EndOffset": 1565
                                 },
@@ -1571,7 +1571,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 57,
+                                    "Line": 56,
                                     "StartOffset": 1585,
                                     "EndOffset": 1594
                                 },
@@ -1580,7 +1580,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "manager.go",
-                                    "Line": 57,
+                                    "Line": 56,
                                     "StartOffset": 1595,
                                     "EndOffset": 1602
                                 }
@@ -1591,7 +1591,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "defaultShardCap",
                                     "File": "manager.go",
-                                    "Line": 57,
+                                    "Line": 56,
                                     "StartOffset": 1604,
                                     "EndOffset": 1619
                                 }
@@ -1605,7 +1605,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "setPprofLabel",
                             "File": "stubs.go",
-                            "Line": 31,
+                            "Line": 30,
                             "StartOffset": 776,
                             "EndOffset": 870,
                             "Content": "//go:linkname setPprofLabel runtime/pprof.runtime_setProfLabel\nfunc setPprofLabel(m *labelMap)",
@@ -1615,7 +1615,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "labelMap",
                                     "File": "stubs.go",
-                                    "Line": 31,
+                                    "Line": 30,
                                     "StartOffset": 858,
                                     "EndOffset": 869
                                 }
@@ -1629,7 +1629,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "shard.Delete",
                             "File": "manager.go",
-                            "Line": 107,
+                            "Line": 106,
                             "StartOffset": 2677,
                             "EndOffset": 2766,
                             "Content": "func (s *shard) Delete(id SessionID) {\n\ts.lock.Lock()\n\tdelete(s.m, id)\n\ts.lock.Unlock()\n}",
@@ -1647,7 +1647,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 107,
+                                    "Line": 106,
                                     "StartOffset": 2700,
                                     "EndOffset": 2712
                                 }
@@ -1661,7 +1661,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "shard.Load",
                             "File": "manager.go",
-                            "Line": 90,
+                            "Line": 89,
                             "StartOffset": 2319,
                             "EndOffset": 2576,
                             "Content": "func (s *shard) Load(id SessionID) (Session, bool) {\n\ts.lock.RLock()\n\n\t// p := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(\u0026s.m)))\n\t// m := *(*map[SessionID]Session)(unsafe.Pointer(p))\n\n\tsession, ok := s.m[id]\n\ts.lock.RUnlock()\n\treturn session, ok\n}",
@@ -1679,7 +1679,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 90,
+                                    "Line": 89,
                                     "StartOffset": 2340,
                                     "EndOffset": 2352
                                 }
@@ -1690,7 +1690,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "manager.go",
-                                    "Line": 90,
+                                    "Line": 89,
                                     "StartOffset": 2355,
                                     "EndOffset": 2362
                                 }
@@ -1704,7 +1704,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "shard.Store",
                             "File": "manager.go",
-                            "Line": 101,
+                            "Line": 100,
                             "StartOffset": 2578,
                             "EndOffset": 2675,
                             "Content": "func (s *shard) Store(id SessionID, se Session) {\n\ts.lock.Lock()\n\ts.m[id] = se\n\ts.lock.Unlock()\n}",
@@ -1722,7 +1722,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "manager.go",
-                                    "Line": 101,
+                                    "Line": 100,
                                     "StartOffset": 2600,
                                     "EndOffset": 2612
                                 },
@@ -1731,7 +1731,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Session",
                                     "File": "manager.go",
-                                    "Line": 101,
+                                    "Line": 100,
                                     "StartOffset": 2614,
                                     "EndOffset": 2624
                                 }
@@ -1745,7 +1745,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "transmitSessionID",
                             "File": "stubs.go",
-                            "Line": 38,
+                            "Line": 37,
                             "StartOffset": 1013,
                             "EndOffset": 1336,
                             "Content": "func transmitSessionID(id SessionID) {\n\tm := getPproLabel()\n\n\tvar n labelMap\n\tif m == nil {\n\t\tn = make(labelMap)\n\t} else {\n\t\tn = make(labelMap, len(*m))\n\t\tfor k, v := range *m {\n\t\t\tif k != Pprof_Label_Session_ID {\n\t\t\t\tn[k] = v\n\t\t\t}\n\t\t}\n\t}\n\t\n\tn[Pprof_Label_Session_ID] = strconv.FormatInt(int64(id), 10)\n\tsetPprofLabel(\u0026n)\n}",
@@ -1755,7 +1755,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionID",
                                     "File": "stubs.go",
-                                    "Line": 38,
+                                    "Line": 37,
                                     "StartOffset": 1036,
                                     "EndOffset": 1048
                                 }
@@ -1766,7 +1766,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "getPproLabel",
                                     "File": "stubs.go",
-                                    "Line": 39,
+                                    "Line": 38,
                                     "StartOffset": 1058,
                                     "EndOffset": 1070
                                 },
@@ -1775,7 +1775,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "setPprofLabel",
                                     "File": "stubs.go",
-                                    "Line": 54,
+                                    "Line": 53,
                                     "StartOffset": 1317,
                                     "EndOffset": 1330
                                 }
@@ -1786,7 +1786,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "labelMap",
                                     "File": "stubs.go",
-                                    "Line": 41,
+                                    "Line": 40,
                                     "StartOffset": 1081,
                                     "EndOffset": 1089
                                 }
@@ -1797,7 +1797,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "Pprof_Label_Session_ID",
                                     "File": "stubs.go",
-                                    "Line": 47,
+                                    "Line": 46,
                                     "StartOffset": 1202,
                                     "EndOffset": 1224
                                 }
@@ -1812,7 +1812,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "ManagerOptions",
                             "File": "manager.go",
-                            "Line": 24,
+                            "Line": 23,
                             "StartOffset": 697,
                             "EndOffset": 1270,
                             "Content": "// ManagerOptions for SessionManager\ntype ManagerOptions struct {\n\t// EnableImplicitlyTransmitAsync enables transparently transmit\n\t// current session to children goroutines\n\t//\n\t// WARNING: Once this option enables, if you want to use `pprof.Do()`, it must be called before `BindSession()`,\n\t// otherwise transmitting will be disfunctional\n\tEnableImplicitlyTransmitAsync bool\n\n\t// ShardNumber is used to shard session id, it must be larger than zero\n\tShardNumber int\n\n\t// GCInterval decides the GC interval for SessionManager,\n\t// it must be larger than 1s or zero means disable GC\n\tGCInterval time.Duration\n}"
@@ -1824,7 +1824,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "Session",
                             "File": "session.go",
-                            "Line": 25,
+                            "Line": 24,
                             "StartOffset": 725,
                             "EndOffset": 1027,
                             "Content": "// Session represents a local storage for one session\ntype Session interface {\n\t// IsValid tells if the session is valid at present\n\tIsValid() bool\n\n\t// Get returns value for specific key\n\tGet(key interface{}) interface{}\n\n\t// WithValue sets value for specific key，and return newly effective session\n\tWithValue(key interface{}, val interface{}) Session\n}",
@@ -1853,7 +1853,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionCtx",
                             "File": "session.go",
-                            "Line": 38,
+                            "Line": 37,
                             "StartOffset": 1149,
                             "EndOffset": 1223,
                             "Content": "// SessionCtx implements Session with context,\n// which means children session WON'T affect parent and sibling sessions\ntype SessionCtx struct {\n\tenabled *atomic.Value\n\tstorage context.Context\n}",
@@ -1904,7 +1904,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionID",
                             "File": "manager.go",
-                            "Line": 88,
+                            "Line": 87,
                             "StartOffset": 2296,
                             "EndOffset": 2317,
                             "Content": "// SessionID is the identity of a session\ntype SessionID uint64"
@@ -1916,7 +1916,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionManager",
                             "File": "manager.go",
-                            "Line": 46,
+                            "Line": 45,
                             "StartOffset": 1389,
                             "EndOffset": 1495,
                             "Content": "// SessionManager maintain and manage sessions\ntype SessionManager struct {\n\tshards []*shard\n\tinGC   uint32\n\ttik    *time.Ticker\n\topts   ManagerOptions\n}",
@@ -1926,7 +1926,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "manager.go",
-                                    "Line": 50,
+                                    "Line": 49,
                                     "StartOffset": 1479,
                                     "EndOffset": 1493
                                 }
@@ -1976,7 +1976,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SessionMap",
                             "File": "session.go",
-                            "Line": 95,
+                            "Line": 94,
                             "StartOffset": 2566,
                             "EndOffset": 2674,
                             "Content": "// NewSessionMap implements Session with map,\n// which means children session WILL affect parent session and sibling sessions\ntype SessionMap struct {\n\tenabled *atomic.Value\n\tstorage map[interface{}]interface{}\n\tlock    sync.RWMutex\n}",
@@ -2022,7 +2022,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "labelMap",
                             "File": "stubs.go",
-                            "Line": 28,
+                            "Line": 27,
                             "StartOffset": 743,
                             "EndOffset": 774,
                             "Content": "type labelMap map[string]string"
@@ -2034,7 +2034,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "shard",
                             "File": "manager.go",
-                            "Line": 40,
+                            "Line": 39,
                             "StartOffset": 1272,
                             "EndOffset": 1340,
                             "Content": "type shard struct {\n\tlock sync.RWMutex\n\tm    map[SessionID]Session\n}",
@@ -2066,7 +2066,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "Pprof_Label_Session_ID",
                             "File": "stubs.go",
-                            "Line": 36,
+                            "Line": 35,
                             "StartOffset": 971,
                             "EndOffset": 1011,
                             "Content": "const Pprof_Label_Session_ID = \"go_session_id\""
@@ -2079,7 +2079,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "SESSION_CONFIG_KEY",
                             "File": "gls.go",
-                            "Line": 34,
+                            "Line": 33,
                             "StartOffset": 1142,
                             "EndOffset": 1193,
                             "Content": "// SESSION_CONFIG_KEY is the env key for configuring default session manager.\n//\n//\tValue format: [EnableImplicitlyTransmitAsync][,ShardNumber][,GCInterval]\n//\t- EnableImplicitlyTransmitAsync: 'true' means enabled, otherwist means disabled\n//\t- ShardNumber: integer \u003e 0\n//\t- GCInterval: Golang time.Duration format, such as '10m' means ten minutes for each GC\n//\n// Once the key is set, default option values will be set if the option value doesn't exist.\nconst SESSION_CONFIG_KEY = \"CLOUDWEGO_SESSION_CONFIG_KEY\""
@@ -2092,7 +2092,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "defaultManagerObj",
                             "File": "gls.go",
-                            "Line": 37,
+                            "Line": 36,
                             "StartOffset": 1202,
                             "EndOffset": 1236,
                             "Type": {
@@ -2110,7 +2110,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "defaultManagerOnce",
                             "File": "gls.go",
-                            "Line": 38,
+                            "Line": 37,
                             "StartOffset": 1238,
                             "EndOffset": 1266,
                             "Type": {
@@ -2128,7 +2128,7 @@
                             "PkgPath": "github.com/cloudwego/localsession",
                             "Name": "defaultShardCap",
                             "File": "manager.go",
-                            "Line": 53,
+                            "Line": 52,
                             "StartOffset": 1501,
                             "EndOffset": 1521,
                             "Type": {
@@ -2153,7 +2153,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "BackupCtx",
                             "File": "backup/metainfo.go",
-                            "Line": 104,
+                            "Line": 103,
                             "StartOffset": 2573,
                             "EndOffset": 2753,
                             "Content": "// Set current Sessioin\nfunc BackupCtx(ctx context.Context) {\n\tif localsession.GetDefaultManager() == nil {\n\t\treturn\n\t}\n\tlocalsession.BindSession(localsession.NewSessionCtx(ctx))\n}",
@@ -2163,7 +2163,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "GetDefaultManager",
                                     "File": "backup/metainfo.go",
-                                    "Line": 105,
+                                    "Line": 104,
                                     "StartOffset": 2652,
                                     "EndOffset": 2669
                                 },
@@ -2172,7 +2172,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "BindSession",
                                     "File": "backup/metainfo.go",
-                                    "Line": 108,
+                                    "Line": 107,
                                     "StartOffset": 2707,
                                     "EndOffset": 2718
                                 },
@@ -2181,7 +2181,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "NewSessionCtx",
                                     "File": "backup/metainfo.go",
-                                    "Line": 108,
+                                    "Line": 107,
                                     "StartOffset": 2732,
                                     "EndOffset": 2745
                                 }
@@ -2195,7 +2195,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "ClearCtx",
                             "File": "backup/metainfo.go",
-                            "Line": 112,
+                            "Line": 111,
                             "StartOffset": 2755,
                             "EndOffset": 2829,
                             "Content": "// Unset current Session\nfunc ClearCtx() {\n\tlocalsession.UnbindSession()\n}",
@@ -2205,7 +2205,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "UnbindSession",
                                     "File": "backup/metainfo.go",
-                                    "Line": 113,
+                                    "Line": 112,
                                     "StartOffset": 2812,
                                     "EndOffset": 2825
                                 }
@@ -2219,7 +2219,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "DefaultOptions",
                             "File": "backup/metainfo.go",
-                            "Line": 36,
+                            "Line": 35,
                             "StartOffset": 965,
                             "EndOffset": 1118,
                             "Content": "// Default Options\nfunc DefaultOptions() Options {\n\treturn Options{\n\t\tEnable:         false,\n\t\tManagerOptions: localsession.DefaultManagerOptions(),\n\t}\n}",
@@ -2229,7 +2229,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession/backup",
                                     "Name": "Options",
                                     "File": "backup/metainfo.go",
-                                    "Line": 36,
+                                    "Line": 35,
                                     "StartOffset": 1006,
                                     "EndOffset": 1013
                                 }
@@ -2240,7 +2240,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "DefaultManagerOptions",
                                     "File": "backup/metainfo.go",
-                                    "Line": 39,
+                                    "Line": 38,
                                     "StartOffset": 1089,
                                     "EndOffset": 1110
                                 }
@@ -2251,7 +2251,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession/backup",
                                     "Name": "Options",
                                     "File": "backup/metainfo.go",
-                                    "Line": 37,
+                                    "Line": 36,
                                     "StartOffset": 1024,
                                     "EndOffset": 1031
                                 }
@@ -2265,7 +2265,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "Init",
                             "File": "backup/metainfo.go",
-                            "Line": 45,
+                            "Line": 44,
                             "StartOffset": 1120,
                             "EndOffset": 1327,
                             "Content": "// Init gloabal session manager\n// It uses env config first, the key is localsession.SESSION_CONFIG_KEY\nfunc Init(opts Options) {\n\tif opts.Enable {\n\t\tlocalsession.InitDefaultManager(opts.ManagerOptions)\n\t}\n}",
@@ -2275,7 +2275,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession/backup",
                                     "Name": "Options",
                                     "File": "backup/metainfo.go",
-                                    "Line": 45,
+                                    "Line": 44,
                                     "StartOffset": 1234,
                                     "EndOffset": 1246
                                 }
@@ -2286,7 +2286,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "InitDefaultManager",
                                     "File": "backup/metainfo.go",
-                                    "Line": 47,
+                                    "Line": 46,
                                     "StartOffset": 1283,
                                     "EndOffset": 1301
                                 }
@@ -2300,7 +2300,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "RecoverCtxOnDemands",
                             "File": "backup/metainfo.go",
-                            "Line": 54,
+                            "Line": 53,
                             "StartOffset": 1329,
                             "EndOffset": 2571,
                             "Content": "// If handler != nil, this func will try to merge metainfo\n// and pre-defined key-values (through Options.BackupHanlder)\n// from backup context into given context\nfunc RecoverCtxOnDemands(ctx context.Context, handler BackupHandler) context.Context {\n\tif handler == nil {\n\t\treturn ctx\n\t}\n\ts, ok := localsession.CurSession()\n\tif !ok {\n\t\treturn ctx\n\t}\n\tc, ok := s.(localsession.SessionCtx)\n\tif !ok {\n\t\treturn ctx\n\t}\n\tpre := c.Export()\n\n\t// trigger user-defined handler if any\n\tnctx, backup := handler(pre, ctx)\n\tif !backup {\n\t\treturn ctx\n\t}\n\tctx = nctx\n\n\t// two-way merge all persistent metainfo if pre context has\n\tif n := metainfo.CountPersistentValues(pre); n \u003e 0 {\n\t\t// persistent kvs\n\t\tkvs := make([]string, 0, n*2)\n\t\tmkvs := metainfo.GetAllPersistentValues(ctx)\n\n\t\t// incoming ctx is prior to session\n\t\tif len(mkvs) == 0 {\n\t\t\t// merge all kvs from pre\n\t\t\tmetainfo.RangePersistentValues(pre, func(k, v string) bool {\n\t\t\t\tkvs = append(kvs, k, v)\n\t\t\t\treturn true\n\t\t\t})\n\t\t} else {\n\t\t\tmetainfo.RangePersistentValues(pre, func(k, v string) bool {\n\t\t\t\t// filter kvs which exists in cur\n\t\t\t\tif _, ok := mkvs[k]; !ok {\n\t\t\t\t\tkvs = append(kvs, k, v)\n\t\t\t\t}\n\t\t\t\treturn true\n\t\t\t})\n\t\t}\n\t\tctx = metainfo.WithPersistentValues(ctx, kvs...)\n\t}\n\n\treturn ctx\n}",
@@ -2310,7 +2310,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession/backup",
                                     "Name": "BackupHandler",
                                     "File": "backup/metainfo.go",
-                                    "Line": 54,
+                                    "Line": 53,
                                     "StartOffset": 1538,
                                     "EndOffset": 1559
                                 }
@@ -2321,7 +2321,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "CurSession",
                                     "File": "backup/metainfo.go",
-                                    "Line": 58,
+                                    "Line": 57,
                                     "StartOffset": 1639,
                                     "EndOffset": 1649
                                 },
@@ -2330,7 +2330,7 @@
                                     "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                                     "Name": "CountPersistentValues",
                                     "File": "backup/metainfo.go",
-                                    "Line": 76,
+                                    "Line": 75,
                                     "StartOffset": 1959,
                                     "EndOffset": 1980
                                 },
@@ -2339,7 +2339,7 @@
                                     "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                                     "Name": "GetAllPersistentValues",
                                     "File": "backup/metainfo.go",
-                                    "Line": 79,
+                                    "Line": 78,
                                     "StartOffset": 2066,
                                     "EndOffset": 2088
                                 },
@@ -2348,7 +2348,7 @@
                                     "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                                     "Name": "RangePersistentValues",
                                     "File": "backup/metainfo.go",
-                                    "Line": 84,
+                                    "Line": 83,
                                     "StartOffset": 2196,
                                     "EndOffset": 2217
                                 },
@@ -2357,7 +2357,7 @@
                                     "PkgPath": "github.com/bytedance/gopkg/cloud/metainfo",
                                     "Name": "WithPersistentValues",
                                     "File": "backup/metainfo.go",
-                                    "Line": 97,
+                                    "Line": 96,
                                     "StartOffset": 2520,
                                     "EndOffset": 2540
                                 }
@@ -2368,7 +2368,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx.Export",
                                     "File": "backup/metainfo.go",
-                                    "Line": 66,
+                                    "Line": 65,
                                     "StartOffset": 1752,
                                     "EndOffset": 1758
                                 }
@@ -2379,7 +2379,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "SessionCtx",
                                     "File": "backup/metainfo.go",
-                                    "Line": 62,
+                                    "Line": 61,
                                     "StartOffset": 1704,
                                     "EndOffset": 1714
                                 }
@@ -2394,7 +2394,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "BackupHandler",
                             "File": "backup/metainfo.go",
-                            "Line": 27,
+                            "Line": 26,
                             "StartOffset": 800,
                             "EndOffset": 885,
                             "Content": "// BackupHandler is used to decide and recover prev context to cur context\ntype BackupHandler func(prev, cur context.Context) (ctx context.Context, backup bool)"
@@ -2406,7 +2406,7 @@
                             "PkgPath": "github.com/cloudwego/localsession/backup",
                             "Name": "Options",
                             "File": "backup/metainfo.go",
-                            "Line": 30,
+                            "Line": 29,
                             "StartOffset": 898,
                             "EndOffset": 963,
                             "Content": "// Options\ntype Options struct {\n\tEnable bool\n\tlocalsession.ManagerOptions\n}",
@@ -2416,7 +2416,7 @@
                                     "PkgPath": "github.com/cloudwego/localsession",
                                     "Name": "ManagerOptions",
                                     "File": "backup/metainfo.go",
-                                    "Line": 32,
+                                    "Line": 31,
                                     "StartOffset": 934,
                                     "EndOffset": 961
                                 }
@@ -2433,63 +2433,48 @@
             },
             "Files": {
                 ".github/ISSUE_TEMPLATE/bug_report.md": {
-                    "Name": "bug_report.md",
                     "Path": ".github/ISSUE_TEMPLATE/bug_report.md"
                 },
                 ".github/ISSUE_TEMPLATE/feature_request.md": {
-                    "Name": "feature_request.md",
                     "Path": ".github/ISSUE_TEMPLATE/feature_request.md"
                 },
                 ".github/PULL_REQUEST_TEMPLATE.md": {
-                    "Name": "PULL_REQUEST_TEMPLATE.md",
                     "Path": ".github/PULL_REQUEST_TEMPLATE.md"
                 },
                 ".github/workflows/release-check.yml": {
-                    "Name": "release-check.yml",
                     "Path": ".github/workflows/release-check.yml"
                 },
                 ".github/workflows/tests.yml": {
-                    "Name": "tests.yml",
                     "Path": ".github/workflows/tests.yml"
                 },
                 ".gitignore": {
-                    "Name": ".gitignore",
                     "Path": ".gitignore"
                 },
                 ".golangci.yaml": {
-                    "Name": ".golangci.yaml",
                     "Path": ".golangci.yaml"
                 },
                 ".licenserc.yaml": {
-                    "Name": ".licenserc.yaml",
                     "Path": ".licenserc.yaml"
                 },
                 "CODE_OF_CONDUCT.md": {
-                    "Name": "CODE_OF_CONDUCT.md",
                     "Path": "CODE_OF_CONDUCT.md"
                 },
                 "CONTRIBUTING.md": {
-                    "Name": "CONTRIBUTING.md",
                     "Path": "CONTRIBUTING.md"
                 },
                 "LICENSE-APACHE": {
-                    "Name": "LICENSE-APACHE",
                     "Path": "LICENSE-APACHE"
                 },
                 "README.md": {
-                    "Name": "README.md",
                     "Path": "README.md"
                 },
                 "_typos.toml": {
-                    "Name": "_typos.toml",
                     "Path": "_typos.toml"
                 },
                 "api_test.go": {
-                    "Name": "api_test.go",
                     "Path": "api_test.go"
                 },
                 "backup/metainfo.go": {
-                    "Name": "metainfo.go",
                     "Path": "backup/metainfo.go",
                     "Imports": [
                         {
@@ -2505,19 +2490,15 @@
                     "Package": "github.com/cloudwego/localsession/backup"
                 },
                 "backup/metainfo_test.go": {
-                    "Name": "metainfo_test.go",
                     "Path": "backup/metainfo_test.go"
                 },
                 "check_branch_name.sh": {
-                    "Name": "check_branch_name.sh",
                     "Path": "check_branch_name.sh"
                 },
                 "example_test.go": {
-                    "Name": "example_test.go",
                     "Path": "example_test.go"
                 },
                 "gls.go": {
-                    "Name": "gls.go",
                     "Path": "gls.go",
                     "Imports": [
                         {
@@ -2542,15 +2523,12 @@
                     "Package": "github.com/cloudwego/localsession"
                 },
                 "go.mod": {
-                    "Name": "go.mod",
                     "Path": "go.mod"
                 },
                 "go.sum": {
-                    "Name": "go.sum",
                     "Path": "go.sum"
                 },
                 "manager.go": {
-                    "Name": "manager.go",
                     "Path": "manager.go",
                     "Imports": [
                         {
@@ -2566,7 +2544,6 @@
                     "Package": "github.com/cloudwego/localsession"
                 },
                 "session.go": {
-                    "Name": "session.go",
                     "Path": "session.go",
                     "Imports": [
                         {
@@ -2585,7 +2562,6 @@
                     "Package": "github.com/cloudwego/localsession"
                 },
                 "stubs.go": {
-                    "Name": "stubs.go",
                     "Path": "stubs.go",
                     "Imports": [
                         {
@@ -2622,7 +2598,7 @@
                             "PkgPath": "github.com/modern-go/gls",
                             "Name": "GoID",
                             "File": "../../../../pkg/mod/github.com/modern-go/gls@v0.0.0-20220109145502-612d0167dce5/goid.go",
-                            "Line": 21,
+                            "Line": 20,
                             "StartOffset": 0,
                             "EndOffset": 0,
                             "Content": "// GoID returns the goroutine id of current goroutine\nfunc GoID() int64 {\n\tg := getg()\n\tp_goid := (*int64)(unsafe.Pointer(g + goidOffset))\n\treturn *p_goid\n}"
@@ -3171,15 +3147,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "getSessionID",
-                    "Line": 5
+                    "Name": "transmitSessionID",
+                    "Line": 9
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "transmitSessionID",
-                    "Line": 9
+                    "Name": "getSessionID",
+                    "Line": 5
                 },
                 {
                     "Kind": "Reference",
@@ -3217,15 +3193,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "newShard",
-                    "Line": 2
+                    "Name": "SessionManager.GC",
+                    "Line": 8
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.GC",
-                    "Line": 8
+                    "Name": "newShard",
+                    "Line": 2
                 }
             ]
         },
@@ -3272,15 +3248,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "NewSessionCtx",
-                    "Line": 3
+                    "Name": "SessionCtx.WithValue",
+                    "Line": 2
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionCtx.WithValue",
-                    "Line": 2
+                    "Name": "NewSessionCtx",
+                    "Line": 3
                 },
                 {
                     "Kind": "Reference",
@@ -3366,8 +3342,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "newShard",
-                    "Line": 2
+                    "Name": "getSessionID",
+                    "Line": 12
+                },
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "CurSession",
+                    "Line": 4
                 },
                 {
                     "Kind": "Reference",
@@ -3380,20 +3363,6 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "getSessionID",
-                    "Line": 12
-                },
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "UnbindSession",
-                    "Line": 4
-                },
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
                     "Name": "BindSession",
                     "Line": 4
                 },
@@ -3401,7 +3370,14 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "CurSession",
+                    "Name": "newShard",
+                    "Line": 2
+                },
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "UnbindSession",
                     "Line": 4
                 }
             ]
@@ -3867,15 +3843,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.UnbindSession",
-                    "Line": 3
+                    "Name": "SessionManager.GetSession",
+                    "Line": 2
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "SessionManager.GetSession",
-                    "Line": 2
+                    "Name": "SessionManager.UnbindSession",
+                    "Line": 3
                 }
             ]
         },
@@ -3930,7 +3906,14 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "UnbindSession",
+                    "Name": "GetDefaultManager",
+                    "Line": 1
+                },
+                {
+                    "Kind": "Reference",
+                    "ModPath": "github.com/cloudwego/localsession",
+                    "PkgPath": "github.com/cloudwego/localsession",
+                    "Name": "CurSession",
                     "Line": 1
                 },
                 {
@@ -3951,14 +3934,7 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "CurSession",
-                    "Line": 1
-                },
-                {
-                    "Kind": "Reference",
-                    "ModPath": "github.com/cloudwego/localsession",
-                    "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "GetDefaultManager",
+                    "Name": "UnbindSession",
                     "Line": 1
                 }
             ]
@@ -4014,14 +3990,14 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "getSessionID",
+                    "Name": "transmitSessionID",
                     "Line": 1
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "transmitSessionID",
+                    "Name": "getSessionID",
                     "Line": 1
                 },
                 {
@@ -4090,7 +4066,7 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "UnbindSession",
+                    "Name": "CurSession",
                     "Line": 4
                 },
                 {
@@ -4104,7 +4080,7 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "CurSession",
+                    "Name": "UnbindSession",
                     "Line": 4
                 }
             ]
@@ -4211,15 +4187,15 @@
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "newShard",
-                    "Line": 1
+                    "Name": "NewSessionManager",
+                    "Line": 4
                 },
                 {
                     "Kind": "Reference",
                     "ModPath": "github.com/cloudwego/localsession",
                     "PkgPath": "github.com/cloudwego/localsession",
-                    "Name": "NewSessionManager",
-                    "Line": 4
+                    "Name": "newShard",
+                    "Line": 1
                 }
             ]
         },

@@ -2,23 +2,31 @@
 
 ![ABCoder](images/ABCoder.png)
 
-ABCoder, an AI-oriented code-processing SDK, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-coding workflow.
+# Overview
+ABCoder, an AI-oriented code-processing SDK, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-coding applications.
+
 
 ## Features
 
--  Universal Abstract Syntax Tree (UniAST), an language-independent, AI-friendly code-struct specfication, providing flexible and structrual coding-context for both AI and hunman.
+-  Universal Abstract Syntax Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a flexible and structrual coding context for both AI and hunman.
   
--  Universal Parser, parses abitary languages to UniAST.
+-  General Parser Interface, parses abitary-language codes to UniAST.
 
--  Univeral Writer, transforms UniAST back to codes.
+-  General Writer Interface, transforms UniAST back to codes.
   
-- (Comming Soon) Univeral Iterator, provides a set of interfaces and tools to help developers to implement their agents without deep knowledge of the UniAST structure.
+- (Comming Soon) General Iterator Interface, provides a set of functions or tools to help developers to implement their agents without deep knowledge of the UniAST structure.
 
 - (Comming Soon) Code RAG, provides a set of tools to help the LLM understand your codes much deeper than ever.
 
-Based on these features, developers can easily implement or enhance their AI-assisted-coding workflows (or agents), such as reviewing, optimizing, translating...
+Based on these features, developers can easily implement or enhance their AI-assisted-coding applications, such as reviewing, optimizing, translating...
 
-## Getting Started
+
+## Universal-Abstract-Syntax-Tree Specification
+
+see [UniAST Specification](docs/uniast-zh.md)
+
+
+# Getting Started
 
 1. Install ABCoder:
 ```bash
@@ -34,12 +42,8 @@ abcoder parse {language} {repo-path} > ast.json
 abcoder write {language} ast.json
 ```
 
-## Universal-Abstract-Syntax-Tree Specification
 
-see [UniAST Specification](docs/uniast-zh.md)
-
-
-## Supported Languages
+# Supported Languages
 
 ABCoder currently supports the following languages:
 
@@ -47,11 +51,11 @@ ABCoder currently supports the following languages:
 | -------- | ----------- | ----------- |
 | Go       | ✅           | ✅           |
 | Rust     | ✅           | Coming Soon |
-| Kotlin   | Coming Soon | ❌           |
-| C        | WIP         | ❌           |
+| C        | Coming Soon | ❌           |
 
 
-## Getting Involved
+
+# Getting Involved
 
 We encourage developers to contribute and make this tool more powerful. If you are interested in contributing to ABCoder
 project, kindly check out our Getting Involved Guide:

@@ -3,9 +3,9 @@
 Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无关的代码上下文数据结构，表示某个仓库代码的统一抽象语法树。收集了语言实体（函数、类型、常（变）量）的 定义 及其 相互依赖关系，用于后续的 AI 理解、coding-workflow 开发。
 
 
-## Identity 节点唯一标识
+# Identity 节点唯一标识
 
-为了保证精确查询和可扩展存储，约定 **ModPath+PkgPath+SymbolName** 为 AST Node 的全球唯一标识**。
+为了保证精确查询和可扩展存储，约定 `ModPath?PkgPath#SymbolName` 为 AST Node 的全球唯一标识。
 
 
 ```json
@@ -60,12 +60,13 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 
 
-## 结构体定义（Go）
+# 结构定义
 
+## Go Struct 形式
 - 代码详见 [Repository](/lang/uniast/ast.go) 定义
 
 
-## JSON 定义
+## JSON 形式
 
 以下以 [cloudwego/localsession](https://github.com/cloudwego/localsession.git) 库解析为示例介绍
 
@@ -153,7 +154,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 
 ```json
-// manager.go
+
 {
     "Path": "manager.go",
     "Imports": [],
@@ -629,12 +630,14 @@ const (
     "Kind": "Dependency",
     "ModPath": "github.com/cloudwego/localsession",
     "PkgPath": "github.com/cloudwego/localsession",
-    "Name": "getPproLabel",
-    "Line": 1
+    "Name": "SESSION_CONFIG_KEY",
+    "Line": 1,
+    "Desc": "",
+    "Codes": ""
 }
 ```
 
-- Kind： 关系类型，目前包括 DEPENDENCY 和 REFERENCE
+- Kind： 关系类型，目前包括 Dependency 和 Reference，分别表示依赖和引用。
 
 
 - ModPath: 模块路径，见【Identity】介绍
@@ -645,8 +648,7 @@ const (
 
 - Name： 变量名称
 
-
-- Line: 产生关系的位置在主节点代码的行号（即函数体内的行号）
+- Line: 产生关系的位置在主节点代码的相对行号（从0开始）
 
 
 ## 完整JSON示例
@@ -821,7 +823,6 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 
 ```json
-// manager.go
 {
     "Path": "manager.go",
     "Imports": [],
@@ -905,10 +906,10 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
     "PkgPath": "github.com/cloudwego/localsession",
     "Name": "SessionManager.BindSession",
     "File": "manager.go",
-    "Line": 134,
+    "Line": 133,
     "StartOffset": 3290,
     "EndOffset": 3573,
-    "Content": "// BindSession binds the session with current goroutine\nfunc (self *SessionManager) BindSession(Identity SessionIdentity, s Session) {\n\tshard := self.shards[uint64(Identity)%uint64(self.opts.ShardNumber)]\n\n\tshard.Store(Identity, s)\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\ttransmitSessionIdentity(Identity)\n\t}\n}",
+    "Content": "// BindSession binds the session with current goroutine\nfunc (self *SessionManager) BindSession(id SessionID, s Session) {\n\tshard := self.shards[uint64(id)%uint64(self.opts.ShardNumber)]\n\n\tshard.Store(id, s)\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\ttransmitSessionID(id)\n\t}\n}",
     "Receiver": {
         "IsPointer": true,
         "Type": {
@@ -921,9 +922,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
         {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "SessionIdentity",
+            "Name": "SessionID",
             "File": "manager.go",
-            "Line": 134,
+            "Line": 133,
             "StartOffset": 3386,
             "EndOffset": 3398
         },
@@ -932,7 +933,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
             "PkgPath": "github.com/cloudwego/localsession",
             "Name": "Session",
             "File": "manager.go",
-            "Line": 134,
+            "Line": 133,
             "StartOffset": 3400,
             "EndOffset": 3409
         }
@@ -941,9 +942,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
         {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "transmitSessionIdentity",
+            "Name": "transmitSessionID",
             "File": "manager.go",
-            "Line": 140,
+            "Line": 139,
             "StartOffset": 3547,
             "EndOffset": 3564
         }
@@ -954,7 +955,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
             "PkgPath": "github.com/cloudwego/localsession",
             "Name": "com/cloudwego/localsession.Store",
             "File": "manager.go",
-            "Line": 137,
+            "Line": 136,
             "StartOffset": 3485,
             "EndOffset": 3490
         }
@@ -976,7 +977,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 - File：所在的文件名
 
 
-- Line：**起始位置文件的行号**
+- Line：**起始位置文件的行号**(从0开始)
 
 
 - StartOffset：代码起始位置**相对文件头的字节偏移量** 
@@ -1024,18 +1025,20 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 ###### Dependency
 
-表示一个依赖关系，包含依赖节点Id、依赖产生位置等信息，方便LLM准确识别
+表示一个依赖关系，包含依赖节点Id、依赖产生位置等信息，方便LLM准确识别。
+
+- 注意：UniAST**一般只收集非标准库的依赖**（下同），因为我们认为对于标准库节点是LLM已经具备的公开知识。
 
 
 ```
 {
     "ModPath": "github.com/cloudwego/localsession",
     "PkgPath": "github.com/cloudwego/localsession",
-    "Name": "transmitSessionIdentity",
+    "Name": "SessionID",
     "File": "manager.go",
-    "Line": 140,
-    "StartOffset": 3547,
-    "EndOffset": 3564
+    "Line": 133,
+    "StartOffset": 3386,
+    "EndOffset": 3398
 }
 ```
 
@@ -1051,7 +1054,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 - File：依赖点（不是被依赖节点）token所处的代码文件
 
 
-- Line：依赖点（不是被依赖节点）token所处的代码行
+- Line：依赖点（不是被依赖节点）token所处的文件代码行(从零开始)
 
 
 - StartOffset：依赖点（不是被依赖节点）token起始位置相对代码文件的偏移
@@ -1068,35 +1071,64 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 ```json
 {
     "Exported": true,
-    "TypeKind": "interface",
+    "TypeKind": "struct",
     "ModPath": "github.com/cloudwego/localsession",
     "PkgPath": "github.com/cloudwego/localsession",
-    "Name": "Session",
-    "File": "session.go",
-    "Line": 25,
-    "StartOffset": 725,
-    "EndOffset": 1027,
-    "Content": "// Session represents a local storage for one session\ntype Session interface {\n\t// IsValid tells if the session is valid at present\n\tIsValid() bool\n\n\t// Get returns value for specific key\n\tGet(key interface{}) interface{}\n\n\t// WithValue sets value for specific key，and return newly effective session\n\tWithValue(key interface{}, val interface{}) Session\n}",
-    "InlineStruct": [
-        {} // dependency
+    "Name": "SessionManager",
+    "File": "manager.go",
+    "Line": 45,
+    "StartOffset": 1389,
+    "EndOffset": 1495,
+    "Content": "// SessionManager maintain and manage sessions\ntype SessionManager struct {\n\tshards []*shard\n\tinGC   uint32\n\ttik    *time.Ticker\n\topts   ManagerOptions\n}",
+    "SubStruct": [
+        {
+            "ModPath": "github.com/cloudwego/localsession",
+            "PkgPath": "github.com/cloudwego/localsession",
+            "Name": "ManagerOptions",
+            "File": "manager.go",
+            "Line": 49,
+            "StartOffset": 1479,
+            "EndOffset": 1493
+        }
     ],
     "Methods": {
-        "Get": {
+        "BindSession": {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "Session.Get"
+            "Name": "SessionManager.BindSession"
         },
-        "IsValid": {
+        "Close": {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "Session.IsValid"
+            "Name": "SessionManager.Close"
         },
-        "WithValue": {
+        "GC": {
             "ModPath": "github.com/cloudwego/localsession",
             "PkgPath": "github.com/cloudwego/localsession",
-            "Name": "Session.WithValue"
+            "Name": "SessionManager.GC"
+        },
+        "GetSession": {
+            "ModPath": "github.com/cloudwego/localsession",
+            "PkgPath": "github.com/cloudwego/localsession",
+            "Name": "SessionManager.GetSession"
+        },
+        "Options": {
+            "ModPath": "github.com/cloudwego/localsession",
+            "PkgPath": "github.com/cloudwego/localsession",
+            "Name": "SessionManager.Options"
+        },
+        "UnbindSession": {
+            "ModPath": "github.com/cloudwego/localsession",
+            "PkgPath": "github.com/cloudwego/localsession",
+            "Name": "SessionManager.UnbindSession"
+        },
+        "startGC": {
+            "ModPath": "github.com/cloudwego/localsession",
+            "PkgPath": "github.com/cloudwego/localsession",
+            "Name": "SessionManager.startGC"
         }
-    }
+    },
+    "Implements": []
 }
 ```
 
@@ -1137,7 +1169,25 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 	- 注意这里不应该包括 InlineStruct 的 methods
 
 
-- Implements：该类型实现了哪些接口**Identity**
+- Implements：该类型实现了哪些接口的**Identity**列表，如：
+```json
+//github.com/cloudwego/localsession?github.com/cloudwego/localsession#ManagerOptions
+"Implements": [
+    {
+        "ModPath": "github.com/cloudwego/localsession",
+        "PkgPath": "github.com/cloudwego/localsession",
+        "Name": "Session"
+    },
+    {
+        "ModPath": "github.com/cloudwego/localsession",
+        "PkgPath": "github.com/cloudwego/localsession",
+        "Name": "Session"
+    }
+]
+```
+
+
+
 
 
 ##### Var
@@ -1154,7 +1204,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
     "PkgPath": "github.com/cloudwego/localsession",
     "Name": "defaultShardCap",
     "File": "manager.go",
-    "Line": 53,
+    "Line": 52,
     "StartOffset": 1501,
     "EndOffset": 1521,
     "Type": {
@@ -1187,7 +1237,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 - IsConst：是否为常量
 
 
-- Type：其类型对应的Identity（不包括 go 原始类型），go内置类型可以只有name（如 string, uint）
+- Type：其类型对应的Identity（**包括 go 原始类型**），go内置类型可以只有name（如 string, uint）
 
 
 - Content：定义代码，如 `var A int = 1 `
@@ -1413,7 +1463,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 ```json
 {
-    "Identity": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "id": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
     "Modules": {
         "github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b": {},
         "github.com/cloudwego/localsession": {}
@@ -1422,7 +1472,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 }
 ```
 
-- Identity: repo 的唯一名称。由于abcoder parser目前不获取仓库git信息，因此一般使用当前所处的绝对路径作为Identity
+- id: repo 的唯一名称。由于abcoder parser目前不获取仓库git信息，因此一般使用当前所处的绝对路径
 
 
 - Modules：包含的子模块，{ModPath} : {Module AST} 的字典，本仓库模块和外部依赖模块都可以出现在Modules中，但是需要通过ModulePath来区分。
@@ -1489,7 +1539,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 
 ```json
-// manager.go
+
 {
     "Path": "manager.go",
     "Imports": [],
@@ -1982,7 +2032,7 @@ const (
 - Name： 变量名称
 
 
-- Line: 产生关系的位置在主节点代码的行号（即函数体内的行号）
+- Line: 产生关系的位置在主节点代码的行号（从零开始）
 
 
 ## 完整JSON示例
