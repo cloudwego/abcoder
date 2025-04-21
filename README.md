@@ -3,7 +3,7 @@
 ![ABCoder](images/ABCoder.png)
 
 # Overview
-ABCoder, an general, AI-oriented code-processing SDK, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-programming applications. 
+ABCoder, an general AI-oriented code-processing SDK, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-programming applications. 
 
 
 ## Features
