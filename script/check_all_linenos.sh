@@ -15,23 +15,18 @@
 
 root=$(dirname $(realpath $(dirname $0)))
 cd $root
-echo "[Making parser]"
-./script/make_parser.sh
-echo "[Done making parser]"
 
-parser=tools/parser/lang
 mkdir -p testdata/jsons
 
 do_test() {
+	name="ast"
 	lang=$1
 	srcpath=$2
-	name=$3
 	flags=$4
 
-	echo $name...
-	$parser -d -v --no-need-comment collect $lang $srcpath > testdata/jsons/$name.json 2>testdata/jsons/$name.log
-	cat testdata/jsons/$name.log
-	python script/check_lineno.py --json testdata/jsons/$name.json --base $srcpath $flags > testdata/jsons/$name.check
+	echo "go run . parse $lang $srcpath  -verbose --no-need-comment > testdata/jsons/$name.json"
+	go run . parse $lang $srcpath -verbose --no-need-comment > testdata/jsons/$name.json 
+	python3 script/check_lineno.py --json testdata/jsons/$name.json --base $srcpath $flags > testdata/jsons/$name.check
 
 	if grep -q "All functions verified successfully!" testdata/jsons/$name.check; then
 		echo "  [PASS]"
@@ -40,5 +35,5 @@ do_test() {
 		exit 1
 	fi
 }
-do_test go src/lang go "--zero_linebase"
-do_test rust testdata/rust2-wobyted rust2 "--zero_linebase --implheads"
+do_test go testdata/golang "--zero_linebase"
+do_test rust testdata/rust2 "--zero_linebase --implheads"
