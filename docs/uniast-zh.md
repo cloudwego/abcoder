@@ -670,6 +670,6 @@ const (
 
 # 扩展其它语言 Parser
 
-当前ABCoder/src/lang 已经支持通过LSP来进行第三方语言解析，但是由于LSP对各个语言特性（主要是函数签名和Import）没有统一规范，因此需要扩展实现一些接口才能适配。详见 [ABCoder-Language Plugin 开发规范](https://bytedance.sg.larkoffice.com/docx/QNZwdYBPjoUUKtxD3XMlstlpglh)
+当前ABCoder/src/lang 已经支持通过LSP来进行第三方语言解析，但是由于LSP对各个语言特性（主要是函数签名和Import）没有统一规范，因此需要扩展实现一些接口才能适配。详见 [ABCoder-Language Plugin 开发规范](parser-zh.md)
 Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无关的代码上下文数据结构，表示某个仓库代码的统一抽象语法树。收集了语言实体（函数、类型、常（变）量）的 定义 及其 相互依赖关系，用于后续的 AI 理解、coding-workflow 开发。
 
