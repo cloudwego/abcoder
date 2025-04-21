@@ -8,7 +8,7 @@ ABCoder, an general, AI-oriented code-processing SDK, is designed to enhance cod
 
 ## Features
 
--  Universal Abstract-Syntax-Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a flexible and structrual coding context for both AI and hunman.
+-  Universal Abstract-Syntax-Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a boundless, flexible and structrual coding context for both AI and hunman.
   
 -  General Parser, parses abitary-language codes to UniAST.
 
