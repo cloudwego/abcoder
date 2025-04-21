@@ -58,7 +58,7 @@ ABCoder currently supports the following languages:
 # Getting Involved
 
 We encourage developers to contribute and make this tool more powerful. If you are interested in contributing to ABCoder
-project, kindly check out our Getting Involved Guide:
+project, kindly check out our guide:
 - [Parser Extension](docs/parser-zh.md)
 
 > Note: This is a dynamic README and is subject to changes as the project evolves.
