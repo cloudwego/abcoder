@@ -37,7 +37,7 @@ go install github.com/cloudwego/abcoder@latest
 abcoder parse {language} {repo-path} > ast.json
 ```
 3. Do your magic with UniAST...
-4. Use ABCoder to write a UniAST back to codes
+4. Use ABCoder to write an UniAST back to codes
 ```bash
 abcoder write {language} ast.json
 ```
