@@ -10,15 +10,15 @@ ABCoder, an AI-oriented code-processing SDK, is designed to enhance coding conte
 
 -  Universal Abstract Syntax Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a flexible and structrual coding context for both AI and hunman.
   
--  General Parser Interface, parses abitary-language codes to UniAST.
+-  General Parser, parses abitary-language codes to UniAST.
 
--  General Writer Interface, transforms UniAST back to codes.
+-  General Writer, transforms UniAST back to codes.
   
-- (Comming Soon) General Iterator Interface, provides a set of functions or tools to help developers to implement their agents without deep knowledge of the UniAST structure.
+- (Comming Soon) General Iterator, a framework for visiting the UniAST easily and implementing batch-code-processing workflows.
 
-- (Comming Soon) Code RAG, provides a set of tools to help the LLM understand your codes much deeper than ever.
+- (Comming Soon) Code RAG, provides a set of tools and functions to help the LLM understand your codes much deeper than ever.
 
-Based on these features, developers can easily implement or enhance their AI-assisted-coding applications, such as reviewing, optimizing, translating...
+Based on these features, developers can easily implement or enhance their AI-assisted-coding applications, such as reviewing, optimizing, translating, etc.
 
 
 ## Universal-Abstract-Syntax-Tree Specification
