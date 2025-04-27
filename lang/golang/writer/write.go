@@ -57,6 +57,8 @@ type chunk struct {
 	line  int
 }
 
+const localVersion = "v0.0.0"
+
 func NewWriter(opts Options) *Writer {
 	if opts.CompilerPath == "" {
 		opts.CompilerPath = "go"
@@ -143,6 +145,8 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir str
 	}
 	bs.WriteString(goVersion)
 	bs.WriteString("\n\n")
+
+	replaces := make(map[string]string)
 	if len(mod.Dependencies) > 0 {
 		bs.WriteString("require (\n")
 		for name, dep := range mod.Dependencies {
@@ -150,13 +154,28 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir str
 			bs.WriteString(name)
 			sp := strings.Split(dep, "@")
 			if len(sp) == 2 {
-				bs.WriteString(" ")
-				bs.WriteString(sp[1])
+				if sp[1] == "" {
+					bs.WriteString(" ")
+					bs.WriteString(localVersion)
+					replaces[name] = sp[0]
+				} else {
+					bs.WriteString(" ")
+					bs.WriteString(sp[1])
+				}
 			}
 			bs.WriteString("\n")
 		}
 		bs.WriteString(")\n\n")
 	}
+
+	for name, dep := range replaces {
+		bs.WriteString("replace ")
+		bs.WriteString(name)
+		bs.WriteString(" => ")
+		bs.WriteString(dep)
+		bs.WriteString("\n")
+	}
+
 	if err := os.WriteFile(filepath.Join(outdir, "go.mod"), []byte(bs.String()), 0644); err != nil {
 		return fmt.Errorf("write go.mod failed: %v", err)
 	}
