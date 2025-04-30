@@ -48,8 +48,8 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	}
 }
 
-func newModule(name string, dir string) *uniast.Module {
-	ret := uniast.NewModule(name, dir, uniast.Rust)
+func newModule(name string, dir string, lang uniast.Language) *uniast.Module {
+	ret := uniast.NewModule(name, dir, lang)
 	return ret
 }
 
@@ -67,7 +67,7 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		if err != nil {
 			return nil, err
 		}
-		repo.Modules[name] = newModule(name, rel)
+		repo.Modules[name] = newModule(name, rel, c.Language)
 	}
 
 	// not allow local symbols inside another symbol
@@ -83,11 +83,13 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	}
 
 	// patch module
-	for p, m := range repo.Modules {
-		if p == "" || strings.Contains(p, "@") {
-			continue
+	if c.modPatcher != nil {
+		for p, m := range repo.Modules {
+			if p == "" || strings.Contains(p, "@") {
+				continue
+			}
+			c.modPatcher.Patch(m)
 		}
-		c.modPatcher.Patch(m)
 	}
 
 	return &repo, nil
@@ -140,7 +142,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	}
 
 	if repo.Modules[mod] == nil {
-		repo.Modules[mod] = newModule(mod, "")
+		repo.Modules[mod] = newModule(mod, "", c.Language)
 	}
 	module := repo.Modules[mod]
 	if repo.Modules[mod].Packages[path] == nil {
