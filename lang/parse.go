@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/collect"
+	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/golang/parser"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
@@ -94,6 +95,9 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 	case uniast.Rust:
 		// NOTICE: open the Cargo.toml file is required for Rust projects
 		openfile, wait = rust.CheckRepo(repoPath)
+	case uniast.Cxx:
+		// NOTICE: open the Cargo.toml file is required for Rust projects
+		openfile, wait = cxx.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -107,6 +111,8 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 	switch language {
 	case uniast.Rust:
 		l, s = rust.GetDefaultLSP()
+	case uniast.Cxx:
+		l, s = cxx.GetDefaultLSP()
 	case uniast.Golang:
 		l = uniast.Golang
 		s = ""
