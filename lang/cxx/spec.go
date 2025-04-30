@@ -59,10 +59,10 @@ func (c *CxxSpec) NameSpace(path string) (string, string, error) {
 }
 
 func (c *CxxSpec) ShouldSkip(path string) bool {
-	if !strings.HasSuffix(path, ".c") {
-		return true
+	if strings.HasSuffix(path, ".c") || strings.HasSuffix(path, ".h") {
+		return false
 	}
-	return false
+	return true
 }
 
 func (c *CxxSpec) IsDocToken(tok lsp.Token) bool {

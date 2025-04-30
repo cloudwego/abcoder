@@ -286,7 +286,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 						obj.GlobalVars = make([]uniast.Dependency, 0, len(deps))
 					}
 					obj.GlobalVars = uniast.InsertDependency(obj.GlobalVars, pdep)
-				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
+				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
 					if obj.Types == nil {
 						obj.Types = make([]uniast.Dependency, 0, len(deps))
 					}
@@ -300,7 +300,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		pkg.Functions[id.Name] = obj
 
 	// Type
-	case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
+	case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
 		obj := &uniast.Type{
 			FileLine: fileLine,
 			Content:  content,
@@ -317,7 +317,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				switch dep.Symbol.Kind {
-				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum:
+				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
 					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
@@ -369,6 +369,9 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 func mapKind(kind lsp.SymbolKind) uniast.TypeKind {
 	switch kind {
 	case lsp.SKStruct:
+		return "struct"
+	// XXX: C++ should use class instead of struct
+	case lsp.SKClass:
 		return "struct"
 	case lsp.SKTypeParameter:
 		return "type-parameter"
