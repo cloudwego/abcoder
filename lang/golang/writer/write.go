@@ -17,6 +17,8 @@
 package writer
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -29,7 +31,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
@@ -180,12 +181,6 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir str
 		return fmt.Errorf("write go.mod failed: %v", err)
 	}
 
-	// go mod tidy
-	cmd := exec.Command(w.Options.CompilerPath, "mod", "tidy")
-	cmd.Dir = outdir
-	if err := cmd.Run(); err != nil {
-		log.Error("go mod tidy failed: %v", err)
-	}
 	return nil
 }
 
@@ -385,4 +380,33 @@ func (p *Writer) CreateFile(fi *uniast.File, mod *uniast.Module) ([]byte, error)
 
 	bs := sb.String()
 	return []byte(bs), nil
+}
+
+func (p *Writer) Format(ctx context.Context, path string) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat %s failed: %v", path, err)
+	}
+
+	// call goimports
+	if err := utils.ExecCmdWithInstall(ctx, "goimports", []string{"-w", path}, p.CompilerPath, []string{"install", "golang.org/x/tools/cmd/goimports@latest"}); err != nil {
+		return fmt.Errorf("goimports failed: %v", err)
+	}
+	// call gofmt
+	if err := utils.ExecCmdWithInstall(ctx, "gofmt", []string{"-w", path}, p.CompilerPath, []string{"install", "golang.org/x/tools/cmd/gofmt@latest"}); err != nil {
+		return fmt.Errorf("gofmt failed: %v", err)
+	}
+	// call go mod tidy
+	cmd := exec.CommandContext(ctx, p.CompilerPath, "mod", "tidy")
+	cmd.Dir = path
+	if !fi.IsDir() {
+		cmd.Dir = filepath.Dir(path)
+	}
+	buf := bytes.NewBuffer(nil)
+	cmd.Stderr = buf
+	cmd.Stdout = buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("go mod tidy failed: %v\n%s", err, buf.String())
+	}
+	return nil
 }

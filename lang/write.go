@@ -48,6 +48,9 @@ func Write(ctx context.Context, repo *uniast.Repository, args WriteOptions) erro
 		if err := w.WriteModule(repo, mpath, args.OutputDir); err != nil {
 			return err
 		}
+		if err := w.Format(ctx, args.OutputDir); err != nil {
+			return err
+		}
 	}
 	return nil
 }

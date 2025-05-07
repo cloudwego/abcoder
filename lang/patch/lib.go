@@ -15,6 +15,7 @@
 package patch
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -124,7 +125,7 @@ next_dep:
 	for _, dep := range patch.AddedDeps {
 		impt, err := w.IdToImport(dep)
 		if err != nil {
-			return fmt.Errorf("convert identity %s to import failed: %v", dep.Full(), err)
+			return utils.WrapError(err, "convert identity %s to import failed", dep.Full())
 		}
 		f.Imports = uniast.InserImport(f.Imports, impt)
 	}
@@ -135,7 +136,7 @@ next_dep:
 		File:     f,
 	}
 	if err := p.patch(n); err != nil {
-		return fmt.Errorf("patch file %s failed: %v", f.Path, err)
+		return utils.WrapError(err, "patch file %s failed", f.Path)
 	}
 	return nil
 }
@@ -168,7 +169,7 @@ func (p *Patcher) Flush() error {
 			fi := mod.GetFile(fpath)
 			data, err = writer.CreateFile(fi, mod)
 			if err != nil {
-				return fmt.Errorf("create file %s failed: %v", fpath, err)
+				return utils.WrapError(err, "create file %s failed", fpath)
 			}
 		}
 
@@ -189,7 +190,7 @@ func (p *Patcher) Flush() error {
 		}
 
 		if err := utils.MustWriteFile(filepath.Join(p.OutDir, fpath), data); err != nil {
-			return fmt.Errorf("write file %s failed: %v", fpath, err)
+			return utils.WrapError(err, "write file %s failed", fpath)
 		}
 
 		// patch imports
@@ -201,10 +202,10 @@ func (p *Patcher) Flush() error {
 			}
 			data, err := writer.PatchImports(n.File.Imports, data)
 			if err != nil {
-				return fmt.Errorf("patch imports failed: %v", err)
+				return utils.WrapError(err, "patch imports failed")
 			}
 			if err := utils.MustWriteFile(filepath.Join(p.OutDir, fpath), data); err != nil {
-				return fmt.Errorf("write file %s failed: %v", fpath, err)
+				return utils.WrapError(err, "write file %s failed: %v", fpath)
 			}
 		}
 	}
@@ -218,12 +219,19 @@ func (p *Patcher) Flush() error {
 			fpath := filepath.Join(p.RepoDir, f.Path)
 			bs, err := os.ReadFile(fpath)
 			if err != nil {
-				return fmt.Errorf("read file %s failed: %v", fpath, err)
+				return utils.WrapError(err, "read file %s failed", fpath)
 			}
 			fpath = filepath.Join(p.OutDir, f.Path)
 			if err := utils.MustWriteFile(fpath, bs); err != nil {
-				return fmt.Errorf("write file %s failed: %v", fpath, err)
+				return utils.WrapError(err, "write file %s failed", fpath)
 			}
+		}
+		w := p.getLangWriter(mod.Language)
+		if w == nil {
+			return fmt.Errorf("unsupported language %s writer", mod.Language)
+		}
+		if err := w.Format(context.Background(), p.OutDir); err != nil {
+			return utils.WrapError(err, "format file %s failed", p.OutDir)
 		}
 	}
 	return nil

@@ -30,6 +30,15 @@ func InsertDependency(ids []Dependency, id Dependency) []Dependency {
 	return append(ids, id)
 }
 
+func InsertRelation(ids []Relation, id Relation) []Relation {
+	for _, i := range ids {
+		if i.Identity == id.Identity {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
 func InserImport(ids []Import, id Import) []Import {
 	for _, i := range ids {
 		if i.Path == id.Path {

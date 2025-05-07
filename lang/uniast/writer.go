@@ -16,6 +16,8 @@
 
 package uniast
 
+import "context"
+
 type Writer interface {
 	// write a module onto Options.OutDir.
 	WriteModule(repo *Repository, modPath string, outDir string) error
@@ -32,4 +34,7 @@ type Writer interface {
 
 	// PatchImports patches the imports into file content
 	PatchImports(impts []Import, file []byte) ([]byte, error)
+
+	// Format formats the file(s) with the given path.
+	Format(ctx context.Context, dir string) error
 }
