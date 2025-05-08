@@ -21,6 +21,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	. "github.com/cloudwego/abcoder/lang/uniast"
@@ -33,15 +34,15 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	sysImports := make(map[string]string)
 	ret := &importInfo{}
 	for _, imp := range impts {
-		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
+		importPath, _ := strconv.Unquote(imp.Path.Value) // remove the quotes
 		importAlias := ""
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
 			importAlias = imp.Name.Name // update the alias
-			ret.Origins = append(ret.Origins, Import{Path: imp.Path.Value, Alias: &importAlias})
+			ret.Origins = append(ret.Origins, Import{Path: importPath, Alias: &importAlias})
 		} else {
 			importAlias = getPackageAlias(importPath)
-			ret.Origins = append(ret.Origins, Import{Path: imp.Path.Value})
+			ret.Origins = append(ret.Origins, Import{Path: importPath})
 		}
 
 		// Fix: module name may also be like this?
@@ -212,7 +213,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				mod.Files[relpath] = f
 			}
 			pkgid := pkg.ID
-			f.Package = &pkgid
+			f.Package = []PkgPath{pkgid}
 			f.Imports = imports.Origins
 			if err := p.parseFile(ctx, file); err != nil {
 				return err

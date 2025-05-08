@@ -200,6 +200,7 @@ func (p *Patcher) Flush() error {
 			if mod == nil {
 				return fmt.Errorf("module %s not found", n.Identity.ModPath)
 			}
+			n.File.RemoveUnusedImports(p.repo)
 			data, err := writer.PatchImports(n.File.Imports, data)
 			if err != nil {
 				return utils.WrapError(err, "patch imports failed")

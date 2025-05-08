@@ -134,6 +134,7 @@ func (r *Repository) BuildGraph() error {
 		if mod.IsExternal() {
 			continue
 		}
+		fileNodes := make(map[string][]Identity)
 		for _, pkg := range mod.Packages {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
@@ -149,6 +150,8 @@ func (r *Repository) BuildGraph() error {
 				for _, dep := range f.GlobalVars {
 					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
+				fi := n.FileLine()
+				fileNodes[fi.File] = InsertIdentity(fileNodes[fi.File], f.Identity)
 			}
 
 			for _, t := range pkg.Types {
@@ -159,6 +162,8 @@ func (r *Repository) BuildGraph() error {
 				for _, dep := range t.InlineStruct {
 					r.AddRelation(n, dep.Identity, dep.FileLine)
 				}
+				fi := n.FileLine()
+				fileNodes[fi.File] = InsertIdentity(fileNodes[fi.File], t.Identity)
 			}
 
 			for _, v := range pkg.Vars {
@@ -166,9 +171,19 @@ func (r *Repository) BuildGraph() error {
 				if v.Type != nil {
 					r.AddRelation(n, *v.Type, v.FileLine)
 				}
+				fi := n.FileLine()
+				fileNodes[fi.File] = InsertIdentity(fileNodes[fi.File], v.Identity)
 			}
 		}
+		for _, f := range mod.Files {
+			nodes, ok := fileNodes[f.Path]
+			if !ok {
+				continue
+			}
+			f.Nodes = nodes
+		}
 	}
+
 	return nil
 }
 
@@ -429,9 +444,18 @@ func (n Node) FileLine() FileLine {
 	}
 }
 
-func (n Node) SetFileLine(file FileLine) {
+func (n *Node) SetFileLine(file FileLine) {
 	if n.Repo == nil {
 		return
+	}
+	m := n.Module()
+	if m == nil {
+		panic("module not found")
+	}
+	fi := m.GetFile(file.File)
+	if fi == nil {
+		fi = NewFile(file.File)
+		m.SetFile(file.File, fi)
 	}
 	switch n.Type {
 	case FUNC:

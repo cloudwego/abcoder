@@ -258,7 +258,7 @@ func (w *Writer) appendNode(node *uniast.Node, pkg string, isMain bool, file str
 		if v.PkgPath == "" || v.PkgPath == pkg {
 			continue
 		}
-		fs.impts = append(fs.impts, uniast.Import{Path: strconv.Quote(v.PkgPath)})
+		fs.impts = append(fs.impts, uniast.Import{Path: v.PkgPath})
 	}
 
 	// 检查是否有imports
@@ -278,18 +278,24 @@ func (w *Writer) appendNode(node *uniast.Node, pkg string, isMain bool, file str
 
 // receive a piece of golang code, parse it and splits the imports and codes
 func (w Writer) SplitImportsAndCodes(src string) (codes string, imports []uniast.Import, err error) {
+	var src2 = src
+	if !strings.Contains("package ", src) {
+		src2 = "package main\n\n" + src
+	}
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "", src, parser.SkipObjectResolution)
+	f, err := parser.ParseFile(fset, "", src2, parser.SkipObjectResolution)
 	if err != nil {
 		// NOTICE: if parse failed, just return the src
 		return src, nil, nil
 	}
 	for _, imp := range f.Imports {
-		var alias string
+		s, _ := strconv.Unquote(imp.Path.Value)
+		v := uniast.Import{Path: s}
 		if imp.Name != nil {
-			alias = imp.Name.Name
+			tmp := imp.Name.Name
+			v.Alias = &tmp
 		}
-		imports = append(imports, uniast.Import{Path: imp.Path.Value, Alias: &alias})
+		imports = append(imports, v)
 	}
 	start := 0
 	for _, s := range f.Decls {
@@ -299,11 +305,11 @@ func (w Writer) SplitImportsAndCodes(src string) (codes string, imports []uniast
 		start = fset.Position(s.Pos()).Offset
 		break
 	}
-	return src[start:], imports, nil
+	return src2[start:], imports, nil
 }
 
 func (w *Writer) IdToImport(id uniast.Identity) (uniast.Import, error) {
-	return uniast.Import{Path: strconv.Quote(id.PkgPath)}, nil
+	return uniast.Import{Path: id.PkgPath}, nil
 }
 
 func (p *Writer) PatchImports(impts []uniast.Import, file []byte) ([]byte, error) {
@@ -316,8 +322,9 @@ func (p *Writer) PatchImports(impts []uniast.Import, file []byte) ([]byte, error
 
 	old := make([]uniast.Import, 0, len(f.Imports))
 	for _, imp := range f.Imports {
+		v, _ := strconv.Unquote(imp.Path.Value)
 		i := uniast.Import{
-			Path: imp.Path.Value,
+			Path: v,
 		}
 		if imp.Name != nil {
 			tmp := imp.Name.Name
@@ -359,7 +366,7 @@ func (p *Writer) CreateFile(fi *uniast.File, mod *uniast.Module) ([]byte, error)
 	sb.WriteString("package ")
 	pkgName := filepath.Base(filepath.Dir(fi.Path))
 	if fi.Package != nil {
-		pkg := mod.Packages[*fi.Package]
+		pkg := mod.Packages[fi.Package[0]]
 		if pkg != nil {
 			if pkg.IsMain {
 				pkgName = "main"
