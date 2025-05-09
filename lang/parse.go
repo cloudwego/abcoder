@@ -96,7 +96,6 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		// NOTICE: open the Cargo.toml file is required for Rust projects
 		openfile, wait = rust.CheckRepo(repoPath)
 	case uniast.Cxx:
-		// NOTICE: open the Cargo.toml file is required for Rust projects
 		openfile, wait = cxx.CheckRepo(repoPath)
 	default:
 		openfile = ""

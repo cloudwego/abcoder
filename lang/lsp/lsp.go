@@ -305,7 +305,6 @@ func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRa
 }
 
 func filterSemanticTokensInRange(resp *SemanticTokens, r Range) {
-	// LSP starts from 0:0 but the project seems to use 1:1 (see collect PositionOffset)
 	curPos := Position{
 		Line:      0,
 		Character: 0,
