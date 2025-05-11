@@ -17,6 +17,7 @@
 package writer
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -44,7 +45,7 @@ func writeSingleImport(sb *strings.Builder, v uniast.Import) {
 		sb.WriteString(*v.Alias)
 		sb.WriteString(" ")
 	}
-	sb.WriteString(v.Path)
+	sb.WriteString(strconv.Quote(v.Path))
 	sb.WriteString("\n")
 }
 

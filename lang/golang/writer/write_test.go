@@ -142,7 +142,7 @@ import "fmt"
 				file: &uniast.File{
 					Imports: []uniast.Import{
 						{
-							Path:  `"runtime"`,
+							Path:  `runtime`,
 							Alias: &alias1,
 						},
 					},

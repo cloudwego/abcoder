@@ -94,16 +94,37 @@ func NewRepository(name string) Repository {
 
 type File struct {
 	Path    string
-	Imports []Import `json:",omitempty"`
-	Package *PkgPath `json:",omitempty"`
+	Imports []Import   `json:",omitempty"`
+	Package []PkgPath  `json:",omitempty"` // related packages, maybe one (belong to) or many (children)
+	Nodes   []Identity `json:",omitempty"`
+}
+
+func (f *File) RemoveUnusedImports(repo *Repository) {
+	marked := make(map[string]bool, len(f.Imports))
+	for _, id := range f.Nodes {
+		node := repo.GetNode(id)
+		if node == nil {
+			continue
+		}
+		for _, dep := range node.Dependencies {
+			marked[dep.Identity.PkgPath] = true
+		}
+	}
+	final := make([]Import, 0, len(f.Imports))
+	for i := len(f.Imports) - 1; i >= 0; i-- {
+		if marked[f.Imports[i].Path] {
+			final = InserImport(final, f.Imports[i])
+		}
+	}
+	f.Imports = final
 }
 
 type Import struct {
 	Alias *string `json:",omitempty"`
-	Path  string
+	Path  PkgPath
 }
 
-func NewImport(alias *string, path string) Import {
+func NewImport(alias *string, path PkgPath) Import {
 	return Import{
 		Alias: alias,
 		Path:  path,

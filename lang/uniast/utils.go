@@ -21,7 +21,25 @@ import (
 	"os"
 )
 
+func InsertIdentity(ids []Identity, id Identity) []Identity {
+	for _, i := range ids {
+		if i == id {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
 func InsertDependency(ids []Dependency, id Dependency) []Dependency {
+	for _, i := range ids {
+		if i.Identity == id.Identity {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
+func InsertRelation(ids []Relation, id Relation) []Relation {
 	for _, i := range ids {
 		if i.Identity == id.Identity {
 			return ids
