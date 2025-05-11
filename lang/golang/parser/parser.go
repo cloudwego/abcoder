@@ -15,6 +15,7 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -22,6 +23,7 @@ import (
 	"go/types"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -142,6 +144,15 @@ func (p *GoParser) ParseRepo() (Repository, error) {
 
 func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 	filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
+		// run go mod tidy before parse
+		cmd := exec.Command("go", "mod", "tidy")
+		cmd.Dir = dir
+		buf := bytes.NewBuffer(nil)
+		cmd.Stderr = buf
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("run go mod tidy failed in %s: %v", dir, buf.String())
+		}
+
 		if info != nil && info.IsDir() && filepath.Base(path) == ".git" {
 			return filepath.SkipDir
 		}

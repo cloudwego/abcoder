@@ -151,7 +151,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkgPath] != nil {
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s", mod.Name, dir, pkgPath)
+	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s\n", mod.Name, dir, pkgPath)
 	fset := token.NewFileSet()
 	loadCount++
 	// slow-path: load packages in the dir, including sub pakcages
@@ -181,6 +181,10 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		}
 	next_file:
 		for idx, file := range pkg.Syntax {
+			if idx >= len(pkg.GoFiles) {
+				fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
+				continue
+			}
 			filePath := pkg.GoFiles[idx]
 			for _, exclude := range p.exclues {
 				if exclude.MatchString(filePath) {
