@@ -39,6 +39,15 @@ func InserImport(ids []Import, id Import) []Import {
 	return append(ids, id)
 }
 
+func InsertRelation(ids []Relation, id Relation) []Relation {
+	for _, i := range ids {
+		if i.Identity == id.Identity {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
 func LoadRepo(path string) (*Repository, error) {
 	bs, err := os.ReadFile(path)
 	if err != nil {
