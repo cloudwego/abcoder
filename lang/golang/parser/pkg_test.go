@@ -114,8 +114,9 @@ func Test_goParser_ParseDirs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_ = out
-			println(string(out))
+			if err := os.WriteFile("golang.json", out, 0644); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }
