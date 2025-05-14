@@ -32,7 +32,7 @@ func CheckRepo(repo string) (string, time.Duration) {
 	// TODO: check if the project compiles.
 
 	// NOTICE: wait for Rust projects based on code files
-	_, size := utils.CountFiles(repo, ".c", "SKIPDIR")
+	_, size := utils.CountFiles(repo, ".c", "build/")
 	wait := 2*time.Second + time.Second*time.Duration(size/1024)
 	if wait > MaxWaitDuration {
 		wait = MaxWaitDuration

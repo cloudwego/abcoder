@@ -43,7 +43,9 @@ func (c *CxxSpec) WorkSpace(root string) (map[string]string, error) {
 	return rets, nil
 }
 
-// returns: mod, path, error
+// returns: modname, pathpath, error
+// Multiple symbols with the same name could occur (for example in the Linux kernel).
+// The identify is mod::pkg::name. So we use the pkg (the file name) to distinguish them.
 func (c *CxxSpec) NameSpace(path string) (string, string, error) {
 	// external lib: only standard library (system headers), in /usr/
 	if !strings.HasPrefix(path, c.repo) {
@@ -54,8 +56,8 @@ func (c *CxxSpec) NameSpace(path string) (string, string, error) {
 		panic(fmt.Sprintf("external lib: %s\n", path))
 	}
 
-	return "current", "current", nil
-
+	relpath, _ := filepath.Rel(c.repo, path)
+	return "current", relpath, nil
 }
 
 func (c *CxxSpec) ShouldSkip(path string) bool {
