@@ -52,6 +52,7 @@ ABCoder currently supports the following languages:
 | Go       | ✅           | ✅           |
 | Rust     | ✅           | Coming Soon |
 | C        | Coming Soon | ❌           |
+| Python   | Coming Soon | ❌           |
 
 
 

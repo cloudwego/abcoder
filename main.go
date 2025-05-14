@@ -51,6 +51,7 @@ Action:
 Language:
    rust			for rust codes
    cxx  		for c codes (cpp support is on the way)
+   python  		for python codes
    go  			for golang codes
 URI:
    for action parse: the directory path of the repo

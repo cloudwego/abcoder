@@ -23,6 +23,7 @@ import (
 	"unicode"
 
 	"github.com/cloudwego/abcoder/lang/cxx"
+	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/rust"
@@ -82,6 +83,8 @@ func switchSpec(l uniast.Language) LanguageSpec {
 		return &rust.RustSpec{}
 	case uniast.Cxx:
 		return &cxx.CxxSpec{}
+	case uniast.Python:
+		return &python.PythonSpec{}
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}
