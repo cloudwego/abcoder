@@ -17,8 +17,8 @@
 #include "pair.h"
 
 union IntOrChar {
-	int i;
-	char c;
+  int i;
+  char c;
 };
 
 extern int add(int, int);
@@ -27,19 +27,20 @@ extern int add(int, int);
 int arr[MAXN];
 
 int compare(const void *a, const void *b) {
-	int int_a = *((int *)a);
-	int int_b = *((int *)b);
-	if (int_a < int_b) return -1;
-	if (int_a > int_b) return 1;
-	return 0;
+  int int_a = *((int *)a);
+  int int_b = *((int *)b);
+  if (int_a < int_b)
+    return -1;
+  if (int_a > int_b)
+    return 1;
+  return 0;
 }
 
 int main() {
-	StructIntPair x;
-	x.a = 5;
-	x.b = 6;
-	swapPair(&x);
-	struct IntPair y = myself(&x);
-	return y.a+y.b;
+  StructIntPair x;
+  x.a = 5;
+  x.b = 6;
+  swapPair(&x);
+  struct IntPair y = myself(&x);
+  return y.a + y.b;
 }
-

@@ -16,8 +16,8 @@
 #define PAIR_H
 
 struct IntPair {
-	int a;
-	int b;
+  int a;
+  int b;
 };
 typedef struct IntPair StructIntPair;
 

@@ -15,11 +15,9 @@
 #include "pair.h"
 
 void swapPair(StructIntPair *a) {
-	int c = a->b;
-	a->b = a->a;
-	a->a = c;
+  int c = a->b;
+  a->b = a->a;
+  a->a = c;
 }
 
-struct IntPair myself(StructIntPair *a) {
-	return *a;
-}
+struct IntPair myself(StructIntPair *a) { return *a; }
