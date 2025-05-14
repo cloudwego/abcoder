@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 	"github.com/sourcegraph/go-lsp"
 )
@@ -284,6 +285,56 @@ func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, 
 	return resp, nil
 }
 
+// TODO(perf): cache results especially for whole file queries.
+// TODO(refactor): infer use_full_method from capabilities
+func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens, use_full_method bool) error {
+	if use_full_method {
+		req1 := struct {
+			TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
+		}{TextDocument: req.TextDocument}
+		if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
+			return err
+		}
+		filterSemanticTokensInRange(resp, req.Range)
+	} else {
+		if err := cli.Call(ctx, "textDocument/semanticTokens/range", req, resp); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func filterSemanticTokensInRange(resp *SemanticTokens, r Range) {
+	curPos := Position{
+		Line:      0,
+		Character: 0,
+	}
+	newData := []uint32{}
+	includedIs := []int{}
+	for i := 0; i < len(resp.Data); i += 5 {
+		deltaLine := int(resp.Data[i])
+		deltaStart := int(resp.Data[i+1])
+		if deltaLine != 0 {
+			curPos.Line += deltaLine
+			curPos.Character = deltaStart
+		} else {
+			curPos.Character += deltaStart
+		}
+		if isPositionInRange(curPos, r, true) {
+			if len(newData) == 0 {
+				// add range start to initial delta
+				newData = append(newData, resp.Data[i:i+5]...)
+				newData[0] = uint32(curPos.Line)
+				newData[1] = uint32(curPos.Character)
+			} else {
+				newData = append(newData, resp.Data[i:i+5]...)
+			}
+			includedIs = append(includedIs, i)
+		}
+	}
+	resp.Data = newData
+}
+
 func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token, error) {
 	// open file first
 	syms, err := cli.DocumentSymbols(ctx, id.URI)
@@ -304,7 +355,8 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 	}
 
 	var resp SemanticTokens
-	if err := cli.Call(ctx, "textDocument/semanticTokens/range", req, &resp); err != nil {
+	if err := cli.getSemanticTokensRange(ctx, req, &resp, cli.Language == uniast.Cxx); err != nil {
+
 		return nil, err
 	}
 

@@ -28,6 +28,7 @@ type Language string
 const (
 	Golang  Language = "go"
 	Rust    Language = "rust"
+	Cxx     Language = "cxx"
 	Unknown Language = ""
 )
 
@@ -37,6 +38,8 @@ func (l Language) String() string {
 		return "rust"
 	case Golang:
 		return "go"
+	case Cxx:
+		return "cxx"
 	default:
 		return string(l)
 	}
@@ -53,6 +56,8 @@ func NewLanguage(lang string) (l Language) {
 		return Golang
 	case "rust":
 		return Rust
+	case "cxx":
+		return Cxx
 	default:
 		return Unknown
 	}
