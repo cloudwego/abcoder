@@ -156,10 +156,10 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		return nil, fmt.Errorf("server did not provide TypeDefinition")
 	}
 
-	implementationProvider, ok := vs["implementationProvider"].(bool)
-	if !ok || !implementationProvider {
-		return nil, fmt.Errorf("server did not provide Implementation")
-	}
+	// implementationProvider, ok := vs["implementationProvider"].(bool)
+	// if !ok || !implementationProvider {
+	// 	return nil, fmt.Errorf("server did not provide Implementation")
+	// }
 	documentSymbolProvider, ok := vs["documentSymbolProvider"].(bool)
 	if !ok || !documentSymbolProvider {
 		return nil, fmt.Errorf("server did not provide DocumentSymbol")
