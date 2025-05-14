@@ -21,6 +21,15 @@ import (
 	"os"
 )
 
+func Append[T comparable](ids []T, id T) []T {
+	for _, i := range ids {
+		if i == id {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
 func InsertDependency(ids []Dependency, id Dependency) []Dependency {
 	for _, i := range ids {
 		if i.Identity == id.Identity {
@@ -33,6 +42,15 @@ func InsertDependency(ids []Dependency, id Dependency) []Dependency {
 func InserImport(ids []Import, id Import) []Import {
 	for _, i := range ids {
 		if i.Path == id.Path {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
+func InsertRelation(ids []Relation, id Relation) []Relation {
+	for _, i := range ids {
+		if i.Identity == id.Identity {
 			return ids
 		}
 	}

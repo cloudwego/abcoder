@@ -90,7 +90,7 @@ func calOffset(ref, dep FileLine) int {
 
 func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine) {
 	line := calOffset(node.FileLine(), depFl)
-	node.Dependencies = append(node.Dependencies, Relation{
+	node.Dependencies = InsertRelation(node.Dependencies, Relation{
 		Identity: dep,
 		Kind:     DEPENDENCY,
 		Line:     line,
@@ -104,7 +104,7 @@ func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine) {
 		}
 		r.Graph[key] = nd
 	}
-	nd.References = append(nd.References, Relation{
+	nd.References = InsertRelation(nd.References, Relation{
 		Identity: node.Identity,
 		Kind:     REFERENCE,
 		Line:     line,
@@ -144,6 +144,9 @@ func (r *Repository) BuildGraph() error {
 				}
 				for _, dep := range f.Types {
 					r.AddRelation(n, dep.Identity, dep.FileLine)
+				}
+				if f.Receiver != nil {
+					r.AddRelation(n, f.Receiver.Type, n.FileLine())
 				}
 				for _, dep := range f.GlobalVars {
 					r.AddRelation(n, dep.Identity, dep.FileLine)

@@ -471,10 +471,17 @@ func (p *GoParser) parseStruct(ctx *fileContext, struName string, name *ast.Iden
 			fieldname = fieldDecl.Names[0].Name
 		}
 		if stru, ok := fieldDecl.Type.(*ast.StructType); ok {
-			// anonymous struct. parse and collect it
+			// anonymous struct. parse it
 			as, _ := p.parseStruct(ctx, "_"+fieldname, nil, stru)
-			dep := NewDependency(as.Identity, ctx.FileLine(fieldDecl.Type))
-			st.SubStruct = append(st.SubStruct, dep)
+			// move out substructs of the anonymous struct
+			for _, dep := range as.SubStruct {
+				st.SubStruct = InsertDependency(st.SubStruct, dep)
+			}
+			for _, dep := range as.InlineStruct {
+				st.SubStruct = InsertDependency(st.InlineStruct, dep)
+			}
+			// remove the anonymous struct from the repo
+			delete(p.repo.GetPackage(as.ModPath, as.PkgPath).Types, as.Name)
 		} else {
 			p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 		}

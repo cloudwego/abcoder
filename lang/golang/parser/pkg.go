@@ -93,12 +93,12 @@ func (p *GoParser) associateImplements() {
 		for iface, iid := range p.interfaces {
 			if types.Implements(typ, iface) {
 				tobj := p.getRepo().GetType(tid)
-				tobj.Implements = append(tobj.Implements, iid)
+				tobj.Implements = Append(tobj.Implements, iid)
 			}
 			// 另外检查 typ 的指针类型是否实现了 iface
 			if types.Implements(types.NewPointer(typ), iface) {
 				tobj := p.getRepo().GetType(tid)
-				tobj.Implements = append(tobj.Implements, iid)
+				tobj.Implements = Append(tobj.Implements, iid)
 			}
 		}
 	}
