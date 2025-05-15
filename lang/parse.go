@@ -27,10 +27,10 @@ import (
 
 	"github.com/cloudwego/abcoder/lang/collect"
 	"github.com/cloudwego/abcoder/lang/cxx"
-	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/golang/parser"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )

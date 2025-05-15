@@ -29,7 +29,7 @@ const (
 	Golang  Language = "go"
 	Rust    Language = "rust"
 	Cxx     Language = "cxx"
-	Python     Language = "python"
+	Python  Language = "python"
 	Unknown Language = ""
 )
 
