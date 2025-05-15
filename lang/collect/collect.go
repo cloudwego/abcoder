@@ -174,8 +174,6 @@ func (c *Collector) Collect(ctx context.Context) error {
 		// only language entity symbols need to be collect on next
 		if c.spec.IsEntitySymbol(*sym) {
 			syms = append(syms, sym)
-		} else {
-			fmt.Printf("skip %s at %+v with %+v\n", sym.Name, sym.Location, sym.Kind)
 		}
 		c.processSymbol(ctx, sym, 1)
 	}
@@ -548,7 +546,7 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 		impl = ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
 	}
 	if impl == "" || len(impl) < len(sym.Name) {
-		impl = sym.Name
+		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
 	// search all methods
 	for _, method := range c.syms {

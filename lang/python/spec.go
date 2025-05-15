@@ -205,6 +205,10 @@ func (c *PythonSpec) IsEntitySymbol(sym lsp.DocumentSymbol) bool {
 }
 
 func (c *PythonSpec) IsPublicSymbol(sym lsp.DocumentSymbol) bool {
+	// builtin methods are exported
+	if strings.HasPrefix(sym.Name, "__") && strings.HasSuffix(sym.Name, "__") {
+		return true
+	}
 	if strings.HasPrefix(sym.Name, "_") {
 		return false
 	}
@@ -212,17 +216,70 @@ func (c *PythonSpec) IsPublicSymbol(sym lsp.DocumentSymbol) bool {
 }
 
 func (c *PythonSpec) HasImplSymbol() bool {
-	// Python does not have direct impl symbols
-	return false
+	return true
 }
 
+func invalidPos() lsp.Position {
+	return lsp.Position{
+		Line:      -1,
+		Character: -1,
+	}
+}
+
+// returns interface, receiver, first method
 func (c *PythonSpec) ImplSymbol(sym lsp.DocumentSymbol) (int, int, int) {
-	panic("TODO")
+	// reference: https://docs.python.org/3/reference/grammar.html
+	if sym.Kind != lsp.SKClass {
+		return -1, -1, -1
+	}
+
+	implType := -1
+	receiverType := -1
+	firstMethod := -1
+
+	// state 0: goto state -1 when we see a 'class'
+	state := 0
+	clsnamepos := invalidPos()
+	curpos := sym.Location.Range.Start
+	for i := range len(sym.Text) {
+		if state == -1 {
+			break
+		}
+		switch state {
+		case 0:
+			if i+6 >= len(sym.Text) {
+				// class text does not contain a 'class'
+				// should be an import
+				return -1, -1, -1
+			}
+			next6chars := sym.Text[i : i+6]
+			// heuristics should work with reasonable python code
+			if next6chars == "class " {
+				clsnamepos = curpos
+				state = -1
+			}
+		}
+		if sym.Text[i] == '\n' {
+			curpos.Line++
+			curpos.Character = 0
+		} else {
+			curpos.Character++
+		}
+	}
+
+	for i, t := range sym.Tokens {
+		if receiverType == -1 && clsnamepos.Less(t.Location.Range.Start) {
+			receiverType = i
+		}
+	}
+
+	return implType, receiverType, firstMethod
 }
 
 // returns: receiver, typeParams, inputParams, outputParams
 func (c *PythonSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []int) {
-	// no receiver. no type params in python
+	// FunctionSymbol do not return receivers.
+	// TODO type params in python (nobody uses them)
 	// reference: https://docs.python.org/3/reference/grammar.html
 	receiver := -1
 	// python actually has these but TODO
@@ -239,20 +296,19 @@ func (c *PythonSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, 
 	// 			finish when we see a :
 	state := 0
 	paren_depth := 0
-	invalidpos := lsp.Position{
-		Line:      -1,
-		Character: -1,
-	}
-	// defpos := invalidpos
-	lparenpos := invalidpos
-	rparenpos := invalidpos
-	bodypos := invalidpos
+	// defpos := invalidPos()
+	lparenpos := invalidPos()
+	rparenpos := invalidPos()
+	bodypos := invalidPos()
 	curpos := sym.Location.Range.Start
 	for i := range len(sym.Text) {
+		if state == -1 {
+			break
+		}
 		switch state {
 		case 0:
 			if i+4 >= len(sym.Text) {
-				// function text does not contain a def
+				// function text does not contain a 'def'
 				// should be an import
 				return -1, []int{}, []int{}, []int{}
 			}
