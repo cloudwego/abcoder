@@ -315,12 +315,23 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 }
 
 func (c *Collector) filterEntitySymbols(syms []*DocumentSymbol) *DocumentSymbol {
+	// Choose the most specific symbol
+	var mostSpecific *DocumentSymbol
+	mostSpecific = nil
 	for _, sym := range syms {
-		if c.spec.IsEntitySymbol(*sym) {
-			return sym
+		if !c.spec.IsEntitySymbol(*sym) {
+			continue
+		}
+		if mostSpecific == nil || mostSpecific.Location.Include(sym.Location) {
+			// replace most specific
+			mostSpecific = sym
+		} else if sym.Location.Include(mostSpecific.Location) {
+			// retain most specific
+		} else {
+			log.Error("multiple symbols %s and %s not include each other", mostSpecific, sym)
 		}
 	}
-	return nil
+	return mostSpecific
 }
 
 // return a language entity symbol
