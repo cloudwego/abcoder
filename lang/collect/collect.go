@@ -621,9 +621,12 @@ func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsym
 		}
 	} else {
 		f = functionInfo{
-			TypeParams: tsyms,
-			Inputs:     ipsyms,
-			Outputs:    opsyms,
+			TypeParams:       tsyms,
+			Inputs:           ipsyms,
+			Outputs:          opsyms,
+			InputsSorted:     is,
+			OutputsSorted:    os,
+			TypeParamsSorted: ts,
 		}
 		if rsym != nil {
 			if f.Method == nil {

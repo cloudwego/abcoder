@@ -136,7 +136,7 @@ func (c *PythonSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
 
 func (c *PythonSpec) IsEntityToken(tok lsp.Token) bool {
 	typ := tok.Type
-	return typ == "function" || typ == "parameter" || typ == "variable" || typ == "property" || typ == "class" || typ == "type"
+	return typ == "function" || typ == "variable" || typ == "property" || typ == "class" || typ == "type"
 }
 
 func (c *PythonSpec) IsStdToken(tok lsp.Token) bool {
@@ -217,8 +217,11 @@ func (c *PythonSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, 
 	// no receiver. no type params in python
 	// reference: https://docs.python.org/3/reference/grammar.html
 	receiver := -1
+	// python actually has these but TODO
 	typeParams := []int{}
 
+	// Hell, manually parse function text to get locations of key tokens since LSP does not support this...
+	//
 	// state 0: goto state 1 when we see a def
 	// state 1: goto state 2 when we see a (
 	// state 2: we're in the param list.
@@ -228,36 +231,75 @@ func (c *PythonSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, 
 	// 			finish when we see a :
 	state := 0
 	paren_depth := 0
-	inputParams := []int{}
-	outputParams := []int{}
-	for i, t := range sym.Tokens {
-		if state == -1 {
-			break
-		}
+	invalidpos := lsp.Position{
+		Line:      -1,
+		Character: -1,
+	}
+	// defpos := invalidpos
+	lparenpos := invalidpos
+	rparenpos := invalidpos
+	bodypos := invalidpos
+	curpos := sym.Location.Range.Start
+	for i := range len(sym.Text) {
 		switch state {
 		case 0:
-			if t.Text == "def" {
+			if i+4 >= len(sym.Text) {
+				// function text does not contain a def
+				// should be an import
+				return -1, []int{}, []int{}, []int{}
+			}
+			next4chars := sym.Text[i : i+4]
+			// heuristics should work with reasonable python code
+			if next4chars == "def " {
+				// defpos = curpos
 				state = 1
 			}
 		case 1:
-			if t.Text == "(" {
-				state = 2
+			if sym.Text[i] == '(' {
+				lparenpos = curpos
 				paren_depth = 1
+				state = 2
 			}
 		case 2:
-			if t.Text == ")" {
+			if sym.Text[i] == ')' {
+				rparenpos = curpos
 				paren_depth -= 1
 				if paren_depth == 0 {
 					state = 3
 				}
-			} else if c.IsEntityToken(t) {
-				inputParams = append(inputParams, i)
 			}
 		case 3:
-			// no-op
-			if t.Text == ":" {
+			if sym.Text[i] == ':' {
+				bodypos = curpos
 				state = -1
-			} else if c.IsEntityToken(t) {
+			}
+		}
+		if sym.Text[i] == '\n' {
+			curpos.Line++
+			curpos.Character = 0
+		} else {
+			curpos.Character++
+		}
+	}
+
+	paramsrange := lsp.Range{
+		Start: lparenpos,
+		End:   rparenpos,
+	}
+	returnrange := lsp.Range{
+		Start: rparenpos,
+		End:   bodypos,
+	}
+	inputParams := []int{}
+	outputParams := []int{}
+	for i, t := range sym.Tokens {
+		if paramsrange.Include(t.Location.Range) {
+			if c.IsEntityToken(t) {
+				inputParams = append(inputParams, i)
+			}
+		}
+		if returnrange.Include(t.Location.Range) {
+			if c.IsEntityToken(t) {
 				outputParams = append(outputParams, i)
 			}
 		}
