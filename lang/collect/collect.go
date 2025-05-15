@@ -23,9 +23,9 @@ import (
 	"unicode"
 
 	"github.com/cloudwego/abcoder/lang/cxx"
-	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
@@ -170,6 +170,8 @@ func (c *Collector) Collect(ctx context.Context) error {
 		// only language entity symbols need to be collect on next
 		if c.spec.IsEntitySymbol(*sym) {
 			syms = append(syms, sym)
+		} else {
+			fmt.Printf("skip %s at %+v with %+v\n", sym.Name, sym.Location, sym.Kind)
 		}
 		c.processSymbol(ctx, sym, 1)
 	}

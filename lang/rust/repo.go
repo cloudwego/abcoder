@@ -27,7 +27,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/utils"
 )
 
-const MaxWaitDuration = 5 * time.Minute
+const MaxWaitDuration = 5 * time.Second
 
 func CheckRepo(repo string) (string, time.Duration) {
 	// NOTICE: open the Cargo.toml file is required for Rust projects

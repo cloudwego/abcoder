@@ -355,7 +355,7 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 	}
 
 	var resp SemanticTokens
-	if err := cli.getSemanticTokensRange(ctx, req, &resp, cli.Language == uniast.Cxx); err != nil {
+	if err := cli.getSemanticTokensRange(ctx, req, &resp, cli.Language == uniast.Cxx || cli.Language == uniast.Python); err != nil {
 
 		return nil, err
 	}

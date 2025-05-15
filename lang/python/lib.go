@@ -24,7 +24,7 @@ import (
 const MaxWaitDuration = 5 * time.Minute
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
-	// needs to use the pylsp from https://github.com/python-lsp/python-lsp-server/pull/533
+	// needs to use the custom pylsp (see commit message)
 	return uniast.Python, "pylsp"
 }
 
