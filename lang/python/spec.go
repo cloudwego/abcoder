@@ -136,7 +136,7 @@ func (c *PythonSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
 
 func (c *PythonSpec) IsEntityToken(tok lsp.Token) bool {
 	typ := tok.Type
-	return typ == "function" || typ == "parameter" || typ == "variable" || typ == "property"
+	return typ == "function" || typ == "parameter" || typ == "variable" || typ == "property" || typ == "class" || typ == "type"
 }
 
 func (c *PythonSpec) IsStdToken(tok lsp.Token) bool {
@@ -192,7 +192,8 @@ func (c *PythonSpec) IsMainFunction(sym lsp.DocumentSymbol) bool {
 
 func (c *PythonSpec) IsEntitySymbol(sym lsp.DocumentSymbol) bool {
 	typ := sym.Kind
-	return typ == lsp.SKObject || typ == lsp.SKMethod || typ == lsp.SKFunction || typ == lsp.SKVariable || typ == lsp.SKStruct || typ == lsp.SKEnum || typ == lsp.SKTypeParameter || typ == lsp.SKInterface || typ == lsp.SKConstant
+	return typ == lsp.SKObject || typ == lsp.SKMethod || typ == lsp.SKFunction || typ == lsp.SKVariable ||
+		typ == lsp.SKStruct || typ == lsp.SKEnum || typ == lsp.SKTypeParameter || typ == lsp.SKConstant || typ == lsp.SKClass
 }
 
 func (c *PythonSpec) IsPublicSymbol(sym lsp.DocumentSymbol) bool {
