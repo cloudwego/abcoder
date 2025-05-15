@@ -147,6 +147,10 @@ func (c *Collector) Collect(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			// HACK: skip imported symbols
+			if c.Language == uniast.Python && (strings.HasPrefix(content, "from ") || strings.HasPrefix(content, "import ")) {
+				continue
+			}
 			// collect tokens
 			tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
 			if err != nil {
