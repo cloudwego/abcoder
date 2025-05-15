@@ -30,9 +30,14 @@ def compare(a: int, b: int) -> int:
 
 
 IntOrChar = Union[IntVariant, CharVariant]
+# TODO: global var not suppported
+globalvar = 5
 
 
 def main() -> None:
+    global globalvar
+    globalvar = 65
+
     ls = list((1, 2))
 
     x = add(2, 3)
@@ -42,6 +47,7 @@ def main() -> None:
     print(f"Original pair: {my_pair}")
     swap_pair(my_pair)
     print(f"Swapped pair: {my_pair}")
+    print(f"my_pair.sum = {my_pair.sum()}")
 
     val1: IntOrChar = IntVariant(123)
     val2: IntOrChar = CharVariant(ord("A"))
