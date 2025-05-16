@@ -81,6 +81,7 @@ func main() {
 	uri := os.Args[3]
 
 	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
+	flagVeryVerbose := flags.Bool("veryverbose", false, "Very verbose mode.")
 
 	flagOutput := flags.String("o", "", "Output path.")
 
@@ -96,8 +97,12 @@ func main() {
 		flagLsp := flags.String("lsp", "", "Specify the language server path.")
 
 		flags.Parse(os.Args[4:])
-		if flagVerbose != nil && *flagVerbose {
+		if flagVeryVerbose != nil && *flagVeryVerbose {
 			log.SetLogLevel(log.DebugLevel)
+			opts.Verbose = true
+		}
+		if flagVerbose != nil && *flagVerbose {
+			log.SetLogLevel(log.InfoLevel)
 			opts.Verbose = true
 		}
 
