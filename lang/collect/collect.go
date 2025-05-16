@@ -117,8 +117,8 @@ func (c *Collector) Collect(ctx context.Context) error {
 	}
 
 	// scan all files
-	roots := make([]*DocumentSymbol, 0, 1024)
-	scanner := func(path string, info os.FileInfo, err error) error {
+	collect_paths := make([]string, 0, 1024)
+	if err := filepath.Walk(c.repo, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -133,15 +133,26 @@ func (c *Collector) Collect(ctx context.Context) error {
 		if c.spec.ShouldSkip(path) {
 			return nil
 		}
-
+		collect_paths = append(collect_paths, path)
+		return nil
+	}); err != nil {
+		return err
+	}
+	// collect root symbols
+	roots := make([]*DocumentSymbol, 0, 1024)
+	for i, path := range collect_paths {
 		// collect symbols
 		uri := NewURI(path)
 		symbols, err := c.cli.DocumentSymbols(ctx, uri)
 		if err != nil {
 			return err
 		}
+		log.Info("collecting %d/%d files %s, has %d symbols\n", i, len(collect_paths), path, len(symbols))
 		// file := filepath.Base(path)
+		n_sym := 0
 		for _, sym := range symbols {
+			log.Debug("  symbol %d/%d %s\n", n_sym, len(symbols), sym.Name)
+			n_sym++
 			// collect content
 			content, err := c.cli.Locate(sym.Location)
 			if err != nil {
@@ -161,11 +172,6 @@ func (c *Collector) Collect(ctx context.Context) error {
 			c.syms[sym.Location] = sym
 			roots = append(roots, sym)
 		}
-
-		return nil
-	}
-	if err := filepath.Walk(c.repo, scanner); err != nil {
-		return err
 	}
 
 	// collect some extra metadata
