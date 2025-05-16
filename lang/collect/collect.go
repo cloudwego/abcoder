@@ -22,8 +22,10 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
@@ -79,6 +81,10 @@ func switchSpec(l uniast.Language) LanguageSpec {
 	switch l {
 	case uniast.Rust:
 		return &rust.RustSpec{}
+	case uniast.Cxx:
+		return &cxx.CxxSpec{}
+	case uniast.Python:
+		return &python.PythonSpec{}
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}
@@ -140,6 +146,10 @@ func (c *Collector) Collect(ctx context.Context) error {
 			content, err := c.cli.Locate(sym.Location)
 			if err != nil {
 				return err
+			}
+			// HACK: skip imported symbols
+			if c.Language == uniast.Python && (strings.HasPrefix(content, "from ") || strings.HasPrefix(content, "import ")) {
+				continue
 			}
 			// collect tokens
 			tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
@@ -303,12 +313,23 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 }
 
 func (c *Collector) filterEntitySymbols(syms []*DocumentSymbol) *DocumentSymbol {
+	// Choose the most specific symbol
+	var mostSpecific *DocumentSymbol
+	mostSpecific = nil
 	for _, sym := range syms {
-		if c.spec.IsEntitySymbol(*sym) {
-			return sym
+		if !c.spec.IsEntitySymbol(*sym) {
+			continue
+		}
+		if mostSpecific == nil || mostSpecific.Location.Include(sym.Location) {
+			// replace most specific
+			mostSpecific = sym
+		} else if sym.Location.Include(mostSpecific.Location) {
+			// retain most specific
+		} else {
+			log.Error("multiple symbols %s and %s not include each other", mostSpecific, sym)
 		}
 	}
-	return nil
+	return mostSpecific
 }
 
 // return a language entity symbol
@@ -525,7 +546,7 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 		impl = ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
 	}
 	if impl == "" || len(impl) < len(sym.Name) {
-		impl = sym.Name
+		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
 	// search all methods
 	for _, method := range c.syms {
@@ -613,9 +634,12 @@ func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsym
 		}
 	} else {
 		f = functionInfo{
-			TypeParams: tsyms,
-			Inputs:     ipsyms,
-			Outputs:    opsyms,
+			TypeParams:       tsyms,
+			Inputs:           ipsyms,
+			Outputs:          opsyms,
+			InputsSorted:     is,
+			OutputsSorted:    os,
+			TypeParamsSorted: ts,
 		}
 		if rsym != nil {
 			if f.Method == nil {
