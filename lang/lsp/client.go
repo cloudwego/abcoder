@@ -35,13 +35,16 @@ type LSPClient struct {
 	tokenTypes     []string
 	tokenModifiers []string
 	files          map[DocumentURI]*TextDocumentItem
+	// TODO: now only cache semantic tokens
+	cachedResults map[string]SemanticTokens
 	ClientOptions
 }
 
 type ClientOptions struct {
 	Server string
 	uniast.Language
-	Verbose bool
+	Verbose      bool
+	CacheResults bool
 }
 
 func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientOptions) (*LSPClient, error) {
@@ -58,6 +61,9 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 
 	cli.ClientOptions = opts
 	cli.files = make(map[DocumentURI]*TextDocumentItem)
+	if opts.CacheResults {
+		cli.cachedResults = make(map[string]SemanticTokens)
+	}
 
 	if openfile != "" {
 		_, err := cli.DidOpen(context.Background(), NewURI(openfile))

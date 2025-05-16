@@ -37,6 +37,7 @@ type CollectOption struct {
 	NoNeedComment      bool
 	NeedTest           bool
 	Excludes           []string
+	CacheResults       bool
 }
 
 type Collector struct {
@@ -138,10 +139,10 @@ func (c *Collector) Collect(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	// collect root symbols
+
+	// collect symbols
 	roots := make([]*DocumentSymbol, 0, 1024)
 	for i, path := range collect_paths {
-		// collect symbols
 		uri := NewURI(path)
 		symbols, err := c.cli.DocumentSymbols(ctx, uri)
 		if err != nil {
@@ -151,7 +152,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 		// file := filepath.Base(path)
 		n_sym := 0
 		for _, sym := range symbols {
-			log.Debug("  symbol %d/%d %s\n", n_sym, len(symbols), sym.Name)
+			log.Debug("  collecting symbol %d/%d %s\n", n_sym, len(symbols), sym.Name)
 			n_sym++
 			// collect content
 			content, err := c.cli.Locate(sym.Location)
@@ -173,6 +174,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 			roots = append(roots, sym)
 		}
 	}
+	log.Info("collected symbols.")
 
 	// collect some extra metadata
 	syms := make([]*DocumentSymbol, 0, len(roots))
@@ -284,6 +286,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 				c.syms[dep.Location] = dep
 			}
 
+			log.Debug("  Collect: dep %s -> %s (file: %s -> %s)\n", sym.Name, dep.Name, sym.Location, token.Location)
 			c.deps[sym] = append(c.deps[sym], dependency{
 				Location: token.Location,
 				Symbol:   dep,

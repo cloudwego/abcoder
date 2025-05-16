@@ -63,9 +63,10 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		log.Info("start initialize LSP server %s...\n", lspPath)
 		var err error
 		client, err = lsp.NewLSPClient(uri, openfile, opentime, lsp.ClientOptions{
-			Server:   lspPath,
-			Language: l,
-			Verbose:  args.Verbose,
+			Server:       lspPath,
+			Language:     l,
+			Verbose:      args.Verbose,
+			CacheResults: args.CacheResults,
 		})
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)

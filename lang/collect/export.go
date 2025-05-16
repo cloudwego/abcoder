@@ -136,7 +136,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	id := uniast.NewIdentity(mod, path, name)
 	visited[symbol] = &id
 
-	// Load eternal symbol on demands
+	// Load external symbol on demands
 	if !c.LoadExternalSymbol && (!c.internal(symbol.Location) || symbol.Kind == SKUnknown) {
 		return &id, nil
 	}

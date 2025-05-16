@@ -288,12 +288,29 @@ func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, 
 // TODO(perf): cache results especially for whole file queries.
 // TODO(refactor): infer use_full_method from capabilities
 func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens, use_full_method bool) error {
+	// Note: resp should be `mutable SemanticTokens * const resp`
 	if use_full_method {
-		req1 := struct {
-			TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
-		}{TextDocument: req.TextDocument}
-		if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
-			return err
+		if cli.cachedResults == nil {
+			// no caching
+			req1 := struct {
+				TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
+			}{TextDocument: req.TextDocument}
+			if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
+				return err
+			}
+		} else {
+			cacheRes, ok := cli.cachedResults[string(req.TextDocument.URI)]
+			if ok {
+				*resp = cacheRes
+			} else {
+				req1 := struct {
+					TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
+				}{TextDocument: req.TextDocument}
+				if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
+					return err
+				}
+				cli.cachedResults[string(req.TextDocument.URI)] = *resp
+			}
 		}
 		filterSemanticTokensInRange(resp, req.Range)
 	} else {
@@ -310,7 +327,6 @@ func filterSemanticTokensInRange(resp *SemanticTokens, r Range) {
 		Character: 0,
 	}
 	newData := []uint32{}
-	includedIs := []int{}
 	for i := 0; i < len(resp.Data); i += 5 {
 		deltaLine := int(resp.Data[i])
 		deltaStart := int(resp.Data[i+1])
@@ -329,7 +345,6 @@ func filterSemanticTokensInRange(resp *SemanticTokens, r Range) {
 			} else {
 				newData = append(newData, resp.Data[i:i+5]...)
 			}
-			includedIs = append(includedIs, i)
 		}
 	}
 	resp.Data = newData
@@ -356,7 +371,6 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 
 	var resp SemanticTokens
 	if err := cli.getSemanticTokensRange(ctx, req, &resp, cli.Language == uniast.Cxx || cli.Language == uniast.Python); err != nil {
-
 		return nil, err
 	}
 
