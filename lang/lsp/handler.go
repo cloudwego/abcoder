@@ -93,9 +93,9 @@ loop:
 
 func (h *lspHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	// This method will be called for both requests and notifications
-	log.Info("handle method: %s\n", req.Method)
+	log.Debug("handle method: %s\n", req.Method)
 	if req.Params != nil {
-		log.Info("param: %s\n", string(*req.Params))
+		log.Debug("param: %s\n", string(*req.Params))
 	}
 	if req.Notif {
 		// This is a notification

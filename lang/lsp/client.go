@@ -225,7 +225,7 @@ func (rwc rwc) Close() error {
 
 // start a LSP process and return its io
 func startLSPSever(path string) (io.ReadWriteCloser, error) {
-	// Launch rust-analyzer
+	// Launch LSP server
 	cmd := exec.Command(path)
 
 	stdin, err := cmd.StdinPipe()

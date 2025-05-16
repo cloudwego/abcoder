@@ -320,7 +320,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
 					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
 				default:
-					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
+					log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
 				}
 			}
 		}

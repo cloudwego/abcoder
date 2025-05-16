@@ -108,6 +108,22 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 }
 
 func (c *Collector) Collect(ctx context.Context) error {
+	// Example code to configure the LSP client
+	// if c.Language == uniast.Python {
+	// 	conf := map[string]interface{}{
+	// 		"settings": map[string]interface{}{
+	// 			"pylsp": map[string]interface{}{
+	// 				"plugins": map[string]interface{}{
+	// 					"jedi_definition": map[string]interface{}{
+	// 						"follow_builtin_definitions": false,
+	// 					},
+	// 				},
+	// 			},
+	// 		},
+	// 	}
+	// 	c.cli.Notify(ctx, "workspace/didChangeConfiguration", conf)
+	// }
+
 	excludes := make([]string, len(c.Excludes))
 	for i, e := range c.Excludes {
 		if !filepath.IsAbs(e) {

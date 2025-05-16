@@ -21,7 +21,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/utils"
 )
 
-const MaxWaitDuration = 5 * time.Second
+const MaxWaitDuration = 2 * time.Second
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
 	// needs to use the custom pylsp (see commit message)

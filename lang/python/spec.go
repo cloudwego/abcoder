@@ -43,33 +43,20 @@ func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
 		return nil, err
 	}
 
-	num_projfiles := 0
-	scanner := func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		base := filepath.Base(path)
-		if base == "pyproject.toml" {
-			num_projfiles++
-			if num_projfiles > 1 {
-				panic("multiple pyproject.toml files found")
-			}
-			// it's hard to infer the name or package from pyproject.toml
-		}
-		return nil
-	}
-	if err := filepath.Walk(root, scanner); err != nil {
-		return nil, err
-	}
+	// TODO: maybe infer from pyproject.toml?
+	//   should ignore {tests,examples}/**/pyproject.toml
 
 	// XXX ad-hoc way
 	if strings.Contains(c.repo, "astropy") {
 		panic("TODO")
+	} else if strings.Contains(c.repo, "flask") {
+		c.topModulePath = absPath + "/src"
+		c.topModuleName = "flask"
 	} else {
 		c.topModulePath = absPath
 		c.topModuleName = "current"
-		rets[c.topModuleName] = c.topModulePath
 	}
+	rets[c.topModuleName] = c.topModulePath
 	return rets, nil
 }
 
