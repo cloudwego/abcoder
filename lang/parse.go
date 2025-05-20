@@ -41,6 +41,8 @@ type ParseOptions struct {
 	LSP string
 	// Language of the repo
 	Verbose bool
+	// Whether to indent the output JSON
+	MarshalIndent bool
 	collect.CollectOption
 }
 
@@ -81,7 +83,12 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		return nil, err
 	}
 	log.Info("all symbols collected, start writing to stdout...\n")
-	out, err := json.Marshal(repo)
+	var out []byte
+	if args.MarshalIndent {
+		out, err = json.MarshalIndent(repo, "", "  ")
+	} else {
+		out, err = json.Marshal(repo)
+	}
 	if err != nil {
 		log.Error("Failed to marshal repository: %v\n", err)
 		return nil, err

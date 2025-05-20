@@ -93,6 +93,7 @@ func main() {
 		flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
 		flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
 		flags.BoolVar(&opts.CacheResults, "cache", false, "cache language server query results")
+		flags.BoolVar(&opts.MarshalIndent, "indent", false, "indent the marshaled output")
 		flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
 		flagLsp := flags.String("lsp", "", "Specify the language server path.")
 
