@@ -75,3 +75,6 @@ src/lang/testdata
 
 tools
 abcoder
+
+/*.txt
+/*.json

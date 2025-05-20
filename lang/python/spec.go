@@ -83,6 +83,22 @@ func (c *PythonSpec) NameSpace(path string) (string, string, error) {
 	// XXX: hardcoded python version
 	condaPrefix := "/home/zhenyang/anaconda3/envs/abcoder/lib/python3.11"
 	if strings.HasPrefix(path, condaPrefix) {
+		if strings.HasPrefix(path, condaPrefix+"/site-packages") {
+			// external module
+			relPath, err := filepath.Rel(condaPrefix+"/site-packages", path)
+			if err != nil {
+				return "", "", err
+			}
+			relPath = strings.TrimSuffix(relPath, ".py")
+			pkgPath := strings.ReplaceAll(relPath, string(os.PathSeparator), ".")
+			modPath := strings.Split(pkgPath, ".")
+			if len(modPath) >= 1 {
+				modName := modPath[0]
+				return modName, pkgPath, nil
+			}
+			panic(fmt.Sprintf("Malformed Namespace %s, pkgPath %s", path, pkgPath))
+		}
+		// builtin module
 		modName := "builtins"
 		relPath, err := filepath.Rel(condaPrefix, path)
 		if err != nil {
@@ -93,7 +109,7 @@ func (c *PythonSpec) NameSpace(path string) (string, string, error) {
 		return modName, pkgPath, nil
 	}
 
-	panic(fmt.Sprintf("Namespace %s", path))
+	panic(fmt.Sprintf("Unhandled Namespace %s", path))
 }
 
 func (c *PythonSpec) ShouldSkip(path string) bool {
