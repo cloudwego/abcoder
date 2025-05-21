@@ -15,99 +15,10 @@
 package parser
 
 import (
-	"bytes"
-	"encoding/json"
-	"flag"
 	"fmt"
-	"os"
-	"strings"
 
 	. "github.com/cloudwego/abcoder/lang/uniast"
 )
-
-var (
-	referCodeDepth int
-	collectComment bool
-	excludes       string
-)
-
-func init() {
-	// init args with flags
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] <RepoDir> [id]\n", os.Args[0])
-		flag.PrintDefaults()
-	}
-	flag.BoolVar(&collectComment, "collect_comment", false, "collect comments for each node")
-	flag.IntVar(&referCodeDepth, "refer_code_depth", 0, "the depth to referenced codes, 0 means only return its identity")
-	flag.StringVar(&excludes, "excludes", "", "exclude paths, seperated by comma")
-}
-
-func Main() {
-	var err error
-	defer func() {
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-		}
-	}()
-	flag.Parse()
-	as := flag.Args()
-	if len(as) < 1 {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	homeDir := as[0]
-	id := ""
-	if len(as) >= 2 {
-		id = as[1]
-	}
-
-	var exs []string
-	if excludes != "" {
-		exs = strings.Split(excludes, ",")
-	}
-	// p := NewParser(homeDir, homeDir, WithReferCodeDepth(referCodeDepth), WithExcludes(exs), WithCollectComment(collectComment))
-	p := NewParser(homeDir, homeDir, Options{
-		ReferCodeDepth: referCodeDepth,
-		Excludes:       exs,
-		CollectComment: collectComment,
-	})
-
-	var out interface{}
-
-	if id == "" {
-		// parse whole repo
-		if out, err = p.ParseRepo(); err != nil {
-			return
-		}
-	} else {
-		// SPEC: seperate the packagepath and entity name by #
-		ids := strings.Split(id, "#")
-
-		if len(ids) == 1 {
-			// parse pacakge
-			pkgPath := ids[0]
-			if out, err = p.ParsePackage(pkgPath); err != nil {
-				return
-			}
-		} else if len(ids) == 2 {
-			if out, err = p.ParseNode(ids[0], ids[1]); err != nil {
-				return
-			}
-		}
-	}
-
-	buf := bytes.NewBuffer(nil)
-	encoder := json.NewEncoder(buf)
-	encoder.SetEscapeHTML(false)
-	err = encoder.Encode(out)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error marshalling functions to JSON:", err)
-		os.Exit(1)
-	}
-
-	fmt.Println(buf.String())
-}
 
 func loadNode(p *GoParser, pkgPath string, name string, out *Repository) error {
 	mod, _ := p.getModuleFromPkg(pkgPath)
