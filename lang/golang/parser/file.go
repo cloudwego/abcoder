@@ -29,13 +29,13 @@ import (
 func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {
 	cont := true
 	ast.Inspect(f, func(node ast.Node) bool {
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		fmt.Fprintf(os.Stderr, "panic: %v in %s:%d\n", r, ctx.filePath, ctx.fset.Position(node.Pos()).Line)
-		// 		cont = false
-		// 		return
-		// 	}
-		// }()
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "panic: %v in %s:%d\n", r, ctx.filePath, ctx.fset.Position(node.Pos()).Line)
+				cont = false
+				return
+			}
+		}()
 		if funcDecl, ok := node.(*ast.FuncDecl); ok {
 			// parse funcs
 			_, ct := p.parseFunc(ctx, funcDecl)
