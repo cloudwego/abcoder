@@ -17,9 +17,11 @@
 package uniast
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -102,6 +104,28 @@ type Import struct {
 	Alias *string `json:",omitempty"`
 	Path  string
 }
+
+func (i *Import) UnmarshalJSON(data []byte) error {
+	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
+		v, e := strconv.Unquote(string(data))
+		if e != nil {
+			return e
+		}
+		i.Path = v
+		return nil
+	} else {
+		var ii importObj
+		err := json.Unmarshal(data, &ii)
+		if err != nil {
+			return err
+		}
+		i.Alias = ii.Alias
+		i.Path = ii.Path
+		return nil
+	}
+}
+
+type importObj Import
 
 func NewImport(alias *string, path string) Import {
 	return Import{
@@ -448,6 +472,31 @@ type FileLine struct {
 
 type TypeKind string
 
+const (
+	TypeKindStruct    TypeKind = "struct"
+	TypeKindInterface TypeKind = "interface"
+	TypeKindTypedef   TypeKind = "typedef"
+	TypeKindEnum      TypeKind = "enum"
+)
+
+func (t *TypeKind) UnmarshalJSON(data []byte) error {
+	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
+		*t = TypeKind(data[1 : len(data)-1])
+		return nil
+	}
+
+	// 兼容历史go ast
+	switch string(data) {
+	case "0":
+		*t = TypeKindStruct
+	case "1":
+		*t = TypeKindInterface
+	default:
+		*t = TypeKindTypedef
+	}
+	return nil
+}
+
 // const (
 // 	TypeKindStruct    = 0 // type struct
 // 	TypeKindInterface = 1 // type interface
@@ -459,7 +508,8 @@ type TypeKind string
 type Type struct {
 	Exported bool // if the struct is exported
 
-	TypeKind // type Kind: Struct / Interface / Typedef
+	TypeKind TypeKind // type Kind: Struct / Interface / Typedef
+
 	Identity // unique id in a repo
 	FileLine
 	Content string // struct declaration content
