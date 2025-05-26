@@ -51,48 +51,56 @@ Action:
 Language:
    rust			for rust codes
    go  			for golang codes
-URI:
-   for action parse: the directory path of the repo
-   for action write: the file path of the UniAST for writer
 `
 
 func main() {
 	flags := flag.NewFlagSet("abcoder", flag.ExitOnError)
+
+	flagHelp := flags.Bool("h", false, "Show help message.")
+
+	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
+
+	flagOutput := flags.String("o", "", "Output path.")
+
+	var opts lang.ParseOptions
+	flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
+	flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
+	flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
+	flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
+	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
+	flagLsp := flags.String("lsp", "", "Specify the language server path.")
+
+	var wopts lang.WriteOptions
+	flags.StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")
+
 	flags.Usage = func() {
-		fmt.Fprintf(os.Stderr, Usage)
+		fmt.Fprint(os.Stderr, Usage)
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		flags.PrintDefaults()
 	}
 
 	if len(os.Args) < 4 {
-		fmt.Fprintf(os.Stderr, Usage)
+		// call flags.Usage()
+		flags.Usage()
 		os.Exit(1)
 	}
-
 	action := strings.ToLower(os.Args[1])
 	language := uniast.NewLanguage(os.Args[2])
 	if language == uniast.Unknown {
 		fmt.Fprintf(os.Stderr, "unsupported language: %s\n", os.Args[2])
 		os.Exit(1)
 	}
-
 	uri := os.Args[3]
 
-	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
-
-	flagOutput := flags.String("o", "", "Output path.")
+	flags.Parse(os.Args[4:])
+	if flagHelp != nil && *flagHelp {
+		flags.Usage()
+		os.Exit(0)
+	}
 
 	switch action {
 	case "parse":
-		var opts lang.ParseOptions
 
-		flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
-		flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
-		flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
-		flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
-		flagLsp := flags.String("lsp", "", "Specify the language server path.")
-
-		flags.Parse(os.Args[4:])
 		if flagVerbose != nil && *flagVerbose {
 			log.SetLogLevel(log.DebugLevel)
 			opts.Verbose = true
@@ -123,21 +131,16 @@ func main() {
 			os.Exit(1)
 		}
 
-		var opts lang.WriteOptions
-		flags.StringVar(&opts.Compiler, "compiler", "", "destination compiler path.")
-
-		flags.Parse(os.Args[4:])
-
 		if flagVerbose != nil && *flagVerbose {
 			log.SetLogLevel(log.DebugLevel)
 		}
 		if flagOutput != nil && *flagOutput != "" {
-			opts.OutputDir = *flagOutput
+			wopts.OutputDir = *flagOutput
 		} else {
-			opts.OutputDir = filepath.Base(repo.Name)
+			wopts.OutputDir = filepath.Base(repo.Name)
 		}
 
-		if err := lang.Write(context.Background(), repo, opts); err != nil {
+		if err := lang.Write(context.Background(), repo, wopts); err != nil {
 			log.Error("Failed to write: %v\n", err)
 			os.Exit(1)
 		}

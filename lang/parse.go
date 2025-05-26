@@ -40,6 +40,8 @@ type ParseOptions struct {
 	// Language of the repo
 	Verbose bool
 	collect.CollectOption
+	// specify the repo id
+	RepoID string
 }
 
 func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
@@ -78,6 +80,11 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		return nil, err
 	}
 	log.Info("all symbols collected, start writing to stdout...\n")
+
+	if args.RepoID != "" {
+		repo.Name = args.RepoID
+	}
+
 	out, err := json.Marshal(repo)
 	if err != nil {
 		log.Error("Failed to marshal repository: %v\n", err)
