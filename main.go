@@ -50,6 +50,7 @@ Action:
    write        write the UniAST to the output directory
 Language:
    rust			for rust codes
+   cxx  		for c codes (cpp support is on the way)
    go  			for golang codes
 `
 
