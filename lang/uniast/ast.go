@@ -544,8 +544,9 @@ type Var struct {
 	IsPointer bool // if its Type is a pointer type
 	Identity
 	FileLine
-	Type    *Identity `json:",omitempty"`
-	Content string
+	Type         *Identity `json:",omitempty"`
+	Content      string
+	Dependencies []Dependency `json:",omitempty"`
 
 	CompressData *string `json:"compress_data,omitempty"`
 }
