@@ -143,9 +143,9 @@ func parseModuleFile(data []byte) (map[string]string, error) {
 	}
 	modules := make(map[string]string)
 	for _, req := range ast.Require {
-		if req.Indirect {
-			continue
-		}
+		// if req.Indirect {
+		// 	continue
+		// }
 		modules[req.Mod.Path] = req.Mod.Path + "@" + req.Mod.Version
 	}
 	// replaces
