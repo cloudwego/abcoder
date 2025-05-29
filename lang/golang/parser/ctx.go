@@ -252,8 +252,39 @@ func (ctx *fileContext) GetTypeId(typ ast.Expr) (x Identity, isPointer bool, isS
 	if tinfo, ok := ctx.pkgTypeInfo.Types[typ]; ok {
 		return ctx.getIdFromType(tinfo.Type)
 	} else {
-		panic("cannot find type info for " + string(ctx.GetRawContent(typ)))
+		// NOTICE: for unloaded type, we only mock the type name
+		fmt.Fprintf(os.Stderr, "cannot find type info for %s\n", ctx.GetRawContent(typ))
+		return ctx.mockType(typ)
 	}
+}
+
+func (ctx *fileContext) mockType(typ ast.Expr) (x Identity, isPointer bool, isStdOrBuiltin bool) {
+	switch ty := typ.(type) {
+	case *ast.StarExpr:
+		id, _, std := ctx.mockType(ty.X)
+		return id, true, std
+	case *ast.CallExpr:
+		// try get func type
+		id, _, std := ctx.mockType(ty.Fun)
+		return id, false, std
+	case *ast.SelectorExpr:
+		// try get import path
+		switch xx := ty.X.(type) {
+		case *ast.Ident:
+			impt, mod, err := ctx.imports.GetImportPath(xx.Name, "")
+			if err != nil {
+				goto fallback
+			}
+			return NewIdentity(mod, PkgPath(impt), ty.Sel.Name), false, false
+		case *ast.SelectorExpr:
+			// recurse
+			id, _, std := ctx.mockType(xx)
+			return NewIdentity(id.ModPath, id.PkgPath, ty.Sel.Name), false, std
+		}
+	}
+
+fallback:
+	return NewIdentity("UNLOADED", ctx.pkgPath, string(ctx.GetRawContent(typ))), false, true
 }
 
 func (ctx *fileContext) collectFields(fields []*ast.Field, m *[]Dependency) {
