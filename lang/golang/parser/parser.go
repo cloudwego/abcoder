@@ -143,16 +143,16 @@ func (p *GoParser) ParseRepo() (Repository, error) {
 }
 
 func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
-	filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
-		// run go mod tidy before parse
-		cmd := exec.Command("go", "mod", "tidy")
-		cmd.Dir = dir
-		buf := bytes.NewBuffer(nil)
-		cmd.Stderr = buf
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("run go mod tidy failed in %s: %v", dir, buf.String())
-		}
+	// run go mod tidy before parse
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = dir
+	buf := bytes.NewBuffer(nil)
+	cmd.Stderr = buf
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "run go mod tidy failed in %s: %v\n", dir, buf.String())
+	}
 
+	filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
 		if info != nil && info.IsDir() && filepath.Base(path) == ".git" {
 			return filepath.SkipDir
 		}
@@ -163,6 +163,7 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 		mod.Files[rel] = NewFile(rel)
 		return nil
 	})
+
 	return p.loadPackages(mod, dir, "./...")
 }
 

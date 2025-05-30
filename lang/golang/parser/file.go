@@ -101,13 +101,19 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		v := p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
 		if vspec.Type != nil {
-			id, isPointer, _ := ctx.GetTypeId(vspec.Type)
-			v.Type = &id
-			v.IsPointer = isPointer
+			ti := ctx.GetTypeInfo(vspec.Type)
+			v.Type = &ti.Id
+			v.IsPointer = ti.IsPointer
+			for _, dep := range ti.Deps {
+				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(vspec.Type)))
+			}
 		} else if val != nil && !isConst {
-			id, isPointer, _ := ctx.GetTypeId(*val)
-			v.Type = &id
-			v.IsPointer = isPointer
+			ti := ctx.GetTypeInfo(*val)
+			v.Type = &ti.Id
+			v.IsPointer = ti.IsPointer
+			for _, dep := range ti.Deps {
+				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(*val)))
+			}
 		} else {
 			v.Type = typ
 		}
@@ -277,19 +283,19 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 		}
 		// callName := string(ctx.GetRawContent(expr))
 		// get receiver type name
-		var rname string
-		rev, _ := getNamedType(sel.Recv())
-		if rev == nil {
-			rname = extractName(sel.Recv().String())
-		} else {
-			rname = rev.Name()
+		// var rname string
+		rev := ctx.getTypeinfo(sel.Recv())
+		// if rev == nil {
+		// 	rname = extractName(sel.Recv().String())
+		// } else {
+		if !rev.IsStdOrBuiltin && rev.Id.ModPath != "" {
+			id := NewIdentity(mod, pkg, rev.Id.Name+"."+expr.Sel.Name)
+			dep := NewDependency(id, ctx.FileLine(expr.Sel))
+			if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
+			}
+			*infos.methodCalls = InsertDependency(*infos.methodCalls, dep)
 		}
-		id := NewIdentity(mod, pkg, rname+"."+expr.Sel.Name)
-		dep := NewDependency(id, ctx.FileLine(expr.Sel))
-		if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
-		}
-		*infos.methodCalls = InsertDependency(*infos.methodCalls, dep)
 		return false
 	}
 
@@ -308,14 +314,14 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	isMethod := funcDecl.Recv != nil
 	if isMethod {
 		// TODO: reserve the pointer message?
-		id, isPointer, _ := ctx.GetTypeId(funcDecl.Recv.List[0].Type)
+		ti := ctx.GetTypeInfo(funcDecl.Recv.List[0].Type)
 		// name := "self"
 		// if len(funcDecl.Recv.List[0].Names) > 0 {
 		// 	name = funcDecl.Recv.List[0].Names[0].Name
 		// }
 		receiver = &Receiver{
-			Type:      id,
-			IsPointer: isPointer,
+			Type:      ti.Id,
+			IsPointer: ti.IsPointer,
 			// Name:      name,
 		}
 	}

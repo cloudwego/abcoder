@@ -143,9 +143,9 @@ func parseModuleFile(data []byte) (map[string]string, error) {
 	}
 	modules := make(map[string]string)
 	for _, req := range ast.Require {
-		if req.Indirect {
-			continue
-		}
+		// if req.Indirect {
+		// 	continue
+		// }
 		modules[req.Mod.Path] = req.Mod.Path + "@" + req.Mod.Version
 	}
 	// replaces
@@ -183,15 +183,64 @@ func getTypeKind(n ast.Expr) TypeKind {
 	}
 }
 
-func getNamedType(typ types.Type) (ty types.Object, isPointer bool) {
-	if pt, ok := typ.(*types.Pointer); ok {
-		typ = pt.Elem()
+func getNamedTypes(typ types.Type) (tys []types.Object, isPointer bool) {
+	switch t := typ.(type) {
+	case *types.Pointer:
 		isPointer = true
+		typs, _ := getNamedTypes(t.Elem())
+		tys = append(tys, typs...)
+	case *types.Slice:
+		typs, _ := getNamedTypes(t.Elem())
+		tys = append(tys, typs...)
+	case *types.Array:
+		typs, _ := getNamedTypes(t.Elem())
+		tys = append(tys, typs...)
+	case *types.Chan:
+		typs, _ := getNamedTypes(t.Elem())
+		tys = append(tys, typs...)
+	case *types.Tuple:
+		for i := 0; i < t.Len(); i++ {
+			typs, _ := getNamedTypes(t.At(i).Type())
+			tys = append(tys, typs...)
+		}
+	case *types.Map:
+		typs2, _ := getNamedTypes(t.Elem())
+		typs1, _ := getNamedTypes(t.Key())
+		tys = append(tys, typs1...)
+		tys = append(tys, typs2...)
+	case *types.Named:
+		tys = append(tys, t.Obj())
+	case *types.Struct:
+		for i := 0; i < t.NumFields(); i++ {
+			typs, _ := getNamedTypes(t.Field(i).Type())
+			tys = append(tys, typs...)
+		}
+	case *types.Interface:
+		for i := 0; i < t.NumEmbeddeds(); i++ {
+			typs, _ := getNamedTypes(t.EmbeddedType(i))
+			tys = append(tys, typs...)
+		}
+		for i := 0; i < t.NumExplicitMethods(); i++ {
+			typs, _ := getNamedTypes(t.ExplicitMethod(i).Type())
+			tys = append(tys, typs...)
+		}
+	case *types.TypeParam:
+		typs, _ := getNamedTypes(t.Constraint())
+		tys = append(tys, typs...)
+	case *types.Alias:
+		typs, _ := getNamedTypes(t.Underlying())
+		tys = append(tys, typs...)
+	case *types.Signature:
+		for i := 0; i < t.Params().Len(); i++ {
+			typs, _ := getNamedTypes(t.Params().At(i).Type())
+			tys = append(tys, typs...)
+		}
+		for i := 0; i < t.Results().Len(); i++ {
+			typs, _ := getNamedTypes(t.Results().At(i).Type())
+			tys = append(tys, typs...)
+		}
 	}
-	if name, ok := typ.(*types.Named); ok {
-		return name.Obj(), isPointer
-	}
-	return nil, isPointer
+	return
 }
 
 func extractName(typ string) string {
