@@ -142,7 +142,7 @@ func (p *GoParser) parsePackage(pkgPath PkgPath) (err error) {
 	}
 	// fmt.Println("[parsePackage] mod:", mod, "dir:", dir, "pkgPath:", pkgPath, p.opts.ReferCodeDepth)
 
-	return p.loadPackages(lib, dir, pkgPath)
+	return p.loadPackages(lib, filepath.Join(p.homePageDir, lib.Dir), pkgPath)
 }
 
 var loadCount = 0

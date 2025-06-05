@@ -164,7 +164,29 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 		return nil
 	})
 
-	return p.loadPackages(mod, dir, "./...")
+	if p.opts.LoadByPackages {
+		var errs []error
+		filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
+			if e != nil || !info.IsDir() || shouldIgnoreDir(path) {
+				return nil
+			}
+			for _, exclude := range p.exclues {
+				if exclude.MatchString(path) {
+					return nil
+				}
+			}
+			if err := p.parsePackage(p.pkgPathFromABS(path)); err != nil {
+				errs = append(errs, err)
+			}
+			return nil
+		})
+		if len(errs) > 0 {
+			return fmt.Errorf("parse package failed: %v", errs)
+		}
+		return nil
+	} else {
+		return p.loadPackages(mod, dir, "./...")
+	}
 }
 
 // getRepo return currently parsed golang AST
@@ -249,7 +271,7 @@ func (p *GoParser) searchName(name string) (ids []Identity, err error) {
 		if e != nil || info.IsDir() || shouldIgnoreFile(path) || shouldIgnoreDir(filepath.Dir(path)) || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		mod, _ := p.getModuleFromPath(filepath.Dir(path))
+		mod := p.pkgPathFromABS(path)
 		m := p.repo.Modules[mod]
 		if m == nil {
 			dir, _ := filepath.Rel(p.homePageDir, path)
@@ -428,24 +450,29 @@ func (p *GoParser) getModuleFromPkg(pkg PkgPath) (name string, dir string) {
 }
 
 // path is absolute path
-func (p *GoParser) getModuleFromPath(path string) (name string, dir string) {
+func (p *GoParser) getModuleFromPath(path string) (name string, dir string, rel string) {
 	for _, m := range p.modules {
-		if len(m.dir) != 0 && strings.HasPrefix(path, m.dir) {
-			return m.name, m.dir
+		if m.dir == "" {
+			continue
+		}
+		dir := filepath.Join(p.homePageDir, m.dir)
+		if strings.HasPrefix(path, dir) {
+			rel, _ = filepath.Rel(dir, path)
+			return m.name, m.dir, rel
 		}
 	}
-	return "", ""
+	return "", "", ""
 }
 
 // FromABS converts an absolute path to local mod path
 func (p *GoParser) pkgPathFromABS(path string) PkgPath {
-	mod, dir := p.getModuleFromPath(path)
+	mod, _, rel := p.getModuleFromPath(path)
 	if mod == "" {
 		panic("not found package from " + path)
 	}
-	if rel, err := filepath.Rel(dir, path); err != nil {
-		panic("path " + path + " is not relative from mod path " + dir)
+	if rel != "" && rel != "." {
+		return mod + "/" + rel
 	} else {
-		return filepath.Join(mod, rel)
+		return mod
 	}
 }

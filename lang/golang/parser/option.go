@@ -25,6 +25,7 @@ type Options struct {
 	Excludes       []string
 	CollectComment bool
 	NeedTest       bool
+	LoadByPackages bool
 }
 
 // type Option func(options *Options)

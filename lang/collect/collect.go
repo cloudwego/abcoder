@@ -36,6 +36,7 @@ type CollectOption struct {
 	NoNeedComment      bool
 	NeedTest           bool
 	Excludes           []string
+	LoadByPackages     bool
 }
 
 type Collector struct {

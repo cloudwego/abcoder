@@ -67,6 +67,7 @@ func main() {
 	flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
 	flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
 	flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
+	flags.BoolVar(&opts.LoadByPackages, "load-by-packages", false, "load by packages (only works for Go now)")
 	flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
 	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
 	flagLsp := flags.String("lsp", "", "Specify the language server path.")
