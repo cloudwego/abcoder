@@ -133,7 +133,8 @@ func (p *GoParser) ParseRepo() (Repository, error) {
 		}
 		mod := p.repo.Modules[lib.name]
 		if err := p.ParseModule(mod, filepath.Join(p.homePageDir, mod.Dir)); err != nil {
-			return p.getRepo(), err
+			fmt.Fprintf(os.Stderr, "parse %s module failed, err: %v", mod, err)
+			//return p.getRepo(), err
 		}
 	}
 	p.associateStructWithMethods()
