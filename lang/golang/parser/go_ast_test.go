@@ -298,7 +298,7 @@ func TestCases(t *testing.T) {
 		{
 			name:   "annoymous struct",
 			fields: fields{"a.b/c", "a.b/c/pkg", "CaseStrucLiterMethod"},
-			want:   `{"Exported":true,"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStrucLiterMethod","File":"util.go","Line":145,"Content":""}`,
+			want:   `{"Exported":true,"IsMethod":false,"IsInterfaceMethod":false,"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStrucLiterMethod","File":"golang/pkg/util.go","Line":145,"StartOffset":2920,"EndOffset":3193,"Content":"func CaseStrucLiterMethod() {\n\t_ = (\u0026CaseStruct{\n\t\tFieldPremitive:         \"a\",\n\t\tFieldType:              1,\n\t\tFieldExternalType:      entity.MyStruct{},\n\t\tFieldInterface:         nil,\n\t\tFieldExternalInterface: nil,\n\t\tFieldClosuer:           nil,\n\t}).CaseMethod(nil, nil)\n}","MethodCalls":[{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStruct.CaseMethod","File":"golang/pkg/util.go","Line":153,"StartOffset":3171,"EndOffset":3181}],"Types":[{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStruct","File":"golang/pkg/util.go","Line":146,"StartOffset":2957,"EndOffset":2967},{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg/entity","Name":"MyStruct","File":"golang/pkg/util.go","Line":149,"StartOffset":3062,"EndOffset":3070}]}`,
 		},
 	}
 	for _, tt := range tests {
