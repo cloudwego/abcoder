@@ -142,3 +142,14 @@ const (
 	// JSON is a raw block of JSON
 	JSON
 )
+
+func CaseStrucLiterMethod() {
+	_ = (&CaseStruct{
+		FieldPremitive:         "a",
+		FieldType:              1,
+		FieldExternalType:      entity.MyStruct{},
+		FieldInterface:         nil,
+		FieldExternalInterface: nil,
+		FieldClosuer:           nil,
+	}).CaseMethod(nil, nil)
+}

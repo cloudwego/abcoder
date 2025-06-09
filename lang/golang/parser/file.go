@@ -263,7 +263,19 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 		// recurse call
 		cont = p.parseSelector(ctx, sel, infos)
 	} else {
-		// descent to the next level
+		// try to get type info of field first
+		if ti := ctx.GetTypeInfo(expr); ti.Ty != nil {
+			if _, ok := ti.Ty.(*types.Signature); ok {
+				// collect method call
+				// method call
+				rev := ctx.GetTypeInfo(expr.X)
+				if !rev.IsStdOrBuiltin {
+					id := NewIdentity(rev.Id.ModPath, rev.Id.PkgPath, rev.Id.Name+"."+expr.Sel.Name)
+					dep := NewDependency(id, ctx.FileLine(expr.Sel))
+					*infos.methodCalls = InsertDependency(*infos.methodCalls, dep)
+				}
+			}
+		}
 		return true
 	}
 

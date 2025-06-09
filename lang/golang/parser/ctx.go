@@ -252,6 +252,7 @@ type typeInfo struct {
 	IsPointer      bool
 	IsStdOrBuiltin bool
 	Deps           []Identity
+	Ty             types.Type
 }
 
 // FIXME: for complex type like map[XX]YY , we only extract first-meet type here
@@ -284,7 +285,7 @@ func (ctx *fileContext) mockType(typ ast.Expr) typeInfo {
 			if err != nil {
 				goto fallback
 			}
-			return typeInfo{NewIdentity(mod, PkgPath(impt), ty.Sel.Name), false, false, nil}
+			return typeInfo{NewIdentity(mod, PkgPath(impt), ty.Sel.Name), false, false, nil, nil}
 		case *ast.SelectorExpr:
 			// recurse
 			ti := ctx.mockType(xx)
@@ -295,7 +296,7 @@ func (ctx *fileContext) mockType(typ ast.Expr) typeInfo {
 	}
 
 fallback:
-	return typeInfo{NewIdentity("UNLOADED", ctx.pkgPath, string(ctx.GetRawContent(typ))), false, true, nil}
+	return typeInfo{NewIdentity("UNLOADED", ctx.pkgPath, string(ctx.GetRawContent(typ))), false, true, nil, nil}
 }
 
 func (ctx *fileContext) collectFields(fields []*ast.Field, m *[]Dependency) {
@@ -453,6 +454,7 @@ func (p *GoParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inline
 func (ctx *fileContext) getTypeinfo(typ types.Type) (ti typeInfo) {
 	tobjs, isPointer := getNamedTypes(typ)
 	ti.IsPointer = isPointer
+	ti.Ty = typ
 	if len(tobjs) > 0 {
 		tobj := tobjs[0]
 		if tp := tobj.Pkg(); tp != nil {
