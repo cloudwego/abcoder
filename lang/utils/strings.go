@@ -28,7 +28,19 @@ func PutCount(count *[]int) {
 	countPool.Put(count)
 }
 
-func CountLinesCached(text string) *[]int {
+var cachedLines = sync.Map{}
+
+func CountLinesCached(ident string, text string) *[]int {
+	if v, ok := cachedLines.Load(ident); ok {
+		res := v.([]int)
+		return &res
+	}
+	tmp := CountLines(text)
+	cachedLines.Store(ident, tmp)
+	return &tmp
+}
+
+func CountLinesPooled(text string) *[]int {
 	tmp := countPool.Get().(*[]int)
 	*tmp = append(*tmp, 0)
 	for i, c := range text {

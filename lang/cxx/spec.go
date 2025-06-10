@@ -164,7 +164,7 @@ func (c *CxxSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []i
 	// TODO: attributes may contain parens. also inline structs.
 
 	endRelOffset := 0
-	lines := utils.CountLinesCached(sym.Text)
+	lines := utils.CountLinesPooled(sym.Text)
 	phase := 0
 	for i, tok := range sym.Tokens {
 		switch phase {
