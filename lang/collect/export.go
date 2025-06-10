@@ -27,6 +27,10 @@ import (
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
+const (
+	SUPRESS_EXPORT_OUTPUT = true
+)
+
 type dependency struct {
 	Location Location        `json:"location"`
 	Symbol   *DocumentSymbol `json:"symbol"`
@@ -74,7 +78,10 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	c.filterLocalSymbols()
 
 	// export symbols
+	i := 0
 	for _, symbol := range c.syms {
+		log.Info("export symbol %d/%d: %s\n", i, len(c.syms), symbol.Name)
+		i++
 		visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
 		_, err := c.exportSymbol(&repo, symbol, "", visited)
 		if err != nil {
@@ -292,7 +299,9 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					}
 					obj.Types = uniast.InsertDependency(obj.Types, pdep)
 				default:
-					log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
+					if !SUPRESS_EXPORT_OUTPUT {
+						log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
+					}
 				}
 			}
 		}
@@ -320,7 +329,9 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
 					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
 				default:
-					log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
+					if !SUPRESS_EXPORT_OUTPUT {
+						log.Error("dep symbol %s not collected for %v\n", dep.Symbol, id)
+					}
 				}
 			}
 		}

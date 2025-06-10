@@ -40,6 +40,10 @@ type CollectOption struct {
 	CacheResults       bool
 }
 
+const (
+	SUPRESS_COLLECT_ERRORS = true
+)
+
 type Collector struct {
 	cli  *LSPClient
 	spec LanguageSpec
@@ -192,7 +196,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 			roots = append(roots, sym)
 		}
 	}
-	log.Info("collected symbols.")
+	log.Info("collected %d root symbols. going to collect more syms and dependencies...\n", len(roots))
 
 	// collect some extra metadata
 	syms := make([]*DocumentSymbol, 0, len(roots))
@@ -203,6 +207,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 		}
 		c.processSymbol(ctx, sym, 1)
 	}
+	log.Info("collected %d symbols. going to collect dependencies...\n", len(c.syms))
 
 	// collect internal references
 	// for _, sym := range syms {
@@ -236,8 +241,11 @@ func (c *Collector) Collect(ctx context.Context) error {
 	// 	}
 	// }
 
+	num_edges := 0
 	// collect dependencies
-	for _, sym := range syms {
+	for i, sym := range syms {
+		log.Info("collecting dependencies %d/%d %s\n", i, len(syms), sym.Name)
+
 	next_token:
 
 		for i, token := range sym.Tokens {
@@ -283,7 +291,9 @@ func (c *Collector) Collect(ctx context.Context) error {
 			// go to definition
 			dep, err := c.getSymbolByToken(ctx, token)
 			if err != nil || dep == nil {
-				log.Error("dep token %v not found: %v\n", token, err)
+				if !SUPRESS_COLLECT_ERRORS {
+					log.Error("dep token %v not found: %v\n", token, err)
+				}
 				continue
 			}
 
@@ -305,6 +315,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 			}
 
 			log.Debug("  Collect: dep %s -> %s (file: %s -> %s)\n", sym.Name, dep.Name, sym.Location, token.Location)
+			num_edges++
 			c.deps[sym] = append(c.deps[sym], dependency{
 				Location: token.Location,
 				Symbol:   dep,
@@ -313,6 +324,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 		}
 	}
 
+	log.Info("collected %d symbols, %d edges.\n", len(c.syms), num_edges)
 	return nil
 }
 
@@ -334,7 +346,9 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 		return nil, fmt.Errorf("definition of token %s not found", tok)
 	}
 	if len(defs) > 1 {
-		log.Error("definition of token %s not unique", tok)
+		if !SUPRESS_COLLECT_ERRORS {
+			log.Error("definition of token %s not unique", tok)
+		}
 	}
 	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
 }
@@ -536,7 +550,9 @@ func (c *Collector) getDepsWithLimit(ctx context.Context, sym *DocumentSymbol, t
 	for _, tp := range tps {
 		dep, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[tp], depth)
 		if err != nil || sym == nil {
-			log.Error_skip(1, "token %v not found its symbol: %v", tp, err)
+			if !SUPRESS_COLLECT_ERRORS {
+				log.Error_skip(1, "token %v not found its symbol: %v", tp, err)
+			}
 		} else {
 			d := dependency{sym.Tokens[tp].Location, dep}
 			tsyms[tp] = d
@@ -629,12 +645,16 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 			}
 		}
 		if i < 0 || i >= len(sym.Tokens) {
-			log.Error("get type token of variable symbol %s failed\n", sym)
+			if !SUPRESS_COLLECT_ERRORS {
+				log.Error("get type token of variable symbol %s failed\n", sym)
+			}
 			return
 		}
 		tsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[i], depth-1)
 		if err != nil || tsym == nil {
-			log.Error("get type symbol for token %s failed:%v\n", sym.Tokens[i], err)
+			if !SUPRESS_COLLECT_ERRORS {
+				log.Error("get type symbol for token %s failed:%v\n", sym.Tokens[i], err)
+			}
 			return
 		}
 		c.vars[sym] = dependency{

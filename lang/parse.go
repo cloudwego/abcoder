@@ -93,6 +93,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		log.Error("Failed to marshal repository: %v\n", err)
 		return nil, err
 	}
+	log.Info("all symbols written to stdout.\n")
 	return out, nil
 }
 
@@ -173,11 +174,14 @@ func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opt
 		if err != nil {
 			return nil, err
 		}
+		log.Info("all symbols exported.\n")
 	}
 
+	log.Info("start building graph...\n")
 	if err := repo.BuildGraph(); err != nil {
 		return nil, err
 	}
+	log.Info("graph built.\n")
 	return repo, nil
 }
 
