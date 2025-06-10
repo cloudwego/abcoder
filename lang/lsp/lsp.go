@@ -356,7 +356,6 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 
 	var resp SemanticTokens
 	if err := cli.getSemanticTokensRange(ctx, req, &resp, cli.Language == uniast.Cxx); err != nil {
-
 		return nil, err
 	}
 
@@ -373,6 +372,11 @@ func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Posit
 	if err != nil {
 		return nil, err
 	}
+	if f.Definitions != nil {
+		if locations, ok := f.Definitions[pos]; ok {
+			return locations, nil
+		}
+	}
 
 	// call
 	req := lsp.TextDocumentPositionParams{
@@ -385,6 +389,7 @@ func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Posit
 	if err := cli.Call(ctx, "textDocument/definition", req, &resp); err != nil {
 		return nil, err
 	}
+
 	// cache definitions
 	if f.Definitions == nil {
 		f.Definitions = make(map[Position][]Location)
