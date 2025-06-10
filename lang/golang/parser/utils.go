@@ -228,7 +228,7 @@ func getNamedTypes(typ types.Type) (tys []types.Object, isPointer bool) {
 		typs, _ := getNamedTypes(t.Constraint())
 		tys = append(tys, typs...)
 	case *types.Alias:
-		typs, _ := getNamedTypes(t.Underlying())
+		typs, _ := getNamedTypes(t.Rhs())
 		tys = append(tys, typs...)
 	case *types.Signature:
 		for i := 0; i < t.Params().Len(); i++ {

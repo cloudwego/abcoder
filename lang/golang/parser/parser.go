@@ -15,6 +15,7 @@
 package parser
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"go/ast"
@@ -148,6 +149,15 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 	cmd.Dir = dir
 	buf := bytes.NewBuffer(nil)
 	cmd.Stderr = buf
+	cmd.Stdout = buf
+	go func() {
+		sc := bufio.NewScanner(buf)
+		// scan and print
+		for sc.Scan() {
+			fmt.Fprintln(os.Stderr, sc.Text())
+		}
+	}()
+	fmt.Fprintf(os.Stderr, "running go mod tidy in %s ...\n", dir)
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "run go mod tidy failed in %s: %v\n", dir, buf.String())
 	}
