@@ -387,6 +387,11 @@ func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Posit
 	if err != nil {
 		return nil, err
 	}
+	if f.Definitions != nil {
+		if locations, ok := f.Definitions[pos]; ok {
+			return locations, nil
+		}
+	}
 
 	// call
 	req := lsp.TextDocumentPositionParams{
