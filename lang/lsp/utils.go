@@ -36,7 +36,7 @@ import (
 )
 
 func GetDistance(text string, start Position, pos Position) int {
-	lines := utils.CountLinesCached(text)
+	lines := utils.CountLinesPooled(text)
 	defer utils.PutCount(lines)
 	// find the line of the position
 	return (*lines)[pos.Line-start.Line] + pos.Character - start.Character
@@ -59,13 +59,15 @@ func RelativePostionWithLines(lines []int, textPos Position, pos Position) int {
 	return lines[l] + pos.Character - textPos.Character
 }
 
-func PositionOffset(text string, pos Position) int {
+func PositionOffset(file_uri string, text string, pos Position) int {
 	if pos.Line < 0 || pos.Character < 0 {
 		log.Error("invalid text position: %+v", pos)
 		return -1
 	}
-	lines := utils.CountLinesCached(text)
-	defer utils.PutCount(lines)
+	lines := utils.CountLinesCached(file_uri, text)
+
+	// lines := utils.CountLinesPooled(text)
+	// defer utils.PutCount(lines)
 
 	return RelativePostionWithLines(*lines, Position{Line: 0, Character: 0}, pos)
 }

@@ -261,7 +261,7 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 	if where == -1 {
 		where = len(tokens) - 1
 	}
-	lines := utils.CountLinesCached(sym.Text)
+	lines := utils.CountLinesPooled(sym.Text)
 
 	// find the typeParam's type token between "fn" and "("
 	var typeParams []int

@@ -73,7 +73,7 @@ func TestPositionOffset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := PositionOffset(tt.text, tt.pos)
+			result := PositionOffset(tt.name, tt.text, tt.pos)
 			if result != tt.expected {
 				t.Errorf("PositionOffset() = %v, expected %v", result, tt.expected)
 			}

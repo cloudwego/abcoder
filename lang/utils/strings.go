@@ -23,12 +23,40 @@ var countPool = sync.Pool{
 	},
 }
 
+var countCache = sync.Map{}
+
+// USE AND ONLY USE in pairs with CountLinesPooled.
 func PutCount(count *[]int) {
 	*count = (*count)[:0]
 	countPool.Put(count)
 }
 
-func CountLinesCached(text string) *[]int {
+// The cached version of CountLines.
+// Avoids redundant computations for the same text.
+// Use when the same text is processed multiple times, such as contents of a file.
+//
+// The key MUST uniquely identify the text i.e. for any two invocations
+//
+//	CountLinesCached(key1, text1) and CountLinesCached(key2, text2),
+//
+// if key1 == key2, then text1 must be equal to text2 (and also vice versa).
+func CountLinesCached(key string, text string) *[]int {
+	if cached, ok := countCache.Load(key); ok {
+		res := cached.([]int)
+		return &res
+	}
+
+	lines := CountLines(text)
+	countCache.Store(key, lines)
+	return &lines
+}
+
+// The pooled version of CountLines.
+// Eases burden on allocation and GC.
+// Use when invocation on small text is frequent.
+//
+// MUST manually invoke `PutCount` when done with the result to return the slice to the pool.
+func CountLinesPooled(text string) *[]int {
 	tmp := countPool.Get().(*[]int)
 	*tmp = append(*tmp, 0)
 	for i, c := range text {
@@ -39,6 +67,9 @@ func CountLinesCached(text string) *[]int {
 	return tmp
 }
 
+// CountLines calculates the starting offsets of lines in a given text.
+// Each offset marks the byte position of the character immediately following a newline character,
+// or 0 for the very beginning of the text.
 func CountLines(text string) []int {
 	var ret []int
 	ret = append(ret, 0)
