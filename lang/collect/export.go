@@ -40,11 +40,12 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 		rel = filepath.Base(loc.URI.File())
 	}
 	text := c.cli.GetFile(loc.URI).Text
+	file_uri := string(loc.URI)
 	return uniast.FileLine{
 		File:        rel,
 		Line:        loc.Range.Start.Line,
-		StartOffset: lsp.PositionOffset(text, loc.Range.Start),
-		EndOffset:   lsp.PositionOffset(text, loc.Range.End),
+		StartOffset: lsp.PositionOffset(file_uri, text, loc.Range.Start),
+		EndOffset:   lsp.PositionOffset(file_uri, text, loc.Range.End),
 	}
 }
 
