@@ -547,6 +547,8 @@ type Var struct {
 	Type         *Identity `json:",omitempty"`
 	Content      string
 	Dependencies []Dependency `json:",omitempty"`
+	// Groups means the var is a group of vars, like Enum in Go
+	Groups []Identity `json:",omitempty"`
 
 	CompressData *string `json:"compress_data,omitempty"`
 }

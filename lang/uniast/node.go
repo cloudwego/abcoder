@@ -82,8 +82,8 @@ func (r *Repository) SetNode(id Identity, typ NodeType) *Node {
 
 func calOffset(ref, dep FileLine) int {
 	refLine := dep.Line - ref.Line
-	if refLine < 0 {
-		return -1
+	if refLine <= 0 {
+		return 0
 	}
 	return refLine
 }
