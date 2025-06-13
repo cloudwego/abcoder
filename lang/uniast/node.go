@@ -185,7 +185,7 @@ func (r *Repository) BuildGraph() error {
 					r.AddRelation(n, dep.Identity, dep.FileLine, INHERIT)
 				}
 				for _, dep := range t.Implements {
-					r.AddRelation(n, dep, n.FileLine(), DEPENDENCY)
+					r.AddRelation(n, dep, n.FileLine(), IMPLEMENT)
 				}
 			}
 
