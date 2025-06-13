@@ -519,10 +519,10 @@ type Type struct {
 	FileLine
 	Content string // struct declaration content
 
-	// field type (not include basic types), type name => type id
+	// field type, type name => type id
 	SubStruct []Dependency `json:",omitempty"`
 
-	// inline field type (not include basic types)
+	// inherit field type
 	InlineStruct []Dependency `json:",omitempty"`
 
 	// methods defined on the Struct, not including inlined type's method

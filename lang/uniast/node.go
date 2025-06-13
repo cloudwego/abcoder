@@ -88,13 +88,30 @@ func calOffset(ref, dep FileLine) int {
 	return refLine
 }
 
-func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine) {
+func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine, kinds ...RelationKind) {
 	line := calOffset(node.FileLine(), depFl)
-	node.Dependencies = InsertRelation(node.Dependencies, Relation{
-		Identity: dep,
-		Kind:     DEPENDENCY,
-		Line:     line,
-	})
+	for _, kind := range kinds {
+		if kind == DEPENDENCY {
+			node.Dependencies = InsertRelation(node.Dependencies, Relation{
+				Identity: dep,
+				Kind:     DEPENDENCY,
+				Line:     line,
+			})
+		} else if kind == IMPLEMENT {
+			node.Implements = InsertRelation(node.Implements, Relation{
+				Identity: dep,
+				Kind:     IMPLEMENT,
+				Line:     line,
+			})
+		} else if kind == INHERIT {
+			node.Inherits = InsertRelation(node.Inherits, Relation{
+				Identity: dep,
+				Kind:     INHERIT,
+				Line:     line,
+			})
+		}
+	}
+
 	key := dep.Full()
 	nd, ok := r.Graph[key]
 	if !ok {
@@ -104,11 +121,16 @@ func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine) {
 		}
 		r.Graph[key] = nd
 	}
-	nd.References = InsertRelation(nd.References, Relation{
-		Identity: node.Identity,
-		Kind:     REFERENCE,
-		Line:     line,
-	})
+	for _, kind := range kinds {
+		if kind == DEPENDENCY {
+			nd.References = InsertRelation(nd.References, Relation{
+				Identity: node.Identity,
+				Kind:     DEPENDENCY,
+				Line:     line,
+			})
+		}
+	}
+
 	if f := r.GetFunction(dep); f != nil {
 		nd.Type = FUNC
 	} else if t := r.GetType(dep); t != nil {
@@ -137,36 +159,43 @@ func (r *Repository) BuildGraph() error {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
 				for _, dep := range f.FunctionCalls {
-					r.AddRelation(n, dep.Identity, dep.FileLine)
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
 				for _, dep := range f.MethodCalls {
-					r.AddRelation(n, dep.Identity, dep.FileLine)
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
 				for _, dep := range f.Types {
-					r.AddRelation(n, dep.Identity, dep.FileLine)
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
+				// NOTICE: We regard the receiver of a method as a dependency of the method
 				if f.Receiver != nil {
-					r.AddRelation(n, f.Receiver.Type, n.FileLine())
+					r.AddRelation(n, f.Receiver.Type, n.FileLine(), DEPENDENCY)
 				}
 				for _, dep := range f.GlobalVars {
-					r.AddRelation(n, dep.Identity, dep.FileLine)
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
 			}
 
 			for _, t := range pkg.Types {
 				n := r.SetNode(t.Identity, TYPE)
 				for _, dep := range t.SubStruct {
-					r.AddRelation(n, dep.Identity, dep.FileLine)
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
 				for _, dep := range t.InlineStruct {
-					r.AddRelation(n, dep.Identity, dep.FileLine)
+					r.AddRelation(n, dep.Identity, dep.FileLine, INHERIT)
+				}
+				for _, dep := range t.Implements {
+					r.AddRelation(n, dep, n.FileLine(), DEPENDENCY)
 				}
 			}
 
 			for _, v := range pkg.Vars {
 				n := r.SetNode(v.Identity, VAR)
 				if v.Type != nil {
-					r.AddRelation(n, *v.Type, v.FileLine)
+					r.AddRelation(n, *v.Type, v.FileLine, DEPENDENCY)
+				}
+				for _, dep := range v.Dependencies {
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
 			}
 		}
@@ -180,8 +209,10 @@ type RelationKind string
 const (
 	// DEPENDENCY: the target node is a dependency of the current node
 	DEPENDENCY RelationKind = "Dependency"
-	// REFERENCE: the target node is a reference of the current node
-	REFERENCE RelationKind = "Reference"
+	// IMPLEMENT: the target node is implemented by  the current node
+	IMPLEMENT RelationKind = "Implement"
+	// INHERIT: the target node is inherited by the current node
+	INHERIT RelationKind = "Inherit"
 )
 
 // Relation between two nodes
@@ -191,7 +222,7 @@ type Relation struct {
 	// target node
 	Identity
 	// start line-offset of the target token related to the current node's codes
-	Line int
+	Line int `json:",omitempty"`
 	// information about this relation
 	Desc *string `json:",omitempty"`
 	// related codes representing this relation, comming from current node's codes
@@ -273,9 +304,13 @@ type Node struct {
 	// Node Type, must be one of FUNC, TYPE, VAR
 	Type NodeType
 	// other nodes that  depends on this node
-	Dependencies []Relation
-	// other nodes that reference this node
-	References []Relation
+	Dependencies []Relation `json:",omitempty"`
+	// other nodes that references this node
+	References []Relation `json:",omitempty"`
+	// other nodes this node implements
+	Implements []Relation `json:",omitempty"`
+	// other nodes this node inherits
+	Inherits []Relation `json:",omitempty"`
 	// the repo that this node belongs to
 	Repo *Repository `json:"-"`
 }
