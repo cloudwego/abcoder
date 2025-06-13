@@ -103,6 +103,7 @@ type File struct {
 	Path    string
 	Imports []Import `json:",omitempty"`
 	Package *PkgPath `json:",omitempty"`
+	Content []byte   `json:",omitempty"`
 }
 
 type Import struct {

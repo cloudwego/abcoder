@@ -213,6 +213,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			f := mod.Files[relpath]
 			if f == nil {
 				f = NewFile(relpath)
+				f.Content = ctx.bs
 				mod.Files[relpath] = f
 			}
 			pkgid := pkg.ID
