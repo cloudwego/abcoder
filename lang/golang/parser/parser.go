@@ -185,7 +185,12 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 					return nil
 				}
 			}
-			if err := p.parsePackage(p.pkgPathFromABS(path)); err != nil {
+			pkgPath, err := p.pkgPathFromABS(path)
+			if err == nil {
+				if err := p.parsePackage(pkgPath); err != nil {
+					errs = append(errs, err)
+				}
+			} else {
 				errs = append(errs, err)
 			}
 			return nil
@@ -281,14 +286,24 @@ func (p *GoParser) searchName(name string) (ids []Identity, err error) {
 		if e != nil || info.IsDir() || shouldIgnoreFile(path) || shouldIgnoreDir(filepath.Dir(path)) || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		mod := p.pkgPathFromABS(path)
+		mod, e := p.pkgPathFromABS(path)
+		if e != nil {
+			fmt.Fprintf(os.Stderr, "get mod from pkgPathFromABS failed, err: %v", e)
+			err = e
+			return nil
+		}
 		m := p.repo.Modules[mod]
 		if m == nil {
 			dir, _ := filepath.Rel(p.homePageDir, path)
 			m = newModule(mod, dir)
 			p.repo.Modules[mod] = m
 		}
-		pkg := p.pkgPathFromABS(filepath.Dir(path))
+		pkg, e := p.pkgPathFromABS(filepath.Dir(path))
+		if e != nil {
+			fmt.Fprintf(os.Stderr, "get pkg from pkgPathFromABS failed, err: %v", e)
+			err = e
+			return nil
+		}
 		// go AST parse file
 		fset := token.NewFileSet()
 		fcontent := p.getFileBytes(path)
@@ -475,14 +490,15 @@ func (p *GoParser) getModuleFromPath(path string) (name string, dir string, rel 
 }
 
 // FromABS converts an absolute path to local mod path
-func (p *GoParser) pkgPathFromABS(path string) PkgPath {
+func (p *GoParser) pkgPathFromABS(path string) (PkgPath, error) {
 	mod, _, rel := p.getModuleFromPath(path)
 	if mod == "" {
-		panic("not found package from " + path)
+		fmt.Fprintf(os.Stderr, "not found package from %s \n", path)
+		return mod, fmt.Errorf("not found package from %s ", path)
 	}
 	if rel != "" && rel != "." {
-		return mod + "/" + rel
+		return mod + "/" + rel, nil
 	} else {
-		return mod
+		return mod, nil
 	}
 }
