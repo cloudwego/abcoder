@@ -109,6 +109,12 @@ func (r *Repository) AddRelation(node *Node, dep Identity, depFl FileLine, kinds
 				Kind:     INHERIT,
 				Line:     line,
 			})
+		} else if kind == GROUP {
+			node.Groups = InsertRelation(node.Groups, Relation{
+				Identity: dep,
+				Kind:     GROUP,
+				Line:     line,
+			})
 		}
 	}
 
@@ -197,6 +203,9 @@ func (r *Repository) BuildGraph() error {
 				for _, dep := range v.Dependencies {
 					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
+				for _, dep := range v.Groups {
+					r.AddRelation(n, dep, n.FileLine(), GROUP)
+				}
 			}
 		}
 	}
@@ -213,6 +222,8 @@ const (
 	IMPLEMENT RelationKind = "Implement"
 	// INHERIT: the target node is inherited by the current node
 	INHERIT RelationKind = "Inherit"
+	// GROUPT: the target is in same definition group of nodes, like `const(a=1,b=2)`
+	GROUP RelationKind = "Group"
 )
 
 // Relation between two nodes
@@ -311,6 +322,8 @@ type Node struct {
 	Implements []Relation `json:",omitempty"`
 	// other nodes this node inherits
 	Inherits []Relation `json:",omitempty"`
+	// other nodes in the same definition group
+	Groups []Relation `json:",omitempty"`
 	// the repo that this node belongs to
 	Repo *Repository `json:"-"`
 }
