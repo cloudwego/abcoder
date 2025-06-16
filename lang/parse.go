@@ -86,6 +86,8 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		repo.Name = args.RepoID
 	}
 
+	repo.ASTVersion = uniast.Version
+
 	out, err := json.Marshal(repo)
 	if err != nil {
 		log.Error("Failed to marshal repository: %v\n", err)

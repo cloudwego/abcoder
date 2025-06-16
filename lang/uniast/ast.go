@@ -71,9 +71,10 @@ type NodeGraph map[string]*Node
 
 // Repository
 type Repository struct {
-	Name    string             `json:"id"` // module name
-	Modules map[string]*Module // module name => module
-	Graph   NodeGraph          // node id => node
+	Name       string             `json:"id"` // module name
+	Modules    map[string]*Module // module name => module
+	Graph      NodeGraph          // node id => node
+	ASTVersion string
 }
 
 func (r Repository) ID() string {
@@ -92,9 +93,10 @@ func (r Repository) InternalModules() []*Module {
 
 func NewRepository(name string) Repository {
 	ret := Repository{
-		Name:    name,
-		Modules: map[string]*Module{},
-		Graph:   map[string]*Node{},
+		Name:       name,
+		Modules:    map[string]*Module{},
+		Graph:      map[string]*Node{},
+		ASTVersion: Version,
 	}
 	return ret
 }
