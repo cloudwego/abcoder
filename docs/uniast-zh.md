@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.1.0)
+# Universal Abstract-Syntax-Tree Specification (v0.1.1)
 
 Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无关的代码上下文数据结构，表示某个仓库代码的统一抽象语法树。收集了语言实体（函数、类型、常（变）量）的 定义 及其 相互依赖关系，用于后续的 AI 理解、coding-workflow 开发。
 
@@ -526,6 +526,16 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 
 - Content：定义代码，如 `var A int = 1 `
 
+- Dependencies：复杂变量声明体中依赖的其他节点，如 
+```go
+var x = getx(y db.Data) int {
+    return y + model.Var2
+}
+```
+中的 `db.Data` 和 `model.Var2`
+
+- Groups: 同组定义， 如 Go 中的 `const( A=1, B=2, C=3)`，Groups 为 `[C=3, B=2]`（假设A为变量自身）
+
 
 ### Graph
 
@@ -570,7 +580,12 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
             "Name": "InitDefaultManager",
             "Line": 3
         }
-    ]
+    ],
+    "Dependencies": [],
+    "References": [],
+    "Implements": [],
+    "Inherits": [],
+    "Groups": []
 }
 ```
 
@@ -623,9 +638,7 @@ const (
 
 #### Relation
 
-用于存储两个节点之间的关系。
-
-
+用于存储两个节点之间的关系。示例如下：
 ```
 {
     "Kind": "Dependency",
@@ -638,7 +651,14 @@ const (
 }
 ```
 
-- Kind： 关系类型，目前包括 Dependency 和 Reference，分别表示依赖和引用。
+- Kind： 关系类型，目前包括：
+  - Dependency：依赖关系，如函数调用、变量引用等
+
+  - Implement：实现关系，如接口方法实现等
+
+  - Inherit：继承关系，如结构体字段等
+
+  - Group：同组定义，如 Go 中的 `const( A=1; B=2; C=3)`
 
 
 - ModPath: 模块路径，见【Identity】介绍

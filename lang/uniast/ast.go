@@ -71,9 +71,10 @@ type NodeGraph map[string]*Node
 
 // Repository
 type Repository struct {
-	Name    string             `json:"id"` // module name
-	Modules map[string]*Module // module name => module
-	Graph   NodeGraph          // node id => node
+	Name       string             `json:"id"` // module name
+	Modules    map[string]*Module // module name => module
+	Graph      NodeGraph          // node id => node
+	ASTVersion string
 }
 
 func (r Repository) ID() string {
@@ -92,9 +93,10 @@ func (r Repository) InternalModules() []*Module {
 
 func NewRepository(name string) Repository {
 	ret := Repository{
-		Name:    name,
-		Modules: map[string]*Module{},
-		Graph:   map[string]*Node{},
+		Name:       name,
+		Modules:    map[string]*Module{},
+		Graph:      map[string]*Node{},
+		ASTVersion: Version,
 	}
 	return ret
 }
@@ -519,10 +521,10 @@ type Type struct {
 	FileLine
 	Content string // struct declaration content
 
-	// field type (not include basic types), type name => type id
+	// field type, type name => type id
 	SubStruct []Dependency `json:",omitempty"`
 
-	// inline field type (not include basic types)
+	// inherit field type
 	InlineStruct []Dependency `json:",omitempty"`
 
 	// methods defined on the Struct, not including inlined type's method
@@ -547,6 +549,8 @@ type Var struct {
 	Type         *Identity `json:",omitempty"`
 	Content      string
 	Dependencies []Dependency `json:",omitempty"`
+	// Groups means the var is a group of vars, like Enum in Go
+	Groups []Identity `json:",omitempty"`
 
 	CompressData *string `json:"compress_data,omitempty"`
 }

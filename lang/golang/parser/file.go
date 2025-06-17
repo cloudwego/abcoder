@@ -58,16 +58,34 @@ func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {
 				for _, spec := range decl.Specs {
 					vspec, ok := spec.(*ast.ValueSpec)
 					if ok {
-						_, firstVal = p.parseVar(ctx, vspec, false, nil, firstVal, doc)
+						_, _, firstVal = p.parseVar(ctx, vspec, false, nil, firstVal, doc)
 					}
 				}
 			case token.CONST:
-				var firstType *Identity
-				var firstVal *float64
+				var curType *Identity
+				var curVal *float64
+				var vars []*Var
+				var v *Var
 				for _, spec := range decl.Specs {
 					vspec, ok := spec.(*ast.ValueSpec)
 					if ok {
-						firstType, firstVal = p.parseVar(ctx, vspec, true, firstType, firstVal, doc)
+						curType, v, curVal = p.parseVar(ctx, vspec, true, curType, curVal, doc)
+						if v != nil {
+							vars = append(vars, v)
+						}
+					}
+				}
+				if len(vars) > 1 {
+					// exclude self and add other vars to Var.Groups
+					for i, v := range vars {
+						gps := make([]Identity, 0, len(vars)-1)
+						for j, v2 := range vars {
+							if i == j {
+								continue
+							}
+							gps = append(gps, v2.Identity)
+						}
+						v.Groups = gps
 					}
 				}
 			}
@@ -87,9 +105,10 @@ func (p *GoParser) newVar(mod string, pkg string, name string, isConst bool) *Va
 	return p.repo.SetVar(ret.Identity, ret)
 }
 
-func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool, lastType *Identity, lastValue *float64, doc *ast.CommentGroup) (*Identity, *float64) {
+func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool, lastType *Identity, lastValue *float64, doc *ast.CommentGroup) (*Identity, *Var, *float64) {
 	var typ *Identity
 	var val *ast.Expr
+	var v *Var
 	for i, name := range vspec.Names {
 		if name.Name == "_" {
 			// igore anonymous var
@@ -98,7 +117,7 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		if vspec.Values != nil {
 			val = &vspec.Values[i]
 		}
-		v := p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
+		v = p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
 		if vspec.Type != nil {
 			ti := ctx.GetTypeInfo(vspec.Type)
@@ -198,7 +217,7 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 
 		typ = v.Type
 	}
-	return typ, lastValue
+	return typ, v, lastValue
 }
 
 // newFunc allocate a function in the repo
@@ -552,7 +571,10 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 	if obj := ctx.pkgTypeInfo.Defs[name]; obj != nil {
 		if named, ok := obj.Type().(*types.Named); ok {
 			iface := named.Underlying().(*types.Interface)
-			p.interfaces[iface] = st.Identity
+			// exclude empty interface
+			if !iface.Empty() {
+				p.interfaces[iface] = st.Identity
+			}
 		}
 	}
 
