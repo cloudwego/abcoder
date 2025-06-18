@@ -309,7 +309,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种LLM亲和、语言无�
 - File：所在的文件名
 
 
-- Line：**起始位置文件的行号**
+- Line：**起始位置文件的行号(从1开始)**
 
 
 - StartOffset：代码起始位置**相对文件头的字节偏移量** 
