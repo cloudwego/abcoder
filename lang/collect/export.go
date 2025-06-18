@@ -77,10 +77,7 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	// export symbols
 	for _, symbol := range c.syms {
 		visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
-		_, err := c.exportSymbol(&repo, symbol, "", visited)
-		if err != nil {
-			log.Info("export symbol %s failed: %v\n", symbol, err)
-		}
+		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
 
 	// patch module
@@ -95,6 +92,11 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 
 	return &repo, nil
 }
+
+var (
+	ErrStdSymbol      = errors.New("std symbol")
+	ErrExternalSymbol = errors.New("external symbol")
+)
 
 // NOTICE: for rust and golang, each entity has separate location
 // TODO: some language may allow local symbols inside another symbol,
@@ -113,9 +115,16 @@ func (c *Collector) filterLocalSymbols() {
 	}
 }
 
-func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol, refName string, visited map[*DocumentSymbol]*uniast.Identity) (*uniast.Identity, error) {
+func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol, refName string, visited map[*DocumentSymbol]*uniast.Identity) (id *uniast.Identity, e error) {
+	defer func() {
+		if e != nil && e != ErrStdSymbol && e != ErrExternalSymbol {
+			log.Info("export symbol %s failed: %v\n", symbol, e)
+		}
+	}()
+
 	if symbol == nil {
-		return nil, errors.New("symbol is nil")
+		e = errors.New("symbol is nil")
+		return
 	}
 	if id, ok := visited[symbol]; ok {
 		return id, nil
@@ -124,7 +133,8 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	name := symbol.Name
 	if name == "" {
 		if refName == "" {
-			return nil, fmt.Errorf("both symbol %v name and refname is empty", symbol)
+			e = fmt.Errorf("both symbol %v name and refname is empty", symbol)
+			return
 		}
 		// NOTICE: use refName as id when symbol name is missing
 		name = refName
@@ -132,14 +142,23 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	file := symbol.Location.URI.File()
 	mod, path, err := c.spec.NameSpace(file)
 	if err != nil {
-		return nil, err
+		e = err
+		return
 	}
-	id := uniast.NewIdentity(mod, path, name)
-	visited[symbol] = &id
+
+	if !c.NeedStdSymbol && mod == "" {
+		e = ErrStdSymbol
+		return
+	}
+
+	tmp := uniast.NewIdentity(mod, path, name)
+	id = &tmp
+	visited[symbol] = id
 
 	// Load eternal symbol on demands
 	if !c.LoadExternalSymbol && (!c.internal(symbol.Location) || symbol.Kind == SKUnknown) {
-		return &id, nil
+		e = ErrExternalSymbol
+		return
 	}
 
 	if repo.Modules[mod] == nil {
@@ -196,7 +215,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				tok, _ := c.cli.Locate(input.Location)
 				tyid, err := c.exportSymbol(repo, input.Symbol, tok, visited)
 				if err != nil {
-					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
 				dep := uniast.NewDependency(*tyid, c.fileLine(input.Location))
@@ -208,7 +226,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				tok, _ := c.cli.Locate(input.Location)
 				tyid, err := c.exportSymbol(repo, input.Symbol, tok, visited)
 				if err != nil {
-					log.Error("export input symbol %s failed: %v\n", input.Symbol, err)
 					continue
 				}
 				dep := uniast.NewDependency(*tyid, c.fileLine(input.Location))
@@ -220,7 +237,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				tok, _ := c.cli.Locate(output.Location)
 				tyid, err := c.exportSymbol(repo, output.Symbol, tok, visited)
 				if err != nil {
-					log.Error("export output symbol %s failed: %v\n", output.Symbol, err)
 					continue
 				}
 				dep := uniast.NewDependency(*tyid, c.fileLine(output.Location))
@@ -242,9 +258,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				if info.Method.Interface != nil {
 					itok, _ := c.cli.Locate(info.Method.Interface.Location)
 					iid, err := c.exportSymbol(repo, info.Method.Interface.Symbol, itok, visited)
-					if err != nil {
-						log.Error("export interface symbol %s failed: %v\n", info.Method.Interface.Symbol, err)
-					} else {
+					if err == nil {
 						id.Name = iid.Name + "<" + id.Name + ">"
 					}
 				}
@@ -259,8 +273,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				if info.Method.ImplHead != "" {
 					obj.Content = info.Method.ImplHead + obj.Content + "\n}"
 				}
-			} else {
-				log.Error("export receiver symbol %s failed: %v\n", info.Method.Receiver.Symbol, err)
 			}
 		}
 		// collect deps
@@ -269,7 +281,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				tok, _ := c.cli.Locate(dep.Location)
 				depid, err := c.exportSymbol(repo, dep.Symbol, tok, visited)
 				if err != nil {
-					log.Error("export dep symbol %s failed: %v\n", dep.Symbol, err)
 					continue
 				}
 				pdep := uniast.NewDependency(*depid, c.fileLine(dep.Location))
@@ -297,7 +308,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 			}
 		}
-		obj.Identity = id
+		obj.Identity = *id
 		pkg.Functions[id.Name] = obj
 
 	// Type
@@ -314,7 +325,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				tok, _ := c.cli.Locate(dep.Location)
 				depid, err := c.exportSymbol(repo, dep.Symbol, tok, visited)
 				if err != nil {
-					log.Error("export dep symbol %s failed: %v\n", dep.Symbol, err)
 					continue
 				}
 				switch dep.Symbol.Kind {
@@ -332,14 +342,13 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				tok, _ := c.cli.Locate(method.Location)
 				mid, err := c.exportSymbol(repo, method, tok, visited)
 				if err != nil {
-					log.Error("export method symbol %s failed: %v\n", method, err)
 					continue
 				}
 				// NOTICE: use method name as key here
 				obj.Methods[method.Name] = *mid
 			}
 		}
-		obj.Identity = id
+		obj.Identity = *id
 		pkg.Types[id.Name] = obj
 	// Vars
 	case lsp.SKConstant, lsp.SKVariable:
@@ -354,17 +363,15 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			tyid, err := c.exportSymbol(repo, ty.Symbol, tok, visited)
 			if err == nil {
 				obj.Type = tyid
-			} else {
-				log.Error("export var type symbol %s failed: %v\n", ty.Symbol, err)
 			}
 		}
-		obj.Identity = id
+		obj.Identity = *id
 		pkg.Vars[id.Name] = obj
 	default:
 		log.Error("symbol %s not collected\n", symbol)
 	}
 
-	return &id, nil
+	return
 }
 
 func mapKind(kind lsp.SymbolKind) uniast.TypeKind {
