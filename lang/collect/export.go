@@ -43,7 +43,7 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	file_uri := string(loc.URI)
 	return uniast.FileLine{
 		File:        rel,
-		Line:        loc.Range.Start.Line,
+		Line:        loc.Range.Start.Line + 1,
 		StartOffset: lsp.PositionOffset(file_uri, text, loc.Range.Start),
 		EndOffset:   lsp.PositionOffset(file_uri, text, loc.Range.End),
 	}
@@ -319,7 +319,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 				switch dep.Symbol.Kind {
 				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
-					obj.SubStruct = append(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
+					obj.SubStruct = uniast.InsertDependency(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
 				}
