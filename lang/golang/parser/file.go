@@ -119,6 +119,27 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		}
 		v = p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
+
+		// always collect value's dependencies
+		if val != nil && !isConst {
+			collects := collectInfos{}
+			ast.Inspect(*val, func(n ast.Node) bool {
+				return p.parseASTNode(ctx, n, &collects)
+			})
+			for _, dep := range collects.functionCalls {
+				v.Dependencies = InsertDependency(v.Dependencies, dep)
+			}
+			for _, dep := range collects.methodCalls {
+				v.Dependencies = InsertDependency(v.Dependencies, dep)
+			}
+			for _, dep := range collects.globalVars {
+				v.Dependencies = InsertDependency(v.Dependencies, dep)
+			}
+			for _, dep := range collects.tys {
+				v.Dependencies = InsertDependency(v.Dependencies, dep)
+			}
+		}
+
 		if vspec.Type != nil {
 			ti := ctx.GetTypeInfo(vspec.Type)
 			v.Type = &ti.Id
@@ -126,16 +147,14 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			for _, dep := range ti.Deps {
 				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(vspec.Type)))
 			}
-		} else if val != nil && !isConst {
+		} else if val != nil {
 			ti := ctx.GetTypeInfo(*val)
 			v.Type = &ti.Id
 			v.IsPointer = ti.IsPointer
-			for _, dep := range ti.Deps {
-				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(*val)))
-			}
 		} else {
 			v.Type = typ
 		}
+
 		// NOTICE: for `const ( a Type, b )` b can inherit the a's type
 		if isConst && v.Type == nil {
 			v.Type = lastType
@@ -232,7 +251,7 @@ func (p *GoParser) newType(mod, pkg, name string) *Type {
 	return p.repo.SetType(ret.Identity, ret)
 }
 
-func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos collectInfos) (cont bool) {
+func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos *collectInfos) (cont bool) {
 	// println("[parseFunc] ast.SelectorExpr:", string(ctx.GetRawContent(expr)))
 	// TODO: not the best but works, optimize it later.
 	if ident, ok := expr.X.(*ast.Ident); ok {
@@ -262,16 +281,16 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 						// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
 						// 	return false
 						// }
-						*infos.tys = InsertDependency(*infos.tys, dep)
+						infos.tys = InsertDependency(infos.tys, dep)
 						// global var
 					} else if _, ok := v.(*types.Const); ok {
-						*infos.globalVars = InsertDependency(*infos.globalVars, dep)
+						infos.globalVars = InsertDependency(infos.globalVars, dep)
 						// external const
 					} else if _, ok := v.(*types.Var); ok {
-						*infos.globalVars = InsertDependency(*infos.globalVars, dep)
+						infos.globalVars = InsertDependency(infos.globalVars, dep)
 						// external function
 					} else if _, ok := v.(*types.Func); ok {
-						*infos.functionCalls = InsertDependency(*infos.functionCalls, dep)
+						infos.functionCalls = InsertDependency(infos.functionCalls, dep)
 					}
 					return false
 				}
@@ -291,7 +310,7 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 				if !rev.IsStdOrBuiltin {
 					id := NewIdentity(rev.Id.ModPath, rev.Id.PkgPath, rev.Id.Name+"."+expr.Sel.Name)
 					dep := NewDependency(id, ctx.FileLine(expr.Sel))
-					*infos.methodCalls = InsertDependency(*infos.methodCalls, dep)
+					infos.methodCalls = InsertDependency(infos.methodCalls, dep)
 				}
 			}
 		}
@@ -325,7 +344,7 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 			if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
 				fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
 			}
-			*infos.methodCalls = InsertDependency(*infos.methodCalls, dep)
+			infos.methodCalls = InsertDependency(infos.methodCalls, dep)
 		}
 		return false
 	}
@@ -334,8 +353,68 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 }
 
 type collectInfos struct {
-	functionCalls, methodCalls *[]Dependency
-	tys, globalVars            *[]Dependency
+	functionCalls, methodCalls []Dependency
+	tys, globalVars            []Dependency
+}
+
+func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collectInfos) bool {
+	switch expr := node.(type) {
+	case *ast.SelectorExpr:
+		return p.parseSelector(ctx, expr, collect)
+	case *ast.Ident:
+		callName := expr.Name
+		// println("[parseFunc] ast.Ident:", callName)
+		if isGoBuiltins(callName) {
+			return false
+		}
+
+		// // collect Named types of defines
+		// // ex: `var x NamedType`
+		// if def, ok := ctx.pkgTypeInfo.Defs[expr]; ok {
+		// 	println("[parseFunc] def:", def.String())
+		// 	if tn, isNamed := def.(*types.TypeName); isNamed {
+		// 		id, ok := ctx.getTypeId(tn.Type())
+		// 		if !ok {
+		// 			// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
+		// 			return false
+		// 		}
+		// 		tys[expr.Name] = id
+		// 	}
+		// 	return false
+		// }
+		if use, ok := ctx.pkgTypeInfo.Uses[expr]; ok {
+			id := NewIdentity(ctx.module.Name, ctx.pkgPath, callName)
+			dep := NewDependency(id, ctx.FileLine(expr))
+			// type name
+			if _, isNamed := use.(*types.TypeName); isNamed {
+				// id, ok := ctx.getTypeId(tn.Type())
+				// if !ok {
+				// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
+				// 	return false
+				// }
+				collect.tys = InsertDependency(collect.tys, dep)
+				// global var
+			} else if v, ok := use.(*types.Var); ok {
+				// NOTICE: the Parent of global scope is nil?
+				if isPkgScope(v.Parent()) {
+					collect.globalVars = InsertDependency(collect.globalVars, dep)
+				}
+				// global const
+			} else if c, ok := use.(*types.Const); ok {
+				if isPkgScope(c.Parent()) {
+					collect.globalVars = InsertDependency(collect.globalVars, dep)
+				}
+				return false
+				// function
+			} else if f, ok := use.(*types.Func); ok {
+				// exclude method
+				if f.Type().(*types.Signature).Recv() == nil {
+					collect.functionCalls = InsertDependency(collect.functionCalls, dep)
+				}
+			}
+		}
+	}
+	return true
 }
 
 // parseFunc parses all function declaration in one file
@@ -376,70 +455,13 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	// collect content
 	content := string(ctx.GetRawContent(funcDecl))
 
-	var functionCalls, globalVars, tys, methodCalls []Dependency
-
+	collects := collectInfos{}
 	if funcDecl.Body == nil {
 		goto set_func
 	}
 
-	ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
-		switch expr := node.(type) {
-		case *ast.SelectorExpr:
-			return p.parseSelector(ctx, expr, collectInfos{&functionCalls, &methodCalls, &tys, &globalVars})
-		case *ast.Ident:
-			callName := expr.Name
-			// println("[parseFunc] ast.Ident:", callName)
-			if isGoBuiltins(callName) {
-				return false
-			}
-
-			// // collect Named types of defines
-			// // ex: `var x NamedType`
-			// if def, ok := ctx.pkgTypeInfo.Defs[expr]; ok {
-			// 	println("[parseFunc] def:", def.String())
-			// 	if tn, isNamed := def.(*types.TypeName); isNamed {
-			// 		id, ok := ctx.getTypeId(tn.Type())
-			// 		if !ok {
-			// 			// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
-			// 			return false
-			// 		}
-			// 		tys[expr.Name] = id
-			// 	}
-			// 	return false
-			// }
-			if use, ok := ctx.pkgTypeInfo.Uses[expr]; ok {
-				id := NewIdentity(ctx.module.Name, ctx.pkgPath, callName)
-				dep := NewDependency(id, ctx.FileLine(expr))
-				// type name
-				if _, isNamed := use.(*types.TypeName); isNamed {
-					// id, ok := ctx.getTypeId(tn.Type())
-					// if !ok {
-					// 	// fmt.Fprintf(os.Stderr, "failed to get type id for %s\n", expr.Name)
-					// 	return false
-					// }
-					tys = InsertDependency(tys, dep)
-					// global var
-				} else if v, ok := use.(*types.Var); ok {
-					// NOTICE: the Parent of global scope is nil?
-					if isPkgScope(v.Parent()) {
-						globalVars = InsertDependency(globalVars, dep)
-					}
-					// global const
-				} else if c, ok := use.(*types.Const); ok {
-					if isPkgScope(c.Parent()) {
-						globalVars = InsertDependency(globalVars, dep)
-					}
-					return false
-					// function
-				} else if f, ok := use.(*types.Func); ok {
-					// exclude method
-					if f.Type().(*types.Signature).Recv() == nil {
-						functionCalls = InsertDependency(functionCalls, dep)
-					}
-				}
-			}
-		}
-		return true
+	ast.Inspect(funcDecl.Body, func(n ast.Node) bool {
+		return p.parseASTNode(ctx, n, &collects)
 	})
 
 set_func:
@@ -454,14 +476,14 @@ set_func:
 	f := p.newFunc(ctx.module.Name, ctx.pkgPath, fname)
 	f.FileLine = ctx.FileLine(funcDecl)
 	f.Content = content
-	f.FunctionCalls = functionCalls
-	f.MethodCalls = methodCalls
+	f.FunctionCalls = collects.functionCalls
+	f.MethodCalls = collects.methodCalls
 	f.IsMethod = isMethod
 	f.Receiver = receiver
 	f.Params = params
 	f.Results = results
-	f.GlobalVars = globalVars
-	f.Types = tys
+	f.GlobalVars = collects.globalVars
+	f.Types = collects.tys
 	return f, false
 }
 

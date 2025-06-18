@@ -249,6 +249,7 @@ func GetRawContent(fset *token.FileSet, file []byte, node ast.Node, collectComme
 
 type typeInfo struct {
 	Id             Identity
+	IsNamed        bool
 	IsPointer      bool
 	IsStdOrBuiltin bool
 	Deps           []Identity
@@ -266,17 +267,17 @@ func (ctx *fileContext) GetTypeInfo(typ ast.Expr) typeInfo {
 	}
 }
 
-func (ctx *fileContext) mockType(typ ast.Expr) typeInfo {
+func (ctx *fileContext) mockType(typ ast.Expr) (ti typeInfo) {
 	switch ty := typ.(type) {
 	case *ast.StarExpr:
-		ti := ctx.mockType(ty.X)
+		ti = ctx.mockType(ty.X)
 		ti.IsPointer = true
-		return ti
+		return
 	case *ast.CallExpr:
 		// try get func type
-		ti := ctx.mockType(ty.Fun)
+		ti = ctx.mockType(ty.Fun)
 		ti.IsPointer = false
-		return ti
+		return
 	case *ast.SelectorExpr:
 		// try get import path
 		switch xx := ty.X.(type) {
@@ -285,10 +286,11 @@ func (ctx *fileContext) mockType(typ ast.Expr) typeInfo {
 			if err != nil {
 				goto fallback
 			}
-			return typeInfo{NewIdentity(mod, PkgPath(impt), ty.Sel.Name), false, false, nil, nil}
+			ti.Id = NewIdentity(mod, PkgPath(impt), ty.Sel.Name)
+			return
 		case *ast.SelectorExpr:
 			// recurse
-			ti := ctx.mockType(xx)
+			ti = ctx.mockType(xx)
 			ti.Id.Name = ty.Sel.Name
 			ti.IsPointer = false
 			return ti
@@ -296,7 +298,9 @@ func (ctx *fileContext) mockType(typ ast.Expr) typeInfo {
 	}
 
 fallback:
-	return typeInfo{NewIdentity("UNLOADED", ctx.pkgPath, string(ctx.GetRawContent(typ))), false, true, nil, nil}
+	ti.Id = NewIdentity("UNLOADED", ctx.pkgPath, string(ctx.GetRawContent(typ)))
+	ti.IsStdOrBuiltin = true
+	return
 }
 
 func (ctx *fileContext) collectFields(fields []*ast.Field, m *[]Dependency) {
@@ -442,20 +446,18 @@ func (p *GoParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inline
 		if err := p.referCodes(ctx, &dep, p.opts.ReferCodeDepth); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", dep, err)
 		}
-		if inlined {
-			st.InlineStruct = InsertDependency(st.InlineStruct, NewDependency(dep, ctx.FileLine(typ)))
-		} else {
-			st.SubStruct = InsertDependency(st.SubStruct, NewDependency(dep, ctx.FileLine(typ)))
-		}
+		st.SubStruct = InsertDependency(st.SubStruct, NewDependency(dep, ctx.FileLine(typ)))
 	}
 }
 
 // get type id and tells if it is std or builtin
 func (ctx *fileContext) getTypeinfo(typ types.Type) (ti typeInfo) {
-	tobjs, isPointer := getNamedTypes(typ)
+	tobjs, isPointer, isNamed := getNamedTypes(typ)
 	ti.IsPointer = isPointer
 	ti.Ty = typ
-	if len(tobjs) > 0 {
+	ti.IsNamed = isNamed
+	// NOTICE: only get full id for Named type
+	if isNamed {
 		tobj := tobjs[0]
 		if tp := tobj.Pkg(); tp != nil {
 			mod, err := ctx.GetMod(tp.Path())
@@ -480,26 +482,27 @@ func (ctx *fileContext) getTypeinfo(typ types.Type) (ti typeInfo) {
 				ti.IsStdOrBuiltin = false
 			}
 		}
-		// NOTICE: only extract Named type here
-		for i := 1; i < len(tobjs); i++ {
-			tobj := tobjs[i]
-			if isGoBuiltins(tobj.Name()) {
-				continue
-			}
-			// get mod and pkg from tobj.Pkg()
-			tp := tobj.Pkg()
-			if tp == nil {
-				continue
-			}
-			mod, err := ctx.GetMod(tp.Path())
-			if err != nil || mod == "" {
-				continue
-			}
-			ti.Deps = append(ti.Deps, NewIdentity(mod, tp.Path(), tobj.Name()))
-		}
 	} else {
+		// Notice: for Composite type like map, slice, regard it as builtin
 		ti.Id = Identity{"", "", typ.String()}
 		ti.IsStdOrBuiltin = true
+	}
+	// collect sub Named type here
+	for i := 1; i < len(tobjs); i++ {
+		tobj := tobjs[i]
+		if isGoBuiltins(tobj.Name()) {
+			continue
+		}
+		// get mod and pkg from tobj.Pkg()
+		tp := tobj.Pkg()
+		if tp == nil {
+			continue
+		}
+		mod, err := ctx.GetMod(tp.Path())
+		if err != nil || mod == "" {
+			continue
+		}
+		ti.Deps = append(ti.Deps, NewIdentity(mod, tp.Path(), tobj.Name()))
 	}
 	return
 }

@@ -183,60 +183,62 @@ func getTypeKind(n ast.Expr) TypeKind {
 	}
 }
 
-func getNamedTypes(typ types.Type) (tys []types.Object, isPointer bool) {
+func getNamedTypes(typ types.Type) (tys []types.Object, isPointer bool, isNamed bool) {
 	switch t := typ.(type) {
 	case *types.Pointer:
 		isPointer = true
-		typs, _ := getNamedTypes(t.Elem())
+		typs, _, isNamed2 := getNamedTypes(t.Elem())
 		tys = append(tys, typs...)
+		isNamed = isNamed2
 	case *types.Slice:
-		typs, _ := getNamedTypes(t.Elem())
+		typs, _, _ := getNamedTypes(t.Elem())
 		tys = append(tys, typs...)
 	case *types.Array:
-		typs, _ := getNamedTypes(t.Elem())
+		typs, _, _ := getNamedTypes(t.Elem())
 		tys = append(tys, typs...)
 	case *types.Chan:
-		typs, _ := getNamedTypes(t.Elem())
+		typs, _, _ := getNamedTypes(t.Elem())
 		tys = append(tys, typs...)
 	case *types.Tuple:
 		for i := 0; i < t.Len(); i++ {
-			typs, _ := getNamedTypes(t.At(i).Type())
+			typs, _, _ := getNamedTypes(t.At(i).Type())
 			tys = append(tys, typs...)
 		}
 	case *types.Map:
-		typs2, _ := getNamedTypes(t.Elem())
-		typs1, _ := getNamedTypes(t.Key())
+		typs2, _, _ := getNamedTypes(t.Elem())
+		typs1, _, _ := getNamedTypes(t.Key())
 		tys = append(tys, typs1...)
 		tys = append(tys, typs2...)
 	case *types.Named:
 		tys = append(tys, t.Obj())
+		isNamed = true
 	case *types.Struct:
 		for i := 0; i < t.NumFields(); i++ {
-			typs, _ := getNamedTypes(t.Field(i).Type())
+			typs, _, _ := getNamedTypes(t.Field(i).Type())
 			tys = append(tys, typs...)
 		}
 	case *types.Interface:
 		for i := 0; i < t.NumEmbeddeds(); i++ {
-			typs, _ := getNamedTypes(t.EmbeddedType(i))
+			typs, _, _ := getNamedTypes(t.EmbeddedType(i))
 			tys = append(tys, typs...)
 		}
 		for i := 0; i < t.NumExplicitMethods(); i++ {
-			typs, _ := getNamedTypes(t.ExplicitMethod(i).Type())
+			typs, _, _ := getNamedTypes(t.ExplicitMethod(i).Type())
 			tys = append(tys, typs...)
 		}
 	case *types.TypeParam:
-		typs, _ := getNamedTypes(t.Constraint())
+		typs, _, _ := getNamedTypes(t.Constraint())
 		tys = append(tys, typs...)
 	case *types.Alias:
-		typs, _ := getNamedTypes(t.Rhs())
+		typs, _, _ := getNamedTypes(t.Rhs())
 		tys = append(tys, typs...)
 	case *types.Signature:
 		for i := 0; i < t.Params().Len(); i++ {
-			typs, _ := getNamedTypes(t.Params().At(i).Type())
+			typs, _, _ := getNamedTypes(t.Params().At(i).Type())
 			tys = append(tys, typs...)
 		}
 		for i := 0; i < t.Results().Len(); i++ {
-			typs, _ := getNamedTypes(t.Results().At(i).Type())
+			typs, _, _ := getNamedTypes(t.Results().At(i).Type())
 			tys = append(tys, typs...)
 		}
 	}
