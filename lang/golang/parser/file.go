@@ -151,9 +151,6 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			ti := ctx.GetTypeInfo(*val)
 			v.Type = &ti.Id
 			v.IsPointer = ti.IsPointer
-			for _, dep := range ti.Deps {
-				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(*val)))
-			}
 		} else {
 			v.Type = typ
 		}
