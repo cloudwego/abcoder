@@ -300,6 +300,11 @@ func TestCases(t *testing.T) {
 			fields: fields{"a.b/c", "a.b/c/pkg", "CaseStrucLiterMethod"},
 			want:   `{"Exported":true,"IsMethod":false,"IsInterfaceMethod":false,"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStrucLiterMethod","File":"golang/pkg/util.go","Line":145,"StartOffset":2920,"EndOffset":3193,"Content":"func CaseStrucLiterMethod() {\n\t_ = (\u0026CaseStruct{\n\t\tFieldPremitive:         \"a\",\n\t\tFieldType:              1,\n\t\tFieldExternalType:      entity.MyStruct{},\n\t\tFieldInterface:         nil,\n\t\tFieldExternalInterface: nil,\n\t\tFieldClosuer:           nil,\n\t}).CaseMethod(nil, nil)\n}","MethodCalls":[{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStruct.CaseMethod","File":"golang/pkg/util.go","Line":153,"StartOffset":3171,"EndOffset":3181}],"Types":[{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStruct","File":"golang/pkg/util.go","Line":146,"StartOffset":2957,"EndOffset":2967},{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg/entity","Name":"MyStruct","File":"golang/pkg/util.go","Line":149,"StartOffset":3062,"EndOffset":3070}]}`,
 		},
+		{
+			name:   "var initialized by func",
+			fields: fields{"a.b/c", "a.b/c/pkg", "CaseVarFunc"},
+			want:   `{"IsExported":true,"IsConst":false,"IsPointer":false,"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseVarFunc","File":"golang/pkg/util.go","Line":157,"StartOffset":3199,"EndOffset":3370,"Type":{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStruct"},"Content":"var CaseVarFunc CaseStruct = func() CaseStruct {\n\treturn CaseStruct{\n\t\tFieldPremitive:    Var4,\n\t\tFieldType:         Integer(1),\n\t\tFieldExternalType: entity.MyStruct{},\n\t}\n}()","Dependencies":[{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"Var4","File":"golang/pkg/util.go","Line":159,"StartOffset":3285,"EndOffset":3289},{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"CaseStruct","File":"golang/pkg/util.go","Line":157,"StartOffset":3231,"EndOffset":3241},{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg","Name":"Integer","File":"golang/pkg/util.go","Line":160,"StartOffset":3312,"EndOffset":3319},{"ModPath":"a.b/c","PkgPath":"a.b/c/pkg/entity","Name":"MyStruct","File":"golang/pkg/util.go","Line":161,"StartOffset":3352,"EndOffset":3360}]}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
