@@ -321,6 +321,12 @@ func getRelativeOrBasePath(homePageDir string, fset *token.FileSet, pos token.Po
 	return filepath.Base(fset.Position(pos).Filename)
 }
 
+func (p *GoParser) exportFileLine(fset *token.FileSet, decl ast.Node) (ret FileLine) {
+	ret.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
+	ret.Line = fset.Position(decl.Pos()).Line
+	return
+}
+
 func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []byte, mod string, pkg string, impt *importInfo, name string) (ids []Identity, err error) {
 	for _, decl := range file.Decls {
 		// println(string(GetRawContent(fset, fcontent, decl)))
@@ -352,8 +358,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 				ids = append(ids, newIdentity(mod, pkg, name))
 				fn := p.newFunc(mod, pkg, name)
 				fn.Content = string(GetRawContent(fset, fcontent, decl, p.opts.CollectComment))
-				fn.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
-				fn.Line = fset.Position(decl.Pos()).Line - 1
+				fn.FileLine = p.exportFileLine(fset, decl)
 				fn.IsMethod = decl.Recv != nil
 				fn.Receiver = receiver
 				// if decl.Type.Params != nil {
@@ -381,8 +386,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 					if spec.Name.Name == name {
 						st = p.newType(mod, pkg, spec.Name.Name)
 						st.Content = string(GetRawContent(fset, fcontent, spec, p.opts.CollectComment))
-						st.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
-						st.Line = fset.Position(decl.Pos()).Line - 1
+						st.FileLine = p.exportFileLine(fset, spec)
 						st.TypeKind = getTypeKind(spec.Type)
 						ids = append(ids, newIdentity(mod, pkg, name))
 					}
@@ -398,9 +402,9 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 								ids = append(ids, newIdentity(mod, pkg, name))
 								fn := p.newFunc(mod, pkg, name)
 								fn.Content = string(GetRawContent(fset, fcontent, m, p.opts.CollectComment))
-								fn.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
-								fn.Line = fset.Position(decl.Pos()).Line - 1
+								fn.FileLine = p.exportFileLine(fset, m)
 								fn.IsMethod = true
+								fn.IsInterfaceMethod = true
 								fn.Receiver = &Receiver{
 									Type:      st.Identity,
 									IsPointer: true,
@@ -429,8 +433,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 							ids = append(ids, newIdentity(mod, pkg, name))
 							v := p.newVar(mod, pkg, name, decl.Tok == token.CONST)
 							v.Content = string(GetRawContent(fset, fcontent, spec, p.opts.CollectComment))
-							v.File = getRelativeOrBasePath(p.homePageDir, fset, decl.Pos())
-							v.Line = fset.Position(decl.Pos()).Line - 1
+							v.FileLine = p.exportFileLine(fset, spec)
 							if spec.Type != nil {
 								var m = map[string]Identity{}
 								// NOTICE: collect all types

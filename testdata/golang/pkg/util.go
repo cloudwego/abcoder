@@ -153,3 +153,11 @@ func CaseStrucLiterMethod() {
 		FieldClosuer:           nil,
 	}).CaseMethod(nil, nil)
 }
+
+var CaseVarFunc CaseStruct = func() CaseStruct {
+	return CaseStruct{
+		FieldPremitive:    Var4,
+		FieldType:         Integer(1),
+		FieldExternalType: entity.MyStruct{},
+	}
+}()
