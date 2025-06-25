@@ -164,6 +164,12 @@ func (r *Repository) BuildGraph() error {
 		for _, pkg := range mod.Packages {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
+				for _, dep := range f.Params {
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
+				}
+				for _, dep := range f.Results {
+					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
+				}
 				for _, dep := range f.FunctionCalls {
 					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
