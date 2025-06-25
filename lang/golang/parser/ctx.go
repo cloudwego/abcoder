@@ -152,17 +152,11 @@ func (ctx *fileContext) GetMod(impt string) (string, error) {
 			return ims[0], nil
 		}
 	}
-	// try find self first
-	if strings.HasPrefix(impt, ctx.module.Name) {
-		return ctx.module.Name, nil
+	mod, _ := matchMod(impt, ctx.module.Dependencies)
+	if mod == "" {
+		return "", fmt.Errorf("not found mod for %s", impt)
 	}
-	// try find in go.mod
-	for dep, ver := range ctx.module.Dependencies {
-		if strings.HasPrefix(impt, dep) {
-			return ver, nil
-		}
-	}
-	return "", fmt.Errorf("not found mod: %s", impt)
+	return mod, nil
 }
 
 func (ctx *fileContext) FileLine(node ast.Node) FileLine {

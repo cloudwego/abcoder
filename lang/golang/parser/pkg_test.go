@@ -191,3 +191,41 @@ func Test_goParser_ParseNode(t *testing.T) {
 		})
 	}
 }
+
+func Test_matchMod(t *testing.T) {
+	type args struct {
+		impt    string
+		modules map[string]string
+	}
+	tests := []struct {
+		name     string
+		args     args
+		wantName string
+		wantPath string
+	}{
+		{
+			name: "test",
+			args: args{
+				impt: "github.com/xx/yy/zz",
+				modules: map[string]string{
+					"github.com/xx/yy":    "github.com/xx/yy@v1",
+					"github.com/xx/yy/zz": "github.com/xx/yy/zz@v2",
+					"github.com/xx/yy/bb": "github.com/xx/yy/bb@v3",
+				},
+			},
+			wantName: "github.com/xx/yy/zz",
+			wantPath: "github.com/xx/yy/zz@v2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotPath := matchMod(tt.args.impt, tt.args.modules)
+			if gotName != tt.wantName {
+				t.Errorf("matchMod() gotName = %v, want %v", gotName, tt.wantName)
+			}
+			if gotPath != tt.wantPath {
+				t.Errorf("matchMod() gotPath = %v, want %v", gotPath, tt.wantPath)
+			}
+		})
+	}
+}

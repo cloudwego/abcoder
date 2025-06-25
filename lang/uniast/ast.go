@@ -218,22 +218,6 @@ func NewModule(name string, dir string, language Language) *Module {
 	return &ret
 }
 
-func (p *Module) GetDependency(pkg string) string {
-	// // search internal library first
-	// if lib := p.Libraries[mod]; lib != nil {
-	// 	return lib
-	// }
-	// match the prefix of name for each repo.Dependencies
-	for k, v := range p.Dependencies {
-		if strings.HasPrefix(pkg, k) {
-			return v
-		}
-	}
-	// FIXME: return value's dependency may not explicitly defined in go.mod, thus may not be found
-	// fmt.Fprintf(os.Stderr, "Error: not found dependency for %v", pkg)
-	return ""
-}
-
 // Package
 type Package struct {
 	IsMain bool

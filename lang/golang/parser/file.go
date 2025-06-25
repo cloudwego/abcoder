@@ -422,6 +422,9 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	// method receiver
 	var receiver *Receiver
 	isMethod := funcDecl.Recv != nil
+	if strings.HasSuffix(ctx.filePath, "cmds/life_stat/main.go") && funcDecl.Name.Name == "init" {
+
+	}
 	if isMethod {
 		// TODO: reserve the pointer message?
 		ti := ctx.GetTypeInfo(funcDecl.Recv.List[0].Type)
