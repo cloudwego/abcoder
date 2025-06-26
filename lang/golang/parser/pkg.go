@@ -21,6 +21,8 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	. "github.com/cloudwego/abcoder/lang/uniast"
@@ -33,7 +35,7 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	sysImports := make(map[string]string)
 	ret := &importInfo{}
 	for _, imp := range impts {
-		importPath := imp.Path.Value[1 : len(imp.Path.Value)-1] // remove the quotes
+		importPath, _ := strconv.Unquote(imp.Path.Value) // remove the quotes
 		importAlias := ""
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
@@ -49,12 +51,14 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 			// Ignoring golang standard libraries（like net/http）
 			sysImports[importAlias] = importPath
 		} else {
-			// Distinguish between project packages and third party packages
-			if strings.HasPrefix(importPath, mod.Name) {
+			match, path := matchMod(importPath, mod.Dependencies)
+			if match == "" {
+				if !strings.HasPrefix(importPath, mod.Name) {
+					return nil, fmt.Errorf("package %s not found mod", importPath)
+				}
 				projectImports[importAlias] = importPath
 			} else {
-				mod := mod.GetDependency(importPath)
-				thirdPartyImports[importAlias] = [2]string{mod, importPath}
+				thirdPartyImports[importAlias] = [2]string{path, importPath}
 			}
 		}
 	}
@@ -62,6 +66,24 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	ret.ProjectImports = projectImports
 	ret.ThirdPartyImports = thirdPartyImports
 	return ret, nil
+}
+
+func matchMod(impt string, modules map[string]string) (name string, path string) {
+	matches := [][2]string{}
+	for name, path := range modules {
+		if strings.HasPrefix(impt, name) {
+			matches = append(matches, [2]string{name, path})
+		}
+	}
+
+	if len(matches) > 0 {
+		sort.Slice(matches, func(i, j int) bool {
+			return len(matches[i][0]) > len(matches[j][0])
+		})
+		name = matches[0][0]
+		path = matches[0][1]
+	}
+	return
 }
 
 func (p *GoParser) ParseNode(pkgPath string, name string) (Repository, error) {
@@ -117,18 +139,9 @@ func (p *GoParser) ParsePackage(pkgPath PkgPath) (Repository, error) {
 }
 
 func (p *GoParser) parsePackage(pkgPath PkgPath) (err error) {
-	mod, dir := p.getModuleFromPkg(pkgPath)
+	mod, _ := p.getModuleFromPkg(pkgPath)
 	if mod == "" {
 		return fmt.Errorf("not found module for package %s", pkgPath)
-	}
-	if dir == "" {
-		// NOTICE: external package should set the dir to the one of its referer
-		for _, m := range p.repo.Modules {
-			if m.GetDependency(pkgPath) != "" {
-				dir = filepath.Join(p.homePageDir, m.Dir)
-				break
-			}
-		}
 	}
 	// fast-path: check cache first
 	if p.visited[pkgPath] {
