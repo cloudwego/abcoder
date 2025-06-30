@@ -21,6 +21,9 @@ import (
 
 func (r *Repository) GetNode(id Identity) *Node {
 	key := id.Full()
+	if r.Graph == nil || len(r.Graph) == 0 {
+		r.BuildGraph()
+	}
 	node, ok := r.Graph[key]
 	if !ok {
 		return nil
