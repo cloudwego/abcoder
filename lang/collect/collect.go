@@ -306,13 +306,30 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
 }
 
-func (c *Collector) filterEntitySymbols(syms []*DocumentSymbol) *DocumentSymbol {
+func (c *Collector) getMostSpecificEntitySymbol(syms []*DocumentSymbol) *DocumentSymbol {
+	var most_specific *DocumentSymbol
 	for _, sym := range syms {
-		if c.spec.IsEntitySymbol(*sym) {
-			return sym
+		if !c.spec.IsEntitySymbol(*sym) {
+			continue
 		}
+		if most_specific == nil {
+			most_specific = sym
+			continue
+		}
+		if most_specific.Location.Include(sym.Location) {
+			// use sym, which is more specific than most_specific
+			most_specific = sym
+			continue
+		}
+		if sym.Location.Include(most_specific.Location) {
+			// remain current choice
+			continue
+		}
+		log.Error("getMostSpecificEntitySymbol: cannot decide between symbols %s (at %+v) and %s (at %+v)\n",
+			most_specific.Name, most_specific.Location,
+			sym.Name, sym.Location)
 	}
-	return nil
+	return most_specific
 }
 
 // return a language entity symbol
@@ -331,7 +348,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 		}
 	}
 	if len(ret) > 0 {
-		return c.filterEntitySymbols(ret), nil
+		return c.getMostSpecificEntitySymbol(ret), nil
 	}
 
 	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
@@ -371,7 +388,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 		}
 
 		// filter entity symbol
-		rsym := c.filterEntitySymbols(ret)
+		rsym := c.getMostSpecificEntitySymbol(ret)
 		return rsym, nil
 
 	} else {
