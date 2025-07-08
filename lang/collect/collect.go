@@ -17,8 +17,10 @@ package collect
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -306,12 +308,25 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
 }
 
-func (c *Collector) getMostSpecificEntitySymbol(syms []*DocumentSymbol) *DocumentSymbol {
+// Find the symbol (from the symbol list) that matches the location.
+// It is the smallest (most specific) entity symbol that contains the location.
+//
+// Parameters:
+//
+//	@syms: the list of symbols to search in
+//	@loc: the location to find the symbol for
+//
+// Returns:
+//
+//	*DocumentSymbol: the most specific entity symbol that contains the location.
+//	If no such symbol is found, it returns nil.
+func (c *Collector) findMatchingSymbolIn(loc Location, syms []*DocumentSymbol) *DocumentSymbol {
 	var most_specific *DocumentSymbol
 	for _, sym := range syms {
-		if !c.spec.IsEntitySymbol(*sym) {
+		if !sym.Location.Include(loc) || !c.spec.IsEntitySymbol(*sym) {
 			continue
 		}
+		// now we have a candidate (containing loc && entity), check if it is the most specific
 		if most_specific == nil {
 			most_specific = sym
 			continue
@@ -325,6 +340,7 @@ func (c *Collector) getMostSpecificEntitySymbol(syms []*DocumentSymbol) *Documen
 			// remain current choice
 			continue
 		}
+		// Indicates a bad usage, sym contains unstructured symbols.
 		log.Error("getMostSpecificEntitySymbol: cannot decide between symbols %s (at %+v) and %s (at %+v)\n",
 			most_specific.Name, most_specific.Location,
 			sym.Name, sym.Location)
@@ -341,22 +357,19 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	// if sym, ok := c.syms[loc]; ok {
 	// 	return sym, nil
 	// }
-	var ret []*DocumentSymbol
-	for _, sym := range c.syms {
-		if sym.Location.Include(loc) {
-			ret = append(ret, sym)
-		}
-	}
-	if len(ret) > 0 {
-		return c.getMostSpecificEntitySymbol(ret), nil
+
+	// 1. already loaded
+	if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
+		return sym, nil
 	}
 
 	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
-		//  external symbol, locate and process it
+		// 2. load external symbol from its file
 		syms, err := c.cli.DocumentSymbols(ctx, loc.URI)
 		if err != nil {
 			return nil, err
 		}
+		// load the other external symbols in that file
 		for _, sym := range syms {
 			// save symbol first
 			if _, ok := c.syms[sym.Location]; !ok {
@@ -367,10 +380,8 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 				sym.Text = content
 				c.syms[sym.Location] = sym
 			}
-			if sym.Location.Include(loc) {
-				ret = append(ret, sym)
-			}
 		}
+		// load more external symbols if depth permits
 		if depth >= 0 {
 			// process target symbol
 			for _, sym := range syms {
@@ -386,13 +397,10 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 				}
 			}
 		}
-
-		// filter entity symbol
-		rsym := c.getMostSpecificEntitySymbol(ret)
+		rsym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(syms)))
 		return rsym, nil
-
 	} else {
-		//  external symbol, just locate the content
+		// external symbol, just locate the content
 		var text string
 		if c.internal(loc) {
 			// maybe internal symbol not loaded, like `lazy_static!` in Rust
