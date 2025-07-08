@@ -535,13 +535,16 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 	for _, method := range c.syms {
 		// NOTICE: some class method (ex: XXType::new) are SKFunction, but still collect its receiver
 		if (method.Kind == SKMethod || method.Kind == SKFunction) && sym.Location.Include(method.Location) {
-			c.funcs[method] = functionInfo{
-				Method: &methodInfo{
-					Receiver:  *rd,
-					Interface: ind,
-					ImplHead:  impl,
-				},
+			if _, ok := c.funcs[method]; !ok {
+				c.funcs[method] = functionInfo{}
 			}
+			f := c.funcs[method]
+			f.Method = &methodInfo{
+				Receiver:  *rd,
+				Interface: ind,
+				ImplHead:  impl,
+			}
+			c.funcs[method] = f
 		}
 	}
 }
@@ -601,32 +604,21 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 }
 
 func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsyms map[int]dependency, ts, is, os []dependency, rsym *dependency) {
-	f, ok := c.funcs[sym]
-	if ok {
-		f.TypeParams = tsyms
-		f.TypeParamsSorted = ts
-		f.Inputs = ipsyms
-		f.InputsSorted = is
-		f.Outputs = opsyms
-		f.OutputsSorted = os
-		if rsym != nil {
-			if f.Method == nil {
-				f.Method = &methodInfo{}
-			}
-			f.Method.Receiver = *rsym
+	if _, ok := c.funcs[sym]; !ok {
+		c.funcs[sym] = functionInfo{}
+	}
+	f := c.funcs[sym]
+	f.TypeParams = tsyms
+	f.TypeParamsSorted = ts
+	f.Inputs = ipsyms
+	f.InputsSorted = is
+	f.Outputs = opsyms
+	f.OutputsSorted = os
+	if rsym != nil {
+		if f.Method == nil {
+			f.Method = &methodInfo{}
 		}
-	} else {
-		f = functionInfo{
-			TypeParams: tsyms,
-			Inputs:     ipsyms,
-			Outputs:    opsyms,
-		}
-		if rsym != nil {
-			if f.Method == nil {
-				f.Method = &methodInfo{}
-			}
-			f.Method.Receiver = *rsym
-		}
+		f.Method.Receiver = *rsym
 	}
 	c.funcs[sym] = f
 }
