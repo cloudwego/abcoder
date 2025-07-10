@@ -17,8 +17,10 @@ package collect
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -306,13 +308,44 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
 }
 
-func (c *Collector) filterEntitySymbols(syms []*DocumentSymbol) *DocumentSymbol {
+// Find the symbol (from the symbol list) that matches the location.
+// It is the smallest (most specific) entity symbol that contains the location.
+//
+// Parameters:
+//
+//	@syms: the list of symbols to search in
+//	@loc: the location to find the symbol for
+//
+// Returns:
+//
+//	*DocumentSymbol: the most specific entity symbol that contains the location.
+//	If no such symbol is found, it returns nil.
+func (c *Collector) findMatchingSymbolIn(loc Location, syms []*DocumentSymbol) *DocumentSymbol {
+	var most_specific *DocumentSymbol
 	for _, sym := range syms {
-		if c.spec.IsEntitySymbol(*sym) {
-			return sym
+		if !sym.Location.Include(loc) || !c.spec.IsEntitySymbol(*sym) {
+			continue
 		}
+		// now we have a candidate (containing loc && entity), check if it is the most specific
+		if most_specific == nil {
+			most_specific = sym
+			continue
+		}
+		if most_specific.Location.Include(sym.Location) {
+			// use sym, which is more specific than most_specific
+			most_specific = sym
+			continue
+		}
+		if sym.Location.Include(most_specific.Location) {
+			// remain current choice
+			continue
+		}
+		// Indicates a bad usage, sym contains unstructured symbols.
+		log.Error("getMostSpecificEntitySymbol: cannot decide between symbols %s (at %+v) and %s (at %+v)\n",
+			most_specific.Name, most_specific.Location,
+			sym.Name, sym.Location)
 	}
-	return nil
+	return most_specific
 }
 
 // return a language entity symbol
@@ -324,22 +357,19 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	// if sym, ok := c.syms[loc]; ok {
 	// 	return sym, nil
 	// }
-	var ret []*DocumentSymbol
-	for _, sym := range c.syms {
-		if sym.Location.Include(loc) {
-			ret = append(ret, sym)
-		}
-	}
-	if len(ret) > 0 {
-		return c.filterEntitySymbols(ret), nil
+
+	// 1. already loaded
+	if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
+		return sym, nil
 	}
 
 	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
-		//  external symbol, locate and process it
+		// 2. load external symbol from its file
 		syms, err := c.cli.DocumentSymbols(ctx, loc.URI)
 		if err != nil {
 			return nil, err
 		}
+		// load the other external symbols in that file
 		for _, sym := range syms {
 			// save symbol first
 			if _, ok := c.syms[sym.Location]; !ok {
@@ -350,10 +380,8 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 				sym.Text = content
 				c.syms[sym.Location] = sym
 			}
-			if sym.Location.Include(loc) {
-				ret = append(ret, sym)
-			}
 		}
+		// load more external symbols if depth permits
 		if depth >= 0 {
 			// process target symbol
 			for _, sym := range syms {
@@ -369,13 +397,10 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 				}
 			}
 		}
-
-		// filter entity symbol
-		rsym := c.filterEntitySymbols(ret)
+		rsym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(syms)))
 		return rsym, nil
-
 	} else {
-		//  external symbol, just locate the content
+		// external symbol, just locate the content
 		var text string
 		if c.internal(loc) {
 			// maybe internal symbol not loaded, like `lazy_static!` in Rust
@@ -535,13 +560,16 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 	for _, method := range c.syms {
 		// NOTICE: some class method (ex: XXType::new) are SKFunction, but still collect its receiver
 		if (method.Kind == SKMethod || method.Kind == SKFunction) && sym.Location.Include(method.Location) {
-			c.funcs[method] = functionInfo{
-				Method: &methodInfo{
-					Receiver:  *rd,
-					Interface: ind,
-					ImplHead:  impl,
-				},
+			if _, ok := c.funcs[method]; !ok {
+				c.funcs[method] = functionInfo{}
 			}
+			f := c.funcs[method]
+			f.Method = &methodInfo{
+				Receiver:  *rd,
+				Interface: ind,
+				ImplHead:  impl,
+			}
+			c.funcs[method] = f
 		}
 	}
 }
@@ -601,32 +629,21 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 }
 
 func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsyms map[int]dependency, ts, is, os []dependency, rsym *dependency) {
-	f, ok := c.funcs[sym]
-	if ok {
-		f.TypeParams = tsyms
-		f.TypeParamsSorted = ts
-		f.Inputs = ipsyms
-		f.InputsSorted = is
-		f.Outputs = opsyms
-		f.OutputsSorted = os
-		if rsym != nil {
-			if f.Method == nil {
-				f.Method = &methodInfo{}
-			}
-			f.Method.Receiver = *rsym
+	if _, ok := c.funcs[sym]; !ok {
+		c.funcs[sym] = functionInfo{}
+	}
+	f := c.funcs[sym]
+	f.TypeParams = tsyms
+	f.TypeParamsSorted = ts
+	f.Inputs = ipsyms
+	f.InputsSorted = is
+	f.Outputs = opsyms
+	f.OutputsSorted = os
+	if rsym != nil {
+		if f.Method == nil {
+			f.Method = &methodInfo{}
 		}
-	} else {
-		f = functionInfo{
-			TypeParams: tsyms,
-			Inputs:     ipsyms,
-			Outputs:    opsyms,
-		}
-		if rsym != nil {
-			if f.Method == nil {
-				f.Method = &methodInfo{}
-			}
-			f.Method.Receiver = *rsym
-		}
+		f.Method.Receiver = *rsym
 	}
 	c.funcs[sym] = f
 }
