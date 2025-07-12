@@ -75,8 +75,8 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	c.filterLocalSymbols()
 
 	// export symbols
+	visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
 	for _, symbol := range c.syms {
-		visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
 
