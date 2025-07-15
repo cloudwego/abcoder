@@ -192,7 +192,47 @@ type Module struct {
 // }
 
 func (m Module) GetFile(path string) *File {
+	if m.Files == nil {
+		return nil
+	}
 	return m.Files[path]
+}
+
+func (r Repository) GetFileNodes(path string) []*Node {
+	var ret []*Node
+	file, mod := r.GetFile(path)
+	if file == nil || file.Package == nil {
+		return ret
+	}
+	pkg := mod.Packages[*file.Package]
+	if pkg == nil {
+		return ret
+	}
+	for _, v := range pkg.Functions {
+		if v.File == path {
+			n := r.GetNode(v.Identity)
+			if n != nil {
+				ret = append(ret, n)
+			}
+		}
+	}
+	for _, v := range pkg.Types {
+		if v.File == path {
+			n := r.GetNode(v.Identity)
+			if n != nil {
+				ret = append(ret, n)
+			}
+		}
+	}
+	for _, v := range pkg.Vars {
+		if v.File == path {
+			n := r.GetNode(v.Identity)
+			if n != nil {
+				ret = append(ret, n)
+			}
+		}
+	}
+	return ret
 }
 
 func (m Module) IsExternal() bool {
@@ -385,7 +425,7 @@ func (p *Repository) GetVar(id Identity) *Var {
 func (p *Repository) SetVar(id Identity, v *Var) *Var {
 	lib := p.Modules[id.ModPath]
 	if lib == nil {
-		panic(fmt.Sprintf("must set module before set var"))
+		panic("must set module before set var")
 	}
 	pp, ok := lib.Packages[id.PkgPath]
 	if !ok {
@@ -396,6 +436,15 @@ func (p *Repository) SetVar(id Identity, v *Var) *Var {
 		pp.Vars[id.Name] = v
 	}
 	return pp.Vars[id.Name]
+}
+
+func (p Repository) GetFile(fp string) (*File, *Module) {
+	for _, mod := range p.Modules {
+		if f := mod.GetFile(fp); f != nil {
+			return f, mod
+		}
+	}
+	return nil, nil
 }
 
 // Function holds the information about a function
