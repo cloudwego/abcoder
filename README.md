@@ -49,7 +49,7 @@ ABCoder currently supports the following languages:
 
 | Language | Parser      | Writer      |
 | -------- | ----------- | ----------- |
-| Go       | ✅           | ✅          |
+| Go       | ✅           | ✅           |
 | Rust     | ✅           | Coming Soon |
 | C        | Coming Soon | ❌           |
 | Python   | Coming Soon | ❌           |
@@ -63,3 +63,15 @@ project, kindly check out our guide:
 - [Parser Extension](docs/parser-zh.md)
 
 > Note: This is a dynamic README and is subject to changes as the project evolves.
+
+
+# Contact Us
+- How to become a member: [COMMUNITY MEMBERSHIP](https://github.com/cloudwego/community/blob/main/COMMUNITY_MEMBERSHIP.md)
+- Issues: [Issues](https://github.com/cloudwego/abcoder/issues)
+- Lark: Scan the QR code below with [Register Feishu](https://www.feishu.cn/en/) to join our CloudWeGo/abcoder user group.
+
+&ensp;&ensp;&ensp; <img src="images/lark_group_zh.png" alt="LarkGroup" width="200"/>
+
+
+# License
+This project is licensed under the [Apache-2.0 License](LICENSE-APACHE).
