@@ -455,6 +455,9 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 		ctx.collectFields(funcDecl.Type.Results.List, &results)
 	}
 
+	// collect signature
+	sig := ctx.GetRawContent(funcDecl.Type)
+
 	// collect content
 	content := string(ctx.GetRawContent(funcDecl))
 
@@ -487,6 +490,7 @@ set_func:
 	f.Results = results
 	f.GlobalVars = collects.globalVars
 	f.Types = collects.tys
+	f.Signature = string(sig)
 	return f, false
 }
 
@@ -588,6 +592,7 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 			fn.FileLine = ctx.FileLine(fieldDecl)
 			fn.IsMethod = true
 			fn.IsInterfaceMethod = true
+			fn.Signature = string(ctx.GetRawContent(fieldDecl))
 		}
 		p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 	}

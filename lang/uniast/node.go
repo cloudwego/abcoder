@@ -570,3 +570,16 @@ func (n Node) Module() *Module {
 	}
 	return n.Repo.Modules[n.Identity.ModPath]
 }
+
+func (n Node) Signature() string {
+	if n.Repo == nil {
+		return ""
+	}
+	switch n.Type {
+	case FUNC:
+		if f := n.Repo.GetFunction(n.Identity); f != nil {
+			return f.Signature
+		}
+	}
+	return ""
+}
