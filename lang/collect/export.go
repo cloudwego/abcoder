@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/cloudwego/abcoder/lang/log"
-	"github.com/cloudwego/abcoder/lang/lsp"
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
@@ -44,8 +43,8 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	return uniast.FileLine{
 		File:        rel,
 		Line:        loc.Range.Start.Line + 1,
-		StartOffset: lsp.PositionOffset(file_uri, text, loc.Range.Start),
-		EndOffset:   lsp.PositionOffset(file_uri, text, loc.Range.End),
+		StartOffset: PositionOffset(file_uri, text, loc.Range.Start),
+		EndOffset:   PositionOffset(file_uri, text, loc.Range.End),
 	}
 }
 
@@ -75,7 +74,7 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	c.filterLocalSymbols()
 
 	// export symbols
-	visited := make(map[*lsp.DocumentSymbol]*uniast.Identity)
+	visited := make(map[*DocumentSymbol]*uniast.Identity)
 	for _, symbol := range c.syms {
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
@@ -191,15 +190,15 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	// map receiver to methods
 	receivers := make(map[*DocumentSymbol][]*DocumentSymbol, len(c.funcs)/4)
 	for method, rec := range c.funcs {
-		if method.Kind == lsp.SKMethod && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
+		if method.Kind == SKMethod && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
 			receivers[rec.Method.Receiver.Symbol] = append(receivers[rec.Method.Receiver.Symbol], method)
 		}
 	}
 
 	switch k := symbol.Kind; k {
 	// Function
-	case lsp.SKFunction, lsp.SKMethod:
-		if p := c.cli.GetParent(symbol); p != nil && p.Kind == lsp.SKInterface {
+	case SKFunction, SKMethod:
+		if p := c.cli.GetParent(symbol); p != nil && p.Kind == SKInterface {
 			// NOTICE: no need collect interface method
 			break
 		}
@@ -209,6 +208,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			Exported: public,
 		}
 		info := c.funcs[symbol]
+		obj.Signature = info.Signature
 		// NOTICE: type parames collect into types
 		if info.TypeParams != nil {
 			for _, input := range info.TypeParamsSorted {
@@ -262,7 +262,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 						id.Name = iid.Name + "<" + id.Name + ">"
 					}
 				}
-				if k == lsp.SKFunction {
+				if k == SKFunction {
 					// NOTICE: class static method name is: type::method
 					id.Name += "::" + name
 				} else {
@@ -285,20 +285,20 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 				pdep := uniast.NewDependency(*depid, c.fileLine(dep.Location))
 				switch dep.Symbol.Kind {
-				case lsp.SKFunction:
+				case SKFunction:
 					obj.FunctionCalls = uniast.InsertDependency(obj.FunctionCalls, pdep)
-				case lsp.SKMethod:
+				case SKMethod:
 					if obj.MethodCalls == nil {
 						obj.MethodCalls = make([]uniast.Dependency, 0, len(deps))
 					}
 					// NOTICE: use loc token as key here, to make it more readable
 					obj.MethodCalls = uniast.InsertDependency(obj.MethodCalls, pdep)
-				case lsp.SKVariable, lsp.SKConstant:
+				case SKVariable, SKConstant:
 					if obj.GlobalVars == nil {
 						obj.GlobalVars = make([]uniast.Dependency, 0, len(deps))
 					}
 					obj.GlobalVars = uniast.InsertDependency(obj.GlobalVars, pdep)
-				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
+				case SKStruct, SKTypeParameter, SKInterface, SKEnum, SKClass:
 					if obj.Types == nil {
 						obj.Types = make([]uniast.Dependency, 0, len(deps))
 					}
@@ -312,7 +312,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		pkg.Functions[id.Name] = obj
 
 	// Type
-	case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
+	case SKStruct, SKTypeParameter, SKInterface, SKEnum, SKClass:
 		obj := &uniast.Type{
 			FileLine: fileLine,
 			Content:  content,
@@ -328,7 +328,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				switch dep.Symbol.Kind {
-				case lsp.SKStruct, lsp.SKTypeParameter, lsp.SKInterface, lsp.SKEnum, lsp.SKClass:
+				case SKStruct, SKTypeParameter, SKInterface, SKEnum, SKClass:
 					obj.SubStruct = uniast.InsertDependency(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
@@ -351,12 +351,12 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		obj.Identity = *id
 		pkg.Types[id.Name] = obj
 	// Vars
-	case lsp.SKConstant, lsp.SKVariable:
+	case SKConstant, SKVariable:
 		obj := &uniast.Var{
 			FileLine:   fileLine,
 			Content:    content,
 			IsExported: public,
-			IsConst:    k == lsp.SKConstant,
+			IsConst:    k == SKConstant,
 		}
 		if ty, ok := c.vars[symbol]; ok {
 			tok, _ := c.cli.Locate(ty.Location)
@@ -374,18 +374,18 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	return
 }
 
-func mapKind(kind lsp.SymbolKind) uniast.TypeKind {
+func mapKind(kind SymbolKind) uniast.TypeKind {
 	switch kind {
-	case lsp.SKStruct:
+	case SKStruct:
 		return "struct"
 	// XXX: C++ should use class instead of struct
-	case lsp.SKClass:
+	case SKClass:
 		return "struct"
-	case lsp.SKTypeParameter:
+	case SKTypeParameter:
 		return "type-parameter"
-	case lsp.SKInterface:
+	case SKInterface:
 		return "interface"
-	case lsp.SKEnum:
+	case SKEnum:
 		return "enum"
 	default:
 		panic(fmt.Sprintf("unexpected kind %v", kind))

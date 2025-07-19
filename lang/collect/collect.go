@@ -77,6 +77,7 @@ type functionInfo struct {
 	InputsSorted     []dependency       `json:"-"`
 	Outputs          map[int]dependency `json:"outputs,omitempty"`
 	OutputsSorted    []dependency       `json:"-"`
+	Signature        string             `json:"signature,omitempty"`
 }
 
 func switchSpec(l uniast.Language) LanguageSpec {
@@ -596,11 +597,29 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 				log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
 			}
 		}
-
 		tsyms, ts := c.getDepsWithLimit(ctx, sym, tps, depth-1)
 		ipsyms, is := c.getDepsWithLimit(ctx, sym, ips, depth-1)
 		opsyms, os := c.getDepsWithLimit(ctx, sym, ops, depth-1)
-		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rsym)
+
+		//get last token of params for get signature
+		lastToken := rec
+		for _, t := range tps {
+			if t > lastToken {
+				lastToken = t
+			}
+		}
+		for _, t := range ips {
+			if t > lastToken {
+				lastToken = t
+			}
+		}
+		for _, t := range ops {
+			if t > lastToken {
+				lastToken = t
+			}
+		}
+
+		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rsym, lastToken)
 	}
 
 	// variable info: type
@@ -628,7 +647,7 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 	}
 }
 
-func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsyms map[int]dependency, ts, is, os []dependency, rsym *dependency) {
+func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsyms map[int]dependency, ts, is, os []dependency, rsym *dependency, lastToken int) {
 	if _, ok := c.funcs[sym]; !ok {
 		c.funcs[sym] = functionInfo{}
 	}
@@ -645,5 +664,12 @@ func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsym
 		}
 		f.Method.Receiver = *rsym
 	}
+
+	// ctruncate the function signature text
+	if lastToken >= 0 && lastToken < len(sym.Tokens)-1 {
+		lastPos := sym.Tokens[lastToken+1].Location.Range.Start
+		f.Signature = ChunkHead(sym.Text, sym.Location.Range.Start, lastPos)
+	}
+
 	c.funcs[sym] = f
 }

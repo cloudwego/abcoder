@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.1.1)
+# Universal Abstract-Syntax-Tree Specification (v0.1.2)
 
 Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言无关的代码上下文数据结构，表示某个仓库代码的统一抽象语法树。收集了语言实体（函数、类型、常（变）量）的定义及其相互依赖关系，用于后续的 AI 理解、coding-workflow 开发。
 
@@ -237,6 +237,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
     "StartOffset": 3290,
     "EndOffset": 3573,
     "Content": "// BindSession binds the session with current goroutine\nfunc (self *SessionManager) BindSession(Identity SessionIdentity, s Session) {\n\tshard : = self.shards[uint64(Identity)%uint64(self.opts.ShardNumber)]\n\n\tshard.Store(Identity, s)\n\n\tif self.opts.EnableImplicitlyTransmitAsync {\n\t\ttransmitSessionIdentity(Identity)\n\t}\n}",
+    "Signature": "func (self *SessionManager) BindSession(Identity SessionIdentity, s Session)",
     "Receiver": {
         "IsPointer": true,
         "Type": {
@@ -320,6 +321,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 
 - IsMethod: 是否是一个方法
 
+- Signature: 函数签名，包括函数名、参数、返回值等
 
 - IsInterfaceMethod: 是否是接口的方法--这里 abcoder parse 收集 InterfaceMethod 为了方便 LLM 理解，但是实际上 write 中并不会认为其是一个语言实体
 
