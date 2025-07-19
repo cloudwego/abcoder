@@ -443,7 +443,7 @@ func (p Repository) GetFile(fp string) (*File, *Module) {
 		if mod.IsExternal() {
 			continue
 		}
-		if f := mod.GetFile(fp); f != nil {
+		if f := mod.GetFile(fp); f != nil && f.Package != nil {
 			return f, mod
 		}
 	}

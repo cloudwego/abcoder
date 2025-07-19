@@ -571,6 +571,10 @@ func (n Node) Module() *Module {
 	return n.Repo.Modules[n.Identity.ModPath]
 }
 
+// Signature returns the signature of the node:
+//   - for function, return the function signature
+//   - for var, return the var full content
+//   - for type, return the type full content
 func (n Node) Signature() string {
 	if n.Repo == nil {
 		return ""
@@ -579,6 +583,14 @@ func (n Node) Signature() string {
 	case FUNC:
 		if f := n.Repo.GetFunction(n.Identity); f != nil {
 			return f.Signature
+		}
+	case VAR:
+		if v := n.Repo.GetVar(n.Identity); v != nil {
+			return v.Content
+		}
+	case TYPE:
+		if t := n.Repo.GetType(n.Identity); t != nil {
+			return t.Content
 		}
 	}
 	return ""
