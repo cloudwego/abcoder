@@ -440,6 +440,9 @@ func (p *Repository) SetVar(id Identity, v *Var) *Var {
 
 func (p Repository) GetFile(fp string) (*File, *Module) {
 	for _, mod := range p.Modules {
+		if mod.IsExternal() {
+			continue
+		}
 		if f := mod.GetFile(fp); f != nil {
 			return f, mod
 		}

@@ -162,17 +162,17 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 		fmt.Fprintf(os.Stderr, "run go mod tidy failed in %s: %v\n", dir, buf.String())
 	}
 
-	filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
-		if info != nil && info.IsDir() && filepath.Base(path) == ".git" {
-			return filepath.SkipDir
-		}
-		if e != nil || info.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(p.homePageDir, path)
-		mod.Files[rel] = NewFile(rel)
-		return nil
-	})
+	// filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
+	// 	if info != nil && info.IsDir() && filepath.Base(path) == ".git" {
+	// 		return filepath.SkipDir
+	// 	}
+	// 	if e != nil || info.IsDir() {
+	// 		return nil
+	// 	}
+	// 	rel, _ := filepath.Rel(p.homePageDir, path)
+	// 	mod.Files[rel] = NewFile(rel)
+	// 	return nil
+	// })
 
 	if p.opts.LoadByPackages {
 		var errs []error
