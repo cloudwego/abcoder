@@ -460,11 +460,10 @@ type Function struct {
 	FileLine
 	Content string // Content of the function, including functiion signature and body
 
-	Signature string
-
-	Receiver *Receiver    `json:",omitempty"` // Method receiver
-	Params   []Dependency `json:",omitempty"` // function parameters, key is the parameter name
-	Results  []Dependency `json:",omitempty"` // function results, key is the result name or type name
+	Signature string       `json:",omitempty"`
+	Receiver  *Receiver    `json:",omitempty"` // Method receiver
+	Params    []Dependency `json:",omitempty"` // function parameters, key is the parameter name
+	Results   []Dependency `json:",omitempty"` // function results, key is the result name or type name
 
 	// call to in-the-project functions, key is {{pkgAlias.funcName}} or {{funcName}}
 	FunctionCalls []Dependency `json:",omitempty"`

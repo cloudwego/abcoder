@@ -265,7 +265,7 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 
 	// find the typeParam's type token between "fn" and "("
 	var typeParams []int
-	s, e := findPair(sym.Text, *lines, sym.Location.Range.Start, sym.Tokens, '<', '>', fn+1, where, '(')
+	s, e := lsp.FindPair(sym.Text, *lines, sym.Location.Range.Start, sym.Tokens, '<', '>', fn+1, where, '(')
 	for ; s >= 0 && s <= e; s++ {
 		if c.IsEntityToken(tokens[s]) {
 			typeParams = append(typeParams, s)
@@ -273,7 +273,7 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 	}
 
 	// find the first '(' ')' pair after "fn"
-	lc, rc := findPair(sym.Text, *lines, sym.Location.Range.Start, sym.Tokens, '(', ')', e, where, '<')
+	lc, rc := lsp.FindPair(sym.Text, *lines, sym.Location.Range.Start, sym.Tokens, '(', ')', e, where, '<')
 	// collect the inputParam's type token
 	var inputParams []int
 	for s := lc; s >= 0 && s <= rc; s++ {
@@ -285,7 +285,7 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 	// find the  outputs's type token
 	var outputs []int
 	if where == len(tokens)-1 {
-		e = findSingle(sym.Text, *lines, sym.Location.Range.Start, sym.Tokens, "{", rc, where)
+		e = lsp.FindSingle(sym.Text, *lines, sym.Location.Range.Start, sym.Tokens, "{", rc, where)
 	} else {
 		e = where
 	}
@@ -300,137 +300,6 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 
 	return -1, typeParams, inputParams, outputs
 }
-
-func findSingle(text string, lines []int, textPos lsp.Position, tokens []lsp.Token, sep string, start int, end int) int {
-	if start < 0 {
-		start = 0
-	}
-	if end >= len(tokens) {
-		end = len(tokens) - 1
-	}
-	if start >= len(tokens) {
-		return -1
-	}
-	sPos := lsp.RelativePostionWithLines(lines, textPos, tokens[start].Location.Range.Start)
-	ePos := lsp.RelativePostionWithLines(lines, textPos, tokens[end].Location.Range.End)
-	pos := strings.Index(text[sPos:ePos], sep)
-	if pos == -1 {
-		return -1
-	}
-	pos += sPos
-	for i := start; i <= end && i < len(tokens); i++ {
-		rel := lsp.RelativePostionWithLines(lines, textPos, tokens[i].Location.Range.Start)
-		if rel > pos {
-			return i - 1
-		}
-	}
-	return -1
-}
-
-func findPair(text string, lines []int, textPos lsp.Position, tokens []lsp.Token, lchar rune, rchar rune, start int, end int, notAllow rune) (int, int) {
-	if start < 0 {
-		start = 0
-	}
-	if end >= len(tokens) {
-		end = len(tokens) - 1
-	}
-	if start >= len(tokens) {
-		return -1, -1
-	}
-
-	startIndex := lsp.RelativePostionWithLines(lines, textPos, tokens[start].Location.Range.Start)
-
-	lArrow := -1
-	lCount := 0
-	rArrow := -1
-	notAllowCount := 0
-	ctext := text[startIndex:]
-	for i, c := range ctext {
-		if c == notAllow && lCount == 0 {
-			return -1, -1
-		} else if c == lchar && notAllowCount == 0 {
-			lCount++
-			if lCount == 1 {
-				lArrow = i
-			}
-		} else if c == rchar && notAllowCount == 0 {
-			if rchar == '>' && ctext[i-1] == '-' {
-				// notice: -> is not a pair in Rust
-				continue
-			}
-			lCount--
-			if lCount == 0 {
-				rArrow = i
-				break
-			}
-		}
-	}
-	if lArrow == -1 || rArrow == -1 {
-		return -1, -1
-	}
-	lArrow += startIndex
-	rArrow += startIndex
-
-	s := -1
-	e := -1
-	for i := start; i <= end && i < len(tokens); i++ {
-		rel := lsp.RelativePostionWithLines(lines, textPos, tokens[i].Location.Range.Start)
-		if rel >= lArrow && s == -1 {
-			s = i
-		}
-		if rel > rArrow {
-			e = i - 1
-			break
-		}
-	}
-
-	return s, e
-}
-
-// find the [lsep, rspe] range after i token's end
-// func findTokens(s int, e int, lsep, rsep string, symbol *DocumentSymbol) (int, int) {
-// 	if s < 0 {
-// 		s = 0
-// 	}
-// 	// find the range of the token from i token
-// 	startIndex := lsp.RelativePostion(symbol.Text, symbol.Location.Range.Start, symbol.Tokens[s].Location.Range.End)
-// 	lArrow := strings.Index(symbol.Text[startIndex:], lsep)
-// 	rArrow := strings.Index(symbol.Text[startIndex:], rsep)
-
-// 	start := -1
-// 	end := -1
-// 	if lArrow != -1 && rArrow != -1 {
-// 		lArrow += startIndex
-// 		rArrow += startIndex
-// 		lLine := strings.Count(symbol.Text[:lArrow], "\n")
-// 		if lLine > 0 {
-// 			lArrow = lArrow - strings.LastIndex(symbol.Text[:lArrow], "\n") - 1
-// 		} else {
-// 			lArrow += symbol.Location.Range.Start.Character
-// 		}
-// 		rLine := strings.Count(symbol.Text[:rArrow], "\n")
-// 		if rLine > 0 {
-// 			rArrow = rArrow - strings.LastIndex(symbol.Text[:rArrow], "\n") - 1
-// 		} else {
-// 			rArrow += symbol.Location.Range.Start.Character
-// 		}
-// 		lPos := Position{lLine + symbol.Location.Range.Start.Line, lArrow}
-// 		rPos := Position{rLine + symbol.Location.Range.Start.Line, rArrow}
-// 		for ; s <= e; s++ {
-// 			if symbol.Tokens[s].Location.Range.Start.Less(lPos) {
-// 				continue
-// 			}
-// 			if rPos.Less(symbol.Tokens[s].Location.Range.Start) {
-// 				end = s - 1
-// 				break
-// 			}
-// 			if start == -1 {
-// 				start = s
-// 			}
-// 		}
-// 	}
-// 	return start, end
-// }
 
 var crateReg = regexp.MustCompile(`^[a-z][a-z0-9\-_]*\-\d+\.\d+\.\d+$`)
 
