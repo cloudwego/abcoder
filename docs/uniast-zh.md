@@ -675,16 +675,16 @@ const (
 
 -  https://github.com/cloudwego/localsession
 
-	- 命令: ` git clone https://github.com/cloudwego/localsession.git && abcoder parse go ./localsession -load-external-symbol`
+	- 命令: ` git clone https://github.com/cloudwego/localsession.git && abcoder parse go ./localsession`
 
-	- 输出 [localsession.json](https://huggingface.co/datasets/AsterDY/abcoder/blob/main/repos/localsession.json)
+	- 输出 [localsession.json](../testdata/asts/localsession.json)
 
 
 - https://github.com/cloudwego/metainfo
 
 	- 命令`git clone https://github.com/cloudwego/metainfo.git && abcoder parse rust ./metainfo -load-external-symbol`
 
-	- 输出 [metainfo.json](https://huggingface.co/datasets/AsterDY/abcoder/blob/main/repos/metainfo.json)
+	- 输出 [metainfo.json](../testdata/asts/metainfo.json)
 
 
 # 扩展其它语言 Parser

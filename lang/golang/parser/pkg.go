@@ -229,7 +229,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				mod.Files[relpath] = f
 			}
 			pkgid := pkg.ID
-			f.Package = &pkgid
+			f.Package = pkgid
 			f.Imports = imports.Origins
 			if err := p.parseFile(ctx, file); err != nil {
 				return err

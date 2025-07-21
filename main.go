@@ -42,35 +42,37 @@ import (
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
+	"github.com/cloudwego/abcoder/llm/mcp"
+	"github.com/cloudwego/abcoder/llm/tool"
 )
 
-const Usage = `abcoder <Action> <Language> <URI> [Flags]
+const Usage = `abcoder <Action> [Language] <Path> [Flags]
 Action:
-   parse		parse the whole repo and output UniAST
-   write        write the UniAST to the output directory
+   parse        parse the specific repo and write its UniAST (to stdout by default)
+   write        write the specific UniAST back to codes
+   mcp          run as a MCP server for all repos (*.json) in the specific directory
+   version      print the version of abcoder
 Language:
-   rust			for rust codes
-   cxx  		for c codes (cpp support is on the way)
-   go  			for golang codes
+   rust         for rust codes
+   cxx          for c codes (cpp support is on the way)
+   go           for golang codes
 `
 
 func main() {
 	flags := flag.NewFlagSet("abcoder", flag.ExitOnError)
 
 	flagHelp := flags.Bool("h", false, "Show help message.")
-
 	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
-
 	flagOutput := flags.String("o", "", "Output path.")
+	flagLsp := flags.String("lsp", "", "Specify the language server path.")
 
 	var opts lang.ParseOptions
 	flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
-	flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "do not need comment (only works for Go now)")
-	flags.BoolVar(&opts.NeedTest, "need-test", false, "need parse test files (only works for Go now)")
+	flags.BoolVar(&opts.NoNeedComment, "no-need-comment", false, "not need comment (only works for Go now)")
+	flags.BoolVar(&opts.NotNeedTest, "no-need-test", false, "not need parse test files (only works for Go now)")
 	flags.BoolVar(&opts.LoadByPackages, "load-by-packages", false, "load by packages (only works for Go now)")
 	flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
 	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
-	flagLsp := flags.String("lsp", "", "Specify the language server path.")
 
 	var wopts lang.WriteOptions
 	flags.StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")
@@ -81,27 +83,18 @@ func main() {
 		flags.PrintDefaults()
 	}
 
-	if len(os.Args) < 4 {
-		// call flags.Usage()
+	if len(os.Args) < 2 {
 		flags.Usage()
 		os.Exit(1)
 	}
 	action := strings.ToLower(os.Args[1])
-	language := uniast.NewLanguage(os.Args[2])
-	if language == uniast.Unknown {
-		fmt.Fprintf(os.Stderr, "unsupported language: %s\n", os.Args[2])
-		os.Exit(1)
-	}
-	uri := os.Args[3]
-
-	flags.Parse(os.Args[4:])
-	if flagHelp != nil && *flagHelp {
-		flags.Usage()
-		os.Exit(0)
-	}
 
 	switch action {
+	case "version":
+		fmt.Fprintf(os.Stdout, "%s\n", Version)
+
 	case "parse":
+		language, uri := getLanguageAndUri(flags, true, flagHelp)
 
 		if flagVerbose != nil && *flagVerbose {
 			log.SetLogLevel(log.DebugLevel)
@@ -126,7 +119,14 @@ func main() {
 		} else {
 			fmt.Fprintf(os.Stdout, "%s\n", out)
 		}
+
 	case "write":
+		_, uri := getLanguageAndUri(flags, false, flagHelp)
+		if uri == "" {
+			log.Error("Arguement Path is required\n")
+			os.Exit(1)
+		}
+
 		repo, err := uniast.LoadRepo(uri)
 		if err != nil {
 			log.Error("Failed to load repo: %v\n", err)
@@ -146,7 +146,65 @@ func main() {
 			log.Error("Failed to write: %v\n", err)
 			os.Exit(1)
 		}
+
+	case "mcp":
+		_, uri := getLanguageAndUri(flags, false, flagHelp)
+		if uri == "" {
+			log.Error("Arguement Path is required\n")
+			os.Exit(1)
+		}
+
+		if flagVerbose != nil && *flagVerbose {
+			log.SetLogLevel(log.DebugLevel)
+		}
+		svr := mcp.NewServer(mcp.ServerOptions{
+			ServerName:    "abcoder",
+			ServerVersion: Version,
+			Verbose:       *flagVerbose,
+			ASTReadToolsOptions: tool.ASTReadToolsOptions{
+				RepoASTsDir: uri,
+			},
+		})
+		if err := svr.ServeStdio(); err != nil {
+			log.Error("Failed to run MCP server: %v\n", err)
+			os.Exit(1)
+		}
 	}
+}
+
+func getLanguageAndUri(flags *flag.FlagSet, needLang bool, flagHelp *bool) (language uniast.Language, uri string) {
+	if len(os.Args) < 3 {
+		flags.Usage()
+		os.Exit(1)
+	}
+
+	if needLang {
+		language = uniast.NewLanguage(os.Args[2])
+		if language == uniast.Unknown {
+			fmt.Fprintf(os.Stderr, "unsupported language: %s\n", os.Args[2])
+			os.Exit(1)
+		}
+		if len(os.Args) < 4 {
+			fmt.Fprintf(os.Stderr, "arguement Path is required\n")
+			os.Exit(1)
+		}
+		uri = os.Args[3]
+		if len(os.Args) > 4 {
+			flags.Parse(os.Args[4:])
+		}
+	} else {
+		uri = os.Args[2]
+		if len(os.Args) > 3 {
+			flags.Parse(os.Args[3:])
+		}
+	}
+
+	if flagHelp != nil && *flagHelp {
+		flags.Usage()
+		os.Exit(0)
+	}
+
+	return language, uri
 }
 
 type StringArray []string

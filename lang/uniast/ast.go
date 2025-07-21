@@ -104,12 +104,12 @@ func NewRepository(name string) Repository {
 type File struct {
 	Path    string
 	Imports []Import `json:",omitempty"`
-	Package *PkgPath `json:",omitempty"`
+	Package PkgPath  `json:",omitempty"`
 }
 
 type Import struct {
 	Alias *string `json:",omitempty"`
-	Path  string
+	Path  string  // raw path
 }
 
 func (i *Import) UnmarshalJSON(data []byte) error {
@@ -201,10 +201,10 @@ func (m Module) GetFile(path string) *File {
 func (r Repository) GetFileNodes(path string) []*Node {
 	var ret []*Node
 	file, mod := r.GetFile(path)
-	if file == nil || file.Package == nil {
+	if file == nil || file.Package == "" {
 		return ret
 	}
-	pkg := mod.Packages[*file.Package]
+	pkg := mod.Packages[file.Package]
 	if pkg == nil {
 		return ret
 	}
@@ -256,6 +256,16 @@ func NewModule(name string, dir string, language Language) *Module {
 		Files:        map[string]*File{},
 	}
 	return &ret
+}
+
+func (m Module) GetPkgFiles(pkg PkgPath) []*File {
+	var ret []*File
+	for _, v := range m.Files {
+		if v.Package != "" && v.Package == pkg {
+			ret = append(ret, v)
+		}
+	}
+	return ret
 }
 
 // Package
@@ -443,7 +453,7 @@ func (p Repository) GetFile(fp string) (*File, *Module) {
 		if mod.IsExternal() {
 			continue
 		}
-		if f := mod.GetFile(fp); f != nil && f.Package != nil {
+		if f := mod.GetFile(fp); f != nil && f.Package != "" {
 			return f, mod
 		}
 	}

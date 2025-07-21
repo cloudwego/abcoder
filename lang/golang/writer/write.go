@@ -363,8 +363,8 @@ func (p *Writer) CreateFile(fi *uniast.File, mod *uniast.Module) ([]byte, error)
 	var sb strings.Builder
 	sb.WriteString("package ")
 	pkgName := filepath.Base(filepath.Dir(fi.Path))
-	if fi.Package != nil {
-		pkg := mod.Packages[*fi.Package]
+	if fi.Package != "" {
+		pkg := mod.Packages[fi.Package]
 		if pkg != nil {
 			if pkg.IsMain {
 				pkgName = "main"

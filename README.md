@@ -13,10 +13,8 @@ ABCoder, an general AI-oriented code-processing SDK, is designed to enhance codi
 -  General Parser, parses abitary-language codes to UniAST.
 
 -  General Writer, transforms UniAST back to codes.
-  
-- (Comming Soon) General Iterator, a framework for visiting the UniAST and implementing code-batch-processing workflows.
 
-- (Comming Soon) Code Retrieval-Augmented-Generation (RAG), provides a set of tools and functions to help the LLM understand your codes much deeper than ever.
+- Code-Retrieval-Augmented-Generation (Code-RAG), provides a set of MCP tools to help the LLM understand your codes more precisely.
 
 Based on these features, developers can easily implement or enhance their AI-assisted-programming applications, such as reviewing, optimizing, translating, etc.
 
@@ -26,21 +24,53 @@ Based on these features, developers can easily implement or enhance their AI-ass
 see [UniAST Specification](docs/uniast-zh.md)
 
 
-# Getting Started
+# Quick Start
+
+Below is a quick start guide for using ABCoder to build a coding context on both internal and external libraies.
 
 1. Install ABCoder:
-```bash
-go install github.com/cloudwego/abcoder@latest
-```
+
+    ```bash
+    go install github.com/cloudwego/abcoder@latest
+    ```
+
 2. Use ABCoder to parse a repository to UniAST (JSON)
-```bash
-abcoder parse {language} {repo-path} > ast.json
-```
-3. Do your magic with UniAST...
-4. Use ABCoder to write an UniAST back to codes
-```bash
-abcoder write {language} ast.json
-```
+
+    ```bash
+    abcoder parse {language} {repo-path} > xxx.json
+    ```
+
+    for example:
+
+    ```bash
+    git clone https://github.com/cloudwego/localsession.git localsession
+    abcoder parse go localsession -o /abcoder-asts/localsession.json
+    ```
+
+3. Integrate ABCoder's MCP tools into your AI agent.
+
+    ```json
+    {
+        "mcpServers": {
+            "abcoder": {
+                "command": "abcoder",
+                "args": [
+                    "mcp",
+                    "{the-AST-directory}" // EX: "/abcoder-asts"
+                ]
+            }
+        }
+    }
+    ```
+
+
+4. Enjoy it!
+
+    See [using ABCoder in TRAE](https://bytedance.sg.larkoffice.com/file/SEmdbLpC1oCbclxmc5Dlkp9fg7r). Tips:
+
+    - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
+    
+    - Try to use [the recommaned prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
 
 
 # Supported Languages
@@ -51,9 +81,8 @@ ABCoder currently supports the following languages:
 | -------- | ----------- | ----------- |
 | Go       | ✅           | ✅           |
 | Rust     | ✅           | Coming Soon |
-| C        | Coming Soon | ❌           |
-| Python   | Coming Soon | ❌           |
-
+| C        | ✅           | ❌           |
+| Python   | Coming Soon | Coming Soon |
 
 
 # Getting Involved
