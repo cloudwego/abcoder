@@ -66,7 +66,7 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 4. Enjoy it!
    
-   See using ABCoder MCP in TRAE demo:
+   Try to click and watch the video below:
 
    <div align="center">
    
