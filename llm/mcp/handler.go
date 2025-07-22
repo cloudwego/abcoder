@@ -39,7 +39,7 @@ func NewTool[R any, T any](name string, desc string, schema json.RawMessage, han
 			if resp, err := handler(ctx, req); err != nil {
 				isError = true
 				final = err.Error()
-			} else if js, err := utils.MarshalJSONIndent(resp); err != nil {
+			} else if js, err := utils.MarshalJSONBytes(resp); err != nil {
 				isError = true
 				final = err.Error()
 			} else {

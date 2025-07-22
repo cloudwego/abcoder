@@ -234,6 +234,14 @@ func NewNodeID(id uniast.Identity) NodeID {
 	}
 }
 
+func (n NodeID) Identity() uniast.Identity {
+	return uniast.Identity{
+		ModPath: n.ModPath,
+		PkgPath: n.PkgPath,
+		Name:    n.Name,
+	}
+}
+
 func (t *ASTReadTools) getRepoAST(repoName string) (*uniast.Repository, error) {
 	repo, ok := t.repos.Load(repoName)
 	if !ok {
@@ -419,8 +427,8 @@ func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq,
 }
 
 type GetASTNodeReq struct {
-	RepoName string            `json:"repo_name" jsonschema:"description=the name of the repository"`
-	NodeIDs  []uniast.Identity `json:"node_ids" jsonschema:"description=the identities of the ast node"`
+	RepoName string   `json:"repo_name" jsonschema:"description=the name of the repository"`
+	NodeIDs  []NodeID `json:"node_ids" jsonschema:"description=the identities of the ast node"`
 }
 
 type GetASTNodeResp struct {
@@ -439,7 +447,8 @@ func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*Get
 	}
 
 	resp := new(GetASTNodeResp)
-	for _, id := range params.NodeIDs {
+	for _, nid := range params.NodeIDs {
+		id := nid.Identity()
 		log.Debug("query ast node %v", id.Full())
 		node := repo.GetNode(id)
 		if node == nil {
