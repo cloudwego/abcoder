@@ -153,7 +153,7 @@ func NewASTReadTools(opts ASTReadToolsOptions) *ASTReadTools {
 	return ret
 }
 
-func (t ASTReadTools) GetTools() []Tool {
+func (t *ASTReadTools) GetTools() []Tool {
 	ret := make([]Tool, 0, len(t.tools))
 	for _, tt := range t.tools {
 		ret = append(ret, tt)
@@ -161,7 +161,7 @@ func (t ASTReadTools) GetTools() []Tool {
 	return ret
 }
 
-func (t ASTReadTools) GetTool(name string) Tool {
+func (t *ASTReadTools) GetTool(name string) Tool {
 	return t.tools[name]
 }
 
@@ -172,7 +172,7 @@ type ListReposResp struct {
 	RepoNames []string `json:"repo_names" jsonschema:"description=the names of the repositories"`
 }
 
-func (t ASTReadTools) ListRepos(ctx context.Context, req ListReposReq) (*ListReposResp, error) {
+func (t *ASTReadTools) ListRepos(ctx context.Context, req ListReposReq) (*ListReposResp, error) {
 	ret := ListReposResp{}
 	t.repos.Range(func(key, value interface{}) bool {
 		ret.RepoNames = append(ret.RepoNames, key.(string))
@@ -187,6 +187,7 @@ type GetRepoStructReq struct {
 
 type GetRepoStructResp struct {
 	Modules []ModuleStruct `json:"modules" jsonschema:"description=the module structure of the repository"`
+	Error   string         `json:"error,omitempty" jsonschema:"description=the error message"`
 }
 
 type ModuleStruct struct {
@@ -263,7 +264,9 @@ func (t *ASTReadTools) GetRepoStructure(_ context.Context, req GetRepoStructReq)
 	log.Debug("get repo structure, req: %v", abutil.MarshalJSONIndentNoError(req))
 	repo, err := t.getRepoAST(req.RepoName)
 	if err != nil {
-		return nil, err
+		return &GetRepoStructResp{
+			Error: err.Error(),
+		}, nil
 	}
 
 	resp := new(GetRepoStructResp)
@@ -300,6 +303,7 @@ type GetPackageStructReq struct {
 
 type GetPackageStructResp struct {
 	Files []FileStruct `json:"files" jsonschema:"description=the file structures"`
+	Error string       `json:"error,omitempty" jsonschema:"description=the error message"`
 }
 
 func (t *ASTReadTools) getPkgFiles(ctx context.Context, pkg *uniast.Package, repo string) []FileStruct {
@@ -332,7 +336,9 @@ func (t *ASTReadTools) GetPackageStructure(ctx context.Context, req GetPackageSt
 	log.Debug("get package structure, req: %v", abutil.MarshalJSONIndentNoError(req))
 	repo, err := t.getRepoAST(req.RepoName)
 	if err != nil {
-		return nil, err
+		return &GetPackageStructResp{
+			Error: err.Error(),
+		}, nil
 	}
 
 	resp := new(GetPackageStructResp)
@@ -363,14 +369,18 @@ type GetFileStructReq struct {
 
 type GetFileStructResp struct {
 	FileStruct
+	Error string `json:"error,omitempty" jsonschema:"description=the error message"`
 }
 
 // GetFileStruct get node list, each node only includes ID\Type\Signature
 func (t *ASTReadTools) GetFileStructure(_ context.Context, req GetFileStructReq) (*GetFileStructResp, error) {
 	log.Debug("get file structure, req: %v", abutil.MarshalJSONIndentNoError(req))
 	resp, err := t.getFileStructure(context.Background(), req, true)
+	if err != nil {
+		resp.Error = err.Error()
+	}
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
-	return resp, err
+	return resp, nil
 }
 
 func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq, needNodeDetail bool) (*GetFileStructResp, error) {
@@ -415,6 +425,7 @@ type GetASTNodeReq struct {
 
 type GetASTNodeResp struct {
 	Nodes []NodeStruct `json:"nodes" jsonschema:"description=the ast nodes"`
+	Error string       `json:"error,omitempty" jsonschema:"description=the error message"`
 }
 
 func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*GetASTNodeResp, error) {
@@ -422,7 +433,9 @@ func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*Get
 
 	repo, err := t.getRepoAST(params.RepoName)
 	if err != nil {
-		return nil, err
+		return &GetASTNodeResp{
+			Error: err.Error(),
+		}, nil
 	}
 
 	resp := new(GetASTNodeResp)

@@ -18,6 +18,7 @@ package llm
 
 import (
 	"context"
+	"strings"
 
 	"github.com/cloudwego/abcoder/llm/prompt"
 	"github.com/cloudwego/abcoder/llm/tool"
@@ -29,7 +30,7 @@ import (
 
 type ModelConfig struct {
 	Name        string    `json:"name"` // alias of the config, not endpoint!
-	Type        ModelType `json:"type"`
+	APIType     ModelType `json:"type"`
 	BaseURL     string    `json:"base_url"`
 	APIKey      string    `json:"api_key"`
 	ModelName   string    `json:"model_name"` // the endpoint of the model, like `claude-opus-4-20250514`
@@ -40,11 +41,26 @@ type ModelConfig struct {
 
 type ModelType string
 
+func NewModelType(t string) ModelType {
+	switch strings.ToLower(t) {
+	case "ollama":
+		return ModelTypeOllama
+	case "ark":
+		return ModelTypeARK
+	case "openai":
+		return ModelTypeOpenAI
+	case "claude":
+		return ModelTypeClaude
+	}
+	return ModelTypeUnknown
+}
+
 const (
-	ModelTypeOllama ModelType = "ollama"
-	ModelTypeARK    ModelType = "ark"
-	ModelTypeOpenAI ModelType = "openai" // Fixed typo in constant name
-	ModelTypeClaude ModelType = "claude"
+	ModelTypeUnknown ModelType = ""
+	ModelTypeOllama  ModelType = "ollama"
+	ModelTypeARK     ModelType = "ark"
+	ModelTypeOpenAI  ModelType = "openai" // Fixed typo in constant name
+	ModelTypeClaude  ModelType = "claude"
 )
 
 type AgentConfig struct {

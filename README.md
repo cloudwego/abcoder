@@ -3,16 +3,16 @@
 ![ABCoder](images/ABCoder.png)
 
 # Overview
-ABCoder, an general AI-oriented code-processing SDK, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-programming applications. 
+ABCoder, an general AI-oriented Code-processing **Framework**, is designed to enhance coding context for Large-Language-Model (LLM), and boost developing AI-assisted-programming applications. 
 
 
 ## Features
 
--  Universal Abstract-Syntax-Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a boundless, flexible and structrual coding context for both AI and hunman.
+- Universal Abstract-Syntax-Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a boundless, flexible and structrual coding context for both AI and hunman.
   
--  General Parser, parses abitary-language codes to UniAST.
+- General Parser, parses abitary-language codes to UniAST.
 
--  General Writer, transforms UniAST back to codes.
+- General Writer, transforms UniAST back to codes.
 
 - Code-Retrieval-Augmented-Generation (Code-RAG), provides a set of MCP tools to help the LLM understand your codes more precisely.
 
@@ -26,7 +26,7 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 # Quick Start
 
-Below is a quick start guide for using ABCoder to build a coding context on both internal and external libraies.
+## Use ABCoder as a MCP server
 
 1. Install ABCoder:
 
@@ -56,7 +56,7 @@ Below is a quick start guide for using ABCoder to build a coding context on both
                 "command": "abcoder",
                 "args": [
                     "mcp",
-                    "{the-AST-directory}" // EX: "/abcoder-asts"
+                    "{the-AST-directory}"
                 ]
             }
         }
@@ -65,12 +65,52 @@ Below is a quick start guide for using ABCoder to build a coding context on both
 
 
 4. Enjoy it!
+   
+   See using ABCoder MCP in TRAE demo:
 
-    See [using ABCoder in TRAE](https://bytedance.sg.larkoffice.com/file/SEmdbLpC1oCbclxmc5Dlkp9fg7r). Tips:
+   <div align="center">
+   
+   [<img src="images/abcoder-hertz-trae.png" alt="MCP" width="500"/>](https://www.bilibili.com/video/BV14ggJzCEnK)
+   
+   </div>
 
-    - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
     
-    - Try to use [the recommaned prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
+## Tips:
+    
+- You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
+    
+- Try to use [the recommaned prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
+
+
+## Use ABCoder as an Agent (WIP)
+
+You can alse use ABCoder as a command-line Agent like:
+
+```bash
+export API_TYPE='{openai|ollama|ark|claude}' 
+export API_KEY='{your-api-key}' 
+export MODEL_NAME='{model-endpoint}' 
+abcoder agent {the-AST-directory}
+```
+For example:
+
+```bash
+$ API_TYPE='ark' API_KEY='xxx' MODEL_NAME='zzz' abcoder agent ./testdata/asts
+
+Hello! I'm ABCoder, your coding assistant. What can I do for you today?
+
+$ what the repo 'localsession' does?
+
+The `localsession` repository appears to be a Go module (`github.com/cloudwego/localsession`) that provides functionality related to managing local sessions. Here's a breakdown of its structure and purpose:
+...
+If you'd like to explore specific functionalities or code details, let me know, and I can dive deeper into the relevant files or nodes. For example:
+- What does `session.go` or `manager.go` implement?
+- How is the backup functionality used?
+
+$ exit
+```
+
+- NOTICE: This feature is Work-In-Progress. It only support code-analyzing at present.
 
 
 # Supported Languages

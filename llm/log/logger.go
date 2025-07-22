@@ -42,19 +42,19 @@ func NewStdLogger() *StdLogger {
 }
 
 func (l *StdLogger) Infof(s string, args ...interface{}) {
-	l.infologger.Output(2, fmt.Sprintf(s, args...))
+	l.infologger.Output(3, fmt.Sprintf(s, args...))
 }
 
 func (l *StdLogger) Errorf(s string, args ...interface{}) {
-	l.errlogger.Output(2, fmt.Sprintf(s, args...))
+	l.errlogger.Output(3, fmt.Sprintf(s, args...))
 }
 
 func (l *StdLogger) Debugf(s string, args ...interface{}) {
-	l.debuglogger.Output(2, fmt.Sprintf(s, args...))
+	l.debuglogger.Output(3, fmt.Sprintf(s, args...))
 }
 
 func (l *StdLogger) Output(calldepth int, s string) error {
-	return l.infologger.Output(calldepth+1, s)
+	return l.infologger.Output(calldepth+2, s)
 }
 
 type LogLevel uint8

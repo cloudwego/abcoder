@@ -42,6 +42,8 @@ import (
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
+	"github.com/cloudwego/abcoder/llm"
+	"github.com/cloudwego/abcoder/llm/agent"
 	"github.com/cloudwego/abcoder/llm/mcp"
 	"github.com/cloudwego/abcoder/llm/tool"
 )
@@ -50,7 +52,8 @@ const Usage = `abcoder <Action> [Language] <Path> [Flags]
 Action:
    parse        parse the specific repo and write its UniAST (to stdout by default)
    write        write the specific UniAST back to codes
-   mcp          run as a MCP server for all repos (*.json) in the specific directory
+   mcp          run as a MCP server for all repo ASTs (*.json) in the specific directory
+   agent        run as an Agent for all repo ASTs (*.json) in the specific directory. WIP: only support code-analyzing at present.
    version      print the version of abcoder
 Language:
    rust         for rust codes
@@ -77,6 +80,10 @@ func main() {
 	var wopts lang.WriteOptions
 	flags.StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")
 
+	var aopts agent.AgentOptions
+	flags.IntVar(&aopts.MaxSteps, "agent-max-steps", 50, "specify the max steps that the agent can run for each time")
+	flags.IntVar(&aopts.MaxHistories, "agent-max-histories", 10, "specify the max histories that the agent can use")
+
 	flags.Usage = func() {
 		fmt.Fprint(os.Stderr, Usage)
 		fmt.Fprintf(os.Stderr, "Flags:\n")
@@ -94,7 +101,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "%s\n", Version)
 
 	case "parse":
-		language, uri := getLanguageAndUri(flags, true, flagHelp)
+		language, uri := parseArgsAndFlags(flags, true, flagHelp, flagVerbose)
 
 		if flagVerbose != nil && *flagVerbose {
 			log.SetLogLevel(log.DebugLevel)
@@ -121,7 +128,7 @@ func main() {
 		}
 
 	case "write":
-		_, uri := getLanguageAndUri(flags, false, flagHelp)
+		_, uri := parseArgsAndFlags(flags, false, flagHelp, flagVerbose)
 		if uri == "" {
 			log.Error("Arguement Path is required\n")
 			os.Exit(1)
@@ -133,9 +140,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		if flagVerbose != nil && *flagVerbose {
-			log.SetLogLevel(log.DebugLevel)
-		}
 		if flagOutput != nil && *flagOutput != "" {
 			wopts.OutputDir = *flagOutput
 		} else {
@@ -148,15 +152,12 @@ func main() {
 		}
 
 	case "mcp":
-		_, uri := getLanguageAndUri(flags, false, flagHelp)
+		_, uri := parseArgsAndFlags(flags, false, flagHelp, flagVerbose)
 		if uri == "" {
 			log.Error("Arguement Path is required\n")
 			os.Exit(1)
 		}
 
-		if flagVerbose != nil && *flagVerbose {
-			log.SetLogLevel(log.DebugLevel)
-		}
 		svr := mcp.NewServer(mcp.ServerOptions{
 			ServerName:    "abcoder",
 			ServerVersion: Version,
@@ -169,10 +170,39 @@ func main() {
 			log.Error("Failed to run MCP server: %v\n", err)
 			os.Exit(1)
 		}
+
+	case "agent":
+		_, uri := parseArgsAndFlags(flags, false, flagHelp, flagVerbose)
+		if uri == "" {
+			log.Error("Arguement Path is required\n")
+			os.Exit(1)
+		}
+
+		aopts.ASTsDir = uri
+		aopts.Model.APIType = llm.NewModelType(os.Getenv("API_TYPE"))
+		if aopts.Model.APIType == llm.ModelTypeUnknown {
+			log.Error("env API_TYPE is required")
+			os.Exit(1)
+		}
+		aopts.Model.APIKey = os.Getenv("API_KEY")
+		if aopts.Model.APIKey == "" {
+			log.Error("env API_KEY is required")
+			os.Exit(1)
+		}
+		aopts.Model.ModelName = os.Getenv("MODEL_NAME")
+		if aopts.Model.ModelName == "" {
+			log.Error("env MODEL_NAME is required")
+			os.Exit(1)
+		}
+		aopts.Model.BaseURL = os.Getenv("BASE_URL")
+
+		ag := agent.NewAgent(aopts)
+		ag.Run(context.Background())
+
 	}
 }
 
-func getLanguageAndUri(flags *flag.FlagSet, needLang bool, flagHelp *bool) (language uniast.Language, uri string) {
+func parseArgsAndFlags(flags *flag.FlagSet, needLang bool, flagHelp *bool, flagVerbose *bool) (language uniast.Language, uri string) {
 	if len(os.Args) < 3 {
 		flags.Usage()
 		os.Exit(1)
@@ -202,6 +232,10 @@ func getLanguageAndUri(flags *flag.FlagSet, needLang bool, flagHelp *bool) (lang
 	if flagHelp != nil && *flagHelp {
 		flags.Usage()
 		os.Exit(0)
+	}
+
+	if flagVerbose != nil && *flagVerbose {
+		log.SetLogLevel(log.DebugLevel)
 	}
 
 	return language, uri

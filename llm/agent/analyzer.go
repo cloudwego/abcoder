@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 
+	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/llm"
 	"github.com/cloudwego/abcoder/llm/prompt"
 	"github.com/cloudwego/abcoder/llm/tool"
@@ -35,6 +36,8 @@ type RepoAnnalyzerOptions struct {
 }
 
 func NewRepoAnalyzer(ctx context.Context, opts RepoAnnalyzerOptions) *llm.ReactAgent {
+	log.Debug("NewRepoAnalyzer, opts: %+v", opts)
+
 	exeModel := llm.NewChatModel(opts.ModelConfig)
 	ast := tool.NewASTReadTools(tool.ASTReadToolsOptions{
 		RepoASTsDir: opts.ASTsDir,
@@ -42,6 +45,7 @@ func NewRepoAnalyzer(ctx context.Context, opts RepoAnnalyzerOptions) *llm.ReactA
 
 	// AST tools
 	ts := ast.GetTools()
+	log.Debug("NewRepoAnalyzer, get AST tools: %#v", ts)
 	tcfg := compose.ToolsNodeConfig{}
 	for _, t := range ts {
 		tcfg.Tools = append(tcfg.Tools, t.(etool.BaseTool))
@@ -49,19 +53,11 @@ func NewRepoAnalyzer(ctx context.Context, opts RepoAnnalyzerOptions) *llm.ReactA
 
 	// Sequential thinking tools
 	tools, err := tool.GetSequentialThinkingTools(ctx)
+	log.Debug("NewRepoAnalyzer, get sequential-thinking tools: %#v", tools)
 	if err != nil {
 		panic(err)
 	}
 	for _, t := range tools {
-		tcfg.Tools = append(tcfg.Tools, t.(etool.BaseTool))
-	}
-
-	// git tools
-	gits, err := tool.GetGitTools(ctx)
-	if err != nil {
-		panic(err)
-	}
-	for _, t := range gits {
 		tcfg.Tools = append(tcfg.Tools, t.(etool.BaseTool))
 	}
 

@@ -26,8 +26,11 @@ import (
 )
 
 func NewChatModel(m ModelConfig) (model ChatModel) {
+	if m.MaxTokens == 0 {
+		m.MaxTokens = 16 * 1024
+	}
 	var err error
-	switch m.Type {
+	switch m.APIType {
 	case ModelTypeARK:
 		model, err = ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
 			BaseURL:     m.BaseURL,
@@ -68,7 +71,7 @@ func NewChatModel(m ModelConfig) (model ChatModel) {
 			MaxTokens:   m.MaxTokens,
 		})
 	default:
-		panic("unsupported model type " + m.Type)
+		panic("unsupported model type " + m.APIType)
 	}
 	return
 }

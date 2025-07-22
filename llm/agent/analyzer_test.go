@@ -40,7 +40,7 @@ func TestAnalyzer(t *testing.T) {
 			// APIKey:    os.Getenv("CLAUDE_API_KEY"),
 			// EndPoint:  "claude-3-7-sonnet-20250219",
 			// BaseURL:   "https://api.anthropic.com/",
-			Type:      llm.ModelTypeARK,
+			APIType:   llm.ModelTypeARK,
 			APIKey:    os.Getenv("ARK_API_KEY"),
 			ModelName: os.Getenv("ARK_DEEPSEEK_V3"),
 			MaxTokens: 1024 * 128,
