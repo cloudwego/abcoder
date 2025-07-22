@@ -36,7 +36,7 @@ type CollectOption struct {
 	LoadExternalSymbol bool
 	NeedStdSymbol      bool
 	NoNeedComment      bool
-	NeedTest           bool
+	NotNeedTest        bool
 	Excludes           []string
 	LoadByPackages     bool
 }
@@ -58,7 +58,9 @@ type Collector struct {
 	// variable (or const) => type
 	vars map[*DocumentSymbol]dependency
 
-	modPatcher ModulePatcher
+	files map[string]*uniast.File
+
+	// modPatcher ModulePatcher
 
 	CollectOption
 }
@@ -100,10 +102,11 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 		funcs: map[*DocumentSymbol]functionInfo{},
 		deps:  map[*DocumentSymbol][]dependency{},
 		vars:  map[*DocumentSymbol]dependency{},
+		files: map[string]*uniast.File{},
 	}
-	if cli.Language == uniast.Rust {
-		ret.modPatcher = &rust.RustModulePatcher{Root: repo}
-	}
+	// if cli.Language == uniast.Rust {
+	// 	ret.modPatcher = &rust.RustModulePatcher{Root: repo}
+	// }
 	return ret
 }
 
@@ -131,9 +134,27 @@ func (c *Collector) Collect(ctx context.Context) error {
 				return nil
 			}
 		}
+
 		if c.spec.ShouldSkip(path) {
 			return nil
 		}
+
+		file := c.files[path]
+		if file == nil {
+			file = uniast.NewFile(path)
+			c.files[path] = file
+		}
+
+		// 解析use语句
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		uses, err := c.spec.FileImports(content)
+		if err != nil {
+			log.Error("parse file %s use statements failed: %v", path, err)
+		}
+		file.Imports = uses
 
 		// collect symbols
 		uri := NewURI(path)

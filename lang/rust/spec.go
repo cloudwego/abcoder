@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
 
@@ -42,6 +43,10 @@ func NewRustSpec() *RustSpec {
 	return &RustSpec{
 		crates: []Module{},
 	}
+}
+
+func (c *RustSpec) FileImports(content []byte) ([]uniast.Import, error) {
+	return ParseUseStatements(string(content))
 }
 
 // func (c *RustSpec) HandleUnloadedSymbol(from lsp.Token, def lsp.Location) *lsp.DocumentSymbol {

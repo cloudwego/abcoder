@@ -184,7 +184,7 @@ func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOpti
 	if !opts.NoNeedComment {
 		goopts.CollectComment = true
 	}
-	if opts.NeedTest {
+	if !opts.NotNeedTest {
 		goopts.NeedTest = true
 	}
 	if opts.LoadByPackages {

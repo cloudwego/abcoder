@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
 
@@ -29,6 +30,10 @@ type CxxSpec struct {
 
 func NewCxxSpec() *CxxSpec {
 	return &CxxSpec{}
+}
+
+func (c *CxxSpec) FileImports(content []byte) ([]uniast.Import, error) {
+	return nil, nil
 }
 
 // XXX: maybe multi module support for C++?

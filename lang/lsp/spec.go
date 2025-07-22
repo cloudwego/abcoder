@@ -31,6 +31,9 @@ type LanguageSpec interface {
 	// tells if a file belang to language AST
 	ShouldSkip(path string) bool
 
+	// FileImports parse file codes to get its imports
+	FileImports(content []byte) ([]uniast.Import, error)
+
 	// return the first declaration token of a symbol, as Type-Name
 	DeclareTokenOfSymbol(sym DocumentSymbol) int
 
@@ -64,10 +67,4 @@ type LanguageSpec interface {
 
 	// Handle a unloaded internal symbol, like `lazy_static!` in rust
 	GetUnloadedSymbol(from Token, define Location) (string, error)
-}
-
-// ModulePatcher supplements some information for module
-type ModulePatcher interface {
-	// Patch is called after collect all symbol
-	Patch(ast *uniast.Module)
 }

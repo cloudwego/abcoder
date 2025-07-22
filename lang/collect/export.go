@@ -79,14 +79,46 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
 
-	// patch module
-	if c.modPatcher != nil {
-		for p, m := range repo.Modules {
-			if p == "" || strings.Contains(p, "@") {
-				continue
-			}
-			c.modPatcher.Patch(m)
+	// connect file with package on demands
+	// for p, m := range repo.Modules {
+	// 	if p == "" || strings.Contains(p, "@") {
+	// 		continue
+	// 	}
+	// 	for _, f := range m.Files {
+	// 		if f.Package != "" {
+	// 			continue
+	// 		}
+	// 		_, pkgpath, err := c.spec.NameSpace(filepath.Join(c.repo, f.Path))
+	// 		if err != nil {
+	// 			continue
+	// 		}
+	// 		f.Package = pkgpath
+	// 	}
+	// }
+	for fp, f := range c.files {
+		if f.Package != "" {
+			continue
 		}
+		rel, err := filepath.Rel(c.repo, fp)
+		if err != nil {
+			continue
+		}
+		modpath, pkgpath, err := c.spec.NameSpace(fp)
+		if err != nil {
+			continue
+		}
+		if modpath == "" || strings.Contains(modpath, "@") {
+			continue
+		}
+		m, ok := repo.Modules[modpath]
+		if !ok {
+			continue
+		}
+		if _, ok := m.Packages[pkgpath]; !ok {
+			continue
+		}
+		f.Package = pkgpath
+		m.Files[rel] = f
 	}
 
 	return &repo, nil
