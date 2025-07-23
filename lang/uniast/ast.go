@@ -19,7 +19,6 @@ package uniast
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -314,10 +313,10 @@ type Identity struct {
 }
 
 func NewIdentity(mod, pkg, name string) Identity {
-	if mod == "" {
-		fmt.Fprintf(os.Stderr, "module name cannot be empty: %s#%s\n", pkg, name)
-		// panic(fmt.Sprintf("module name cannot be empty: %s.%s", pkg, name))
-	}
+	// if mod == "" {
+	// fmt.Fprintf(os.Stderr, "module name cannot be empty: %s#%s\n", pkg, name)
+	// panic(fmt.Sprintf("module name cannot be empty: %s.%s", pkg, name))
+	// }
 	return Identity{ModPath: mod, PkgPath: pkg, Name: name}
 }
 
