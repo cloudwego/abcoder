@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
@@ -121,7 +120,7 @@ func TestASTTools_GetFileStructure(t *testing.T) {
 				in0: context.Background(),
 				req: GetFileStructReq{
 					RepoName: "localsession",
-					FilePath: "backup/metainfo.go",
+					FilePath: "backup/metainfo_test.go",
 				},
 			},
 		},
@@ -301,7 +300,7 @@ func TestASTTools_GetASTNode(t *testing.T) {
 				in0: context.Background(),
 				params: GetASTNodeReq{
 					RepoName: "localsession",
-					NodeIDs: []uniast.Identity{
+					NodeIDs: []NodeID{
 						{
 							ModPath: "github.com/cloudwego/localsession",
 							PkgPath: "github.com/cloudwego/localsession/backup",

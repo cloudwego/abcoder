@@ -207,17 +207,19 @@ type FileStruct struct {
 }
 
 type NodeStruct struct {
-	Name         string   `json:"name" jsonschema:"description=the name of the node"`
-	Type         string   `json:"type,omitempty" jsonschema:"description=the type of the node"`
-	Signature    string   `json:"signature,omitempty" jsonschema:"description=the func signature of the node"`
-	File         string   `json:"file,omitempty" jsonschema:"description=the file path of the node"`
-	Line         int      `json:"line,omitempty" jsonschema:"description=the line of the node"`
-	Codes        string   `json:"codes,omitempty" jsonschema:"description=the codes of the node"`
-	Dependencies []NodeID `json:"dependencies,omitempty" jsonschema:"description=the dependencies of the node"`
-	References   []NodeID `json:"references,omitempty" jsonschema:"description=the references of the node"`
-	Implements   []NodeID `json:"implements,omitempty" jsonschema:"description=the implements of the node"`
-	Groups       []NodeID `json:"groups,omitempty" jsonschema:"description=the groups of the node"`
-	Inherits     []NodeID `json:"inherits,omitempty" jsonschema:"description=the inherits of the node"`
+	ModPath      uniast.ModPath `json:"mod_path,omitempty" jsonschema:"description=the module path"`
+	PkgPath      uniast.PkgPath `json:"pkg_path,omitempty" jsonschema:"description=the package path"`
+	Name         string         `json:"name" jsonschema:"description=the name of the node"`
+	Type         string         `json:"type,omitempty" jsonschema:"description=the type of the node"`
+	Signature    string         `json:"signature,omitempty" jsonschema:"description=the func signature of the node"`
+	File         string         `json:"file,omitempty" jsonschema:"description=the file path of the node"`
+	Line         int            `json:"line,omitempty" jsonschema:"description=the line of the node"`
+	Codes        string         `json:"codes,omitempty" jsonschema:"description=the codes of the node"`
+	Dependencies []NodeID       `json:"dependencies,omitempty" jsonschema:"description=the dependencies of the node"`
+	References   []NodeID       `json:"references,omitempty" jsonschema:"description=the references of the node"`
+	Implements   []NodeID       `json:"implements,omitempty" jsonschema:"description=the implements of the node"`
+	Groups       []NodeID       `json:"groups,omitempty" jsonschema:"description=the groups of the node"`
+	Inherits     []NodeID       `json:"inherits,omitempty" jsonschema:"description=the inherits of the node"`
 }
 
 type NodeID struct {
@@ -366,6 +368,17 @@ func (t *ASTReadTools) GetPackageStructure(ctx context.Context, req GetPackageSt
 			}
 		}
 	}
+
+	if len(resp.Files) == 0 {
+		candidates := []string{}
+		if mod, ok := repo.Modules[req.ModPath]; ok {
+			for p := range mod.Packages {
+				candidates = append(candidates, p)
+			}
+		}
+		resp.Error = fmt.Sprintf("package '%s' not found, maybe you want one of %v", req.PkgPath, candidates)
+	}
+
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
 	return resp, nil
 }
@@ -398,10 +411,11 @@ func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq,
 	}
 
 	resp := new(GetFileStructResp)
-	file, _ := repo.GetFile(req.FilePath)
+	file, mod := repo.GetFile(req.FilePath)
 	if file == nil {
 		return nil, fmt.Errorf("file '%s' not found", req.FilePath)
 	}
+
 	nodes := repo.GetFileNodes(req.FilePath)
 	ff := FileStruct{
 		FilePath: req.FilePath,
@@ -411,7 +425,9 @@ func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq,
 	}
 	for _, n := range nodes {
 		nn := NodeStruct{
-			Name: n.Identity.Name,
+			ModPath: mod.Name,
+			PkgPath: file.Package,
+			Name:    n.Identity.Name,
 		}
 		if needNodeDetail {
 			nn.Type = n.Type.String()
@@ -487,6 +503,11 @@ func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*Get
 			Groups:       grps,
 		})
 	}
+
+	if len(resp.Nodes) == 0 {
+		resp.Error = "node not found, maybe you should check the pkg_path or node_name?"
+	}
+
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
 	return resp, nil
 }
