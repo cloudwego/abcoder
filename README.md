@@ -3,20 +3,20 @@
 ![ABCoder](images/ABCoder.png)
 
 # Overview
-ABCoder, an general AI-oriented Code-processing **Framework**, is designed to enhance and extends coding context for Large-Language-Model (LLM), and boost developing AI-assisted-programming applications. 
+ABCoder, an AI-oriented Code-processing **Framework**, is designed to enhance and extend the coding context for Large-Language-Model (LLM), finally boosting the development of AI-assisted-programming applications. 
 
 
 ## Features
 
-- Universal Abstract-Syntax-Tree (UniAST), an language-independent, AI-friendly specification of code information, providing a boundless, flexible and structrual coding context for both AI and hunman.
+- Universal Abstract-Syntax-Tree (UniAST), a language-independent, AI-friendly specification of code information, providing a boundless, flexible and structural coding context for both AI and humans.
   
-- General Parser, parses abitary-language codes to UniAST.
+- General Parser, parses arbitrary-language codes to UniAST.
 
-- General Writer, transforms UniAST back to codes.
+- General Writer transforms UniAST back to code.
 
 - **Code-Retrieval-Augmented-Generation (Code-RAG)**, provides a set of MCP tools to help the LLM understand code repositories precisely and locally. And it can support both in-workspace and out-of-workspace third-party libraries simultaneously -- I guess you are thinking about [DeepWiki](https://deepwiki.org) and [context7](https://github.com/upstash/context7), but ABCoder is more reliable and confidential -- no need to wait for their services to be done, and no worry about your codes will be uploaded! 
 
-Based on these features, developers can easily implement or enhance their AI-assisted-programming applications, such as reviewing, optimizing, translating, etc.
+Based on these features, developers can easily implement or enhance their AI-assisted programming applications, such as reviewing, optimizing, translating, etc.
 
 
 ## Universal Abstract-Syntax-Tree Specification
@@ -40,7 +40,7 @@ see [UniAST Specification](docs/uniast-zh.md)
     abcoder parse {language} {repo-path} > xxx.json
     ```
 
-    for example:
+    For example:
 
     ```bash
     git clone https://github.com/cloudwego/localsession.git localsession
@@ -84,7 +84,7 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 ## Use ABCoder as an Agent (WIP)
 
-You can alse use ABCoder as a command-line Agent like:
+You can also use ABCoder as a command-line Agent like:
 
 ```bash
 export API_TYPE='{openai|ollama|ark|claude}' 
@@ -99,7 +99,7 @@ $ API_TYPE='ark' API_KEY='xxx' MODEL_NAME='zzz' abcoder agent ./testdata/asts
 
 Hello! I'm ABCoder, your coding assistant. What can I do for you today?
 
-$ what the repo 'localsession' does?
+$ What does the repo 'localsession' do?
 
 The `localsession` repository appears to be a Go module (`github.com/cloudwego/localsession`) that provides functionality related to managing local sessions. Here's a breakdown of its structure and purpose:
 ...
@@ -110,7 +110,7 @@ If you'd like to explore specific functionalities or code details, let me know, 
 $ exit
 ```
 
-- NOTICE: This feature is Work-In-Progress. It only support code-analyzing at present.
+- NOTICE: This feature is Work-In-Progress. It only supports code analysis at present.
 
 
 # Supported Languages
