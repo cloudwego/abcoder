@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 	"github.com/sourcegraph/go-lsp"
 )
@@ -285,22 +284,23 @@ func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, 
 	return resp, nil
 }
 
-// TODO(perf): cache results especially for whole file queries.
-// TODO(refactor): infer use_full_method from capabilities
-func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens, use_full_method bool) error {
-	if use_full_method {
-		req1 := struct {
-			TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
-		}{TextDocument: req.TextDocument}
-		if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
-			return err
-		}
-		filterSemanticTokensInRange(resp, req.Range)
-	} else {
+// Some language servers do not provide semanticTokens/range.
+// In that case, we fall back to semanticTokens/full and then filter the tokens manually.
+func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens) error {
+	if cli.hasSemanticTokensRange {
 		if err := cli.Call(ctx, "textDocument/semanticTokens/range", req, resp); err != nil {
 			return err
 		}
+		return nil
 	}
+	// fall back to semanticTokens/full
+	req1 := struct {
+		TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
+	}{TextDocument: req.TextDocument}
+	if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
+		return err
+	}
+	filterSemanticTokensInRange(resp, req.Range)
 	return nil
 }
 
@@ -355,7 +355,7 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 	}
 
 	var resp SemanticTokens
-	if err := cli.getSemanticTokensRange(ctx, req, &resp, cli.Language == uniast.Cxx); err != nil {
+	if err := cli.getSemanticTokensRange(ctx, req, &resp); err != nil {
 		return nil, err
 	}
 

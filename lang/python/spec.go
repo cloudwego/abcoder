@@ -15,12 +15,19 @@
 package python
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
 type PythonSpec struct {
-	repo string
+	repo          string
+	topModuleName string
+	topModulePath string
 }
 
 func NewPythonSpec() *PythonSpec {
@@ -28,23 +35,109 @@ func NewPythonSpec() *PythonSpec {
 }
 
 func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
-	panic("TODO")
+	c.repo = root
+	rets := map[string]string{}
+	absPath, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+
+	num_projfiles := 0
+	scanner := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		base := filepath.Base(path)
+		if base == "pyproject.toml" {
+			num_projfiles++
+			if num_projfiles > 1 {
+				panic("multiple pyproject.toml files found")
+			}
+		}
+		return nil
+	}
+	if err := filepath.Walk(root, scanner); err != nil {
+		return nil, err
+	}
+
+	c.topModulePath = absPath
+	// TODO: find a way to infer the module (project) name.
+	c.topModuleName = "current"
+	rets[c.topModuleName] = c.topModulePath
+	return rets, nil
 }
 
+// returns: modName, pkgPath, error
 func (c *PythonSpec) NameSpace(path string) (string, string, error) {
-	panic("TODO")
+	if strings.HasPrefix(path, c.topModulePath) {
+		// internal module
+		modName := c.topModuleName
+		relPath, err := filepath.Rel(c.topModulePath, path)
+		if err != nil {
+			return "", "", err
+		}
+		// todo: handle __init__.py
+		relPath = strings.TrimSuffix(relPath, ".py")
+		pkgPath := strings.ReplaceAll(relPath, string(os.PathSeparator), ".")
+		return modName, pkgPath, nil
+	}
+
+	// XXX: hardcode
+	if strings.HasSuffix(path, "stdlib/3/builtins.pyi") {
+		// builtin module
+		return "builtins", "builtins", nil
+	}
+
+	// XXX: hardcoded python path
+	condaPrefix := "/home/zhenyang/anaconda3/envs/abcoder/lib/python3.11"
+	if strings.HasPrefix(path, condaPrefix) {
+		modName := "builtins"
+		relPath, err := filepath.Rel(condaPrefix, path)
+		if err != nil {
+			return "", "", err
+		}
+		relPath = strings.TrimSuffix(relPath, ".py")
+		pkgPath := strings.ReplaceAll(relPath, string(os.PathSeparator), ".")
+		return modName, pkgPath, nil
+	}
+
+	panic(fmt.Sprintf("Namespace %s", path))
 }
 
 func (c *PythonSpec) ShouldSkip(path string) bool {
-	panic("TODO")
+	if !strings.HasSuffix(path, ".py") {
+		return true
+	}
+	return false
+}
+
+func (c *PythonSpec) IsDocToken(tok lsp.Token) bool {
+	return tok.Type == "comment"
 }
 
 func (c *PythonSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
-	panic("TODO")
+	for i, t := range sym.Tokens {
+		if c.IsDocToken(t) {
+			continue
+		}
+		for _, m := range t.Modifiers {
+			if m == "declaration" {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func (c *PythonSpec) IsEntityToken(tok lsp.Token) bool {
-	panic("TODO")
+	typ := tok.Type
+	if strings.HasPrefix(tok.Text, "from ") || strings.HasPrefix(tok.Text, "import ") {
+		// Python LSP highlights imported symbols as function/types
+		// We decide that imported symbols are not entities.
+		// In fact, they ARE, just in a different place.
+		return false
+	}
+	return typ == "function" || typ == "variable" || typ == "property" || typ == "class" || typ == "type"
 }
 
 func (c *PythonSpec) IsStdToken(tok lsp.Token) bool {
@@ -52,37 +145,180 @@ func (c *PythonSpec) IsStdToken(tok lsp.Token) bool {
 }
 
 func (c *PythonSpec) TokenKind(tok lsp.Token) lsp.SymbolKind {
-	panic("TODO")
+	switch tok.Type {
+	case "namespace":
+		return lsp.SKNamespace
+	case "type":
+		return lsp.SKObject // no direct match; mapped to Object conservatively
+	case "class":
+		return lsp.SKClass
+	case "enum":
+		return lsp.SKEnum
+	case "interface":
+		return lsp.SKInterface
+	case "struct":
+		return lsp.SKStruct
+	case "typeParameter":
+		return lsp.SKTypeParameter
+	case "parameter":
+		return lsp.SKVariable
+	case "variable":
+		return lsp.SKVariable
+	case "property":
+		return lsp.SKProperty
+	case "enumMember":
+		return lsp.SKEnumMember
+	case "event":
+		return lsp.SKEvent
+	case "function":
+		return lsp.SKFunction
+	case "method":
+		return lsp.SKMethod
+	case "macro":
+		return lsp.SKFunction
+	case "string":
+		return lsp.SKString
+	case "number":
+		return lsp.SKNumber
+	case "operator":
+		return lsp.SKOperator
+	default:
+		return lsp.SKUnknown
+	}
 }
 
 func (c *PythonSpec) IsMainFunction(sym lsp.DocumentSymbol) bool {
-	panic("TODO")
+	// XXX: maybe just use __main__?
+	return sym.Kind == lsp.SKFunction && sym.Name == "main"
 }
 
 func (c *PythonSpec) IsEntitySymbol(sym lsp.DocumentSymbol) bool {
-	panic("TODO")
+	// Same as in IsEntityToken, we do not consider imported symbols as entities.
+	if strings.HasPrefix(sym.Text, "from ") || strings.HasPrefix(sym.Text, "import ") {
+		return false
+	}
+	typ := sym.Kind
+	return typ == lsp.SKObject || typ == lsp.SKMethod || typ == lsp.SKFunction || typ == lsp.SKVariable ||
+		typ == lsp.SKStruct || typ == lsp.SKEnum || typ == lsp.SKTypeParameter || typ == lsp.SKConstant || typ == lsp.SKClass
 }
 
 func (c *PythonSpec) IsPublicSymbol(sym lsp.DocumentSymbol) bool {
-	panic("TODO")
+	if strings.HasPrefix(sym.Name, "_") {
+		return false
+	}
+	return true
 }
 
 func (c *PythonSpec) HasImplSymbol() bool {
-	panic("TODO")
+	// Python does not have direct impl symbols
+	return false
 }
 
 func (c *PythonSpec) ImplSymbol(sym lsp.DocumentSymbol) (int, int, int) {
 	panic("TODO")
 }
 
+// returns: receiver, typeParams, inputParams, outputParams
 func (c *PythonSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []int) {
-	panic("TODO")
+	// no receiver. no type params in python
+	// reference: https://docs.python.org/3/reference/grammar.html
+	receiver := -1
+	// python actually has these but TODO
+	typeParams := []int{}
+
+	// Hell, manually parse function text to get locations of key tokens since LSP does not support this...
+	//
+	// state 0: goto state 1 when we see a def
+	// state 1: goto state 2 when we see a (
+	// state 2: we're in the param list.
+	//          collect input params by checking entity tokens.
+	//          goto state 3 when we see a )
+	// state 3: collect output params.
+	// 			finish when we see a :
+	state := 0
+	paren_depth := 0
+	invalidpos := lsp.Position{
+		Line:      -1,
+		Character: -1,
+	}
+	// defpos := invalidpos
+	lparenpos := invalidpos
+	rparenpos := invalidpos
+	bodypos := invalidpos
+	curpos := sym.Location.Range.Start
+	for i := range len(sym.Text) {
+		switch state {
+		case 0:
+			if i+4 >= len(sym.Text) {
+				// function text does not contain a def
+				// should be an import
+				return -1, []int{}, []int{}, []int{}
+			}
+			next4chars := sym.Text[i : i+4]
+			// heuristics should work with reasonable python code
+			if next4chars == "def " {
+				// defpos = curpos
+				state = 1
+			}
+		case 1:
+			if sym.Text[i] == '(' {
+				lparenpos = curpos
+				paren_depth = 1
+				state = 2
+			}
+		case 2:
+			if sym.Text[i] == ')' {
+				rparenpos = curpos
+				paren_depth -= 1
+				if paren_depth == 0 {
+					state = 3
+				}
+			}
+		case 3:
+			if sym.Text[i] == ':' {
+				bodypos = curpos
+				state = -1
+			}
+		}
+		if sym.Text[i] == '\n' {
+			curpos.Line++
+			curpos.Character = 0
+		} else {
+			curpos.Character++
+		}
+	}
+
+	paramsrange := lsp.Range{
+		Start: lparenpos,
+		End:   rparenpos,
+	}
+	returnrange := lsp.Range{
+		Start: rparenpos,
+		End:   bodypos,
+	}
+	inputParams := []int{}
+	outputParams := []int{}
+	for i, t := range sym.Tokens {
+		if paramsrange.Include(t.Location.Range) {
+			if c.IsEntityToken(t) {
+				inputParams = append(inputParams, i)
+			}
+		}
+		if returnrange.Include(t.Location.Range) {
+			if c.IsEntityToken(t) {
+				outputParams = append(outputParams, i)
+			}
+		}
+	}
+
+	return receiver, typeParams, inputParams, outputParams
 }
 
 func (c *PythonSpec) GetUnloadedSymbol(from lsp.Token, define lsp.Location) (string, error) {
 	panic("TODO")
 }
 
+// TODO!
 func (c *PythonSpec) FileImports(content []byte) ([]uniast.Import, error) {
-	panic("TODO")
+	return nil, nil
 }
