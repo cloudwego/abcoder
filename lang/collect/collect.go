@@ -580,11 +580,13 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 		}
 	}
 	var impl string
+	// HACK: impl head for Rust.
 	if fn > 0 && fn < len(sym.Tokens) {
 		impl = ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
 	}
+	// HACK: implhead for Python. Should actually be provided by the language spec.
 	if impl == "" || len(impl) < len(sym.Name) {
-		impl = sym.Name
+		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
 	// search all methods
 	for _, method := range c.syms {
