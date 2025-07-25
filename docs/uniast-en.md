@@ -5,8 +5,7 @@ Universal Abstract-Syntax-Tree is a LLM-friendly, language-agnostic code context
 
 # Identity Node Unique Identification
 
-To ensure precise querying and scalable storage, `ModPath?PkgPath#SymbolName` is约定 as the globally unique identifier for AST Nodes.
-
+To ensure precise querying and scalable storage, `ModPath?PkgPath#SymbolName` is as the globally unique identifier for AST Nodes. For example:
 
 ```json
 {
@@ -15,6 +14,15 @@ To ensure precise querying and scalable storage, `ModPath?PkgPath#SymbolName` is
     "Name": "RecoverCtxOnDemands"
 }
 ```
+
+> Note that different languages have different descriptions of module and package. For example:
+> * In Go, a module refers to a project that contains multiple packages, and a package includes all the files within a specific directory.
+> * In Python, a package is a directory, which may contain sub-packages. A package can also contain modules, which are .py files inside the package directory.
+> * In Rust, the term package does not exist at all. Instead, a crate (project) contains multiple modules, and modules may include sub-modules.
+> * In C, neither concept exists at all.
+>
+> Do not confuse them with the terminology used in abcoder!
+> In abcoder, unless otherwise specified, the module (mod) and package (pkg) are defined as follows:
 
 - ModPath: A complete build unit where the content is the installation path@version number. This information is not required for LLMs but is preserved to ensure global uniqueness of Identity. It corresponds to different concepts in various languages:
 
