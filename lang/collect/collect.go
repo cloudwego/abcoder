@@ -113,7 +113,30 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 	return ret
 }
 
+func (c *Collector) configureLSP(ctx context.Context) {
+	// XXX: should be put in language specification
+	if c.Language == uniast.Python {
+		if !c.NeedStdSymbol {
+			if c.Language == uniast.Python {
+				conf := map[string]interface{}{
+					"settings": map[string]interface{}{
+						"pylsp": map[string]interface{}{
+							"plugins": map[string]interface{}{
+								"jedi_definition": map[string]interface{}{
+									"follow_builtin_definitions": false,
+								},
+							},
+						},
+					},
+				}
+				c.cli.Notify(ctx, "workspace/didChangeConfiguration", conf)
+			}
+		}
+	}
+}
+
 func (c *Collector) Collect(ctx context.Context) error {
+	c.configureLSP(ctx)
 	excludes := make([]string, len(c.Excludes))
 	for i, e := range c.Excludes {
 		if !filepath.IsAbs(e) {
