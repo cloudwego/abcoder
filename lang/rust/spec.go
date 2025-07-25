@@ -182,7 +182,7 @@ func hasKeyword(tokens []lsp.Token, keyword string) int {
 	return -1
 }
 
-func findSpecifiToken(tokens []lsp.Token, typ string, text string) int {
+func findSpecificToken(tokens []lsp.Token, typ string, text string) int {
 	for i := 0; i < len(tokens); i++ {
 		if tokens[i].Type == typ && tokens[i].Text == text {
 			return i
@@ -191,7 +191,7 @@ func findSpecifiToken(tokens []lsp.Token, typ string, text string) int {
 	return -1
 }
 
-func findSpecifiTokenUntil(tokens []lsp.Token, typ string, text string, start int, end int) int {
+func findSpecificTokenUntil(tokens []lsp.Token, typ string, text string, start int, end int) int {
 	for i := start; i < end; i++ {
 		if tokens[i].Type == typ && tokens[i].Text == text {
 			return i
@@ -222,8 +222,8 @@ func (c *RustSpec) ImplSymbol(sym lsp.DocumentSymbol) (int, int, int) {
 
 	// find the impl type token
 	var implType, receiverType = -1, -1
-	var fn = start + findSpecifiToken(tokens[start:], "keyword", "fn")
-	var forToken = findSpecifiTokenUntil(tokens, "keyword", "for", start, fn)
+	var fn = start + findSpecificToken(tokens[start:], "keyword", "fn")
+	var forToken = findSpecificTokenUntil(tokens, "keyword", "for", start, fn)
 
 	for i := start; i < forToken; i++ {
 		if tokens[i].Type == "interface" {
@@ -258,11 +258,11 @@ func (c *RustSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []
 	}
 
 	// exclude #[xxx]
-	fn := start + findSpecifiToken(tokens[start:], "keyword", "fn")
+	fn := start + findSpecificToken(tokens[start:], "keyword", "fn")
 	if fn < 0 {
 		return -1, nil, nil, nil
 	}
-	where := start + findSpecifiToken(tokens[start:], "keyword", "where")
+	where := start + findSpecificToken(tokens[start:], "keyword", "where")
 	if where == -1 {
 		where = len(tokens) - 1
 	}

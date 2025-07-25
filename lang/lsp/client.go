@@ -32,9 +32,10 @@ import (
 type LSPClient struct {
 	*jsonrpc2.Conn
 	*lspHandler
-	tokenTypes     []string
-	tokenModifiers []string
-	files          map[DocumentURI]*TextDocumentItem
+	tokenTypes             []string
+	tokenModifiers         []string
+	hasSemanticTokensRange bool
+	files                  map[DocumentURI]*TextDocumentItem
 	ClientOptions
 }
 
@@ -156,10 +157,6 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		return nil, fmt.Errorf("server did not provide TypeDefinition")
 	}
 
-	implementationProvider, ok := vs["implementationProvider"].(bool)
-	if !ok || !implementationProvider {
-		return nil, fmt.Errorf("server did not provide Implementation")
-	}
 	documentSymbolProvider, ok := vs["documentSymbolProvider"].(bool)
 	if !ok || !documentSymbolProvider {
 		return nil, fmt.Errorf("server did not provide DocumentSymbol")
@@ -174,6 +171,8 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 	if !ok || semanticTokensProvider == nil {
 		return nil, fmt.Errorf("server did not provide SemanticTokensProvider")
 	}
+	semanticTokensRange, ok := semanticTokensProvider["range"].(bool)
+	cli.hasSemanticTokensRange = ok && semanticTokensRange
 	legend, ok := semanticTokensProvider["legend"].(map[string]interface{})
 	if !ok || legend == nil {
 		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend")

@@ -30,6 +30,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/golang/parser"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
@@ -106,6 +107,8 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		openfile, wait = rust.CheckRepo(repoPath)
 	case uniast.Cxx:
 		openfile, wait = cxx.CheckRepo(repoPath)
+	case uniast.Python:
+		openfile, wait = python.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -121,6 +124,8 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 		l, s = rust.GetDefaultLSP()
 	case uniast.Cxx:
 		l, s = cxx.GetDefaultLSP()
+	case uniast.Python:
+		l, s = python.GetDefaultLSP()
 	case uniast.Golang:
 		l = uniast.Golang
 		s = ""

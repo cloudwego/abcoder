@@ -5,8 +5,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 
 # Identity 节点唯一标识
 
-为了保证精确查询和可扩展存储，约定 `ModPath?PkgPath#SymbolName` 为 AST Node 的全球唯一标识。
-
+为了保证精确查询和可扩展存储，约定 `ModPath?PkgPath#SymbolName` 为 AST Node 的全球唯一标识。例如：
 
 ```json
 {
@@ -15,6 +14,15 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
     "Name": "RecoverCtxOnDemands"
 }
 ```
+
+> 注意，不同的语言对 module 和 package 的描述不同，例如
+> * 在 Go 中 module 表示一个项目，包含了若干 package。而 package 包含了某目录下的诸文件。
+> * 在 Python 中则是，package 是一个目录，可能包含子 package。而且 package 也可能包含 module，是 package 目录下的 py 文件。
+> * 在 Rust 中根本没有 package 的说法，而是 crate（项目）包含了诸 module。module 可能包含子 module。
+> * 在 C 中就完全没有这两个东西。
+>
+> 不要把它们和 abcoder 的描述混淆！
+> 在 abcoder 中，除非另外说明，module(mod) / package(pkg) 的含义如下。
 
 - ModPath: 一个完整的构建单元，ModPath 内容为安装路径@版本号。该信息对于 LLM 并不需要，只是为了保证 Identity 的全球唯一性而保存。它在各个语言中对应不同概念: 
 

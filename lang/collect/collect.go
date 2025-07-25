@@ -27,6 +27,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
@@ -88,6 +89,8 @@ func switchSpec(l uniast.Language) LanguageSpec {
 		return &rust.RustSpec{}
 	case uniast.Cxx:
 		return &cxx.CxxSpec{}
+	case uniast.Python:
+		return &python.PythonSpec{}
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}
@@ -110,7 +113,30 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 	return ret
 }
 
+func (c *Collector) configureLSP(ctx context.Context) {
+	// XXX: should be put in language specification
+	if c.Language == uniast.Python {
+		if !c.NeedStdSymbol {
+			if c.Language == uniast.Python {
+				conf := map[string]interface{}{
+					"settings": map[string]interface{}{
+						"pylsp": map[string]interface{}{
+							"plugins": map[string]interface{}{
+								"jedi_definition": map[string]interface{}{
+									"follow_builtin_definitions": false,
+								},
+							},
+						},
+					},
+				}
+				c.cli.Notify(ctx, "workspace/didChangeConfiguration", conf)
+			}
+		}
+	}
+}
+
 func (c *Collector) Collect(ctx context.Context) error {
+	c.configureLSP(ctx)
 	excludes := make([]string, len(c.Excludes))
 	for i, e := range c.Excludes {
 		if !filepath.IsAbs(e) {
@@ -121,7 +147,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 	}
 
 	// scan all files
-	roots := make([]*DocumentSymbol, 0, 1024)
+	root_syms := make([]*DocumentSymbol, 0, 1024)
 	scanner := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -169,6 +195,11 @@ func (c *Collector) Collect(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			// HACK: skip imported symbols (do not expose imported symbols in Python)
+			// TODO: make this behavior consistent in python and rust (where we have pub use vs use)
+			if c.Language == uniast.Python && (strings.HasPrefix(content, "from ") || strings.HasPrefix(content, "import ")) {
+				continue
+			}
 			// collect tokens
 			tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
 			if err != nil {
@@ -177,7 +208,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 			sym.Text = content
 			sym.Tokens = tokens
 			c.syms[sym.Location] = sym
-			roots = append(roots, sym)
+			root_syms = append(root_syms, sym)
 		}
 
 		return nil
@@ -187,11 +218,11 @@ func (c *Collector) Collect(ctx context.Context) error {
 	}
 
 	// collect some extra metadata
-	syms := make([]*DocumentSymbol, 0, len(roots))
-	for _, sym := range roots {
+	entity_syms := make([]*DocumentSymbol, 0, len(root_syms))
+	for _, sym := range root_syms {
 		// only language entity symbols need to be collect on next
 		if c.spec.IsEntitySymbol(*sym) {
-			syms = append(syms, sym)
+			entity_syms = append(entity_syms, sym)
 		}
 		c.processSymbol(ctx, sym, 1)
 	}
@@ -229,7 +260,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 	// }
 
 	// collect dependencies
-	for _, sym := range syms {
+	for _, sym := range entity_syms {
 	next_token:
 
 		for i, token := range sym.Tokens {
@@ -572,11 +603,13 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 		}
 	}
 	var impl string
+	// HACK: impl head for Rust.
 	if fn > 0 && fn < len(sym.Tokens) {
 		impl = ChunkHead(sym.Text, sym.Location.Range.Start, sym.Tokens[fn].Location.Range.Start)
 	}
+	// HACK: implhead for Python. Should actually be provided by the language spec.
 	if impl == "" || len(impl) < len(sym.Name) {
-		impl = sym.Name
+		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
 	// search all methods
 	for _, method := range c.syms {
