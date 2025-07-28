@@ -161,6 +161,25 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		return id, nil
 	}
 
+	// Check NeedStdSymbol
+	file := symbol.Location.URI.File()
+	mod, path, err := c.spec.NameSpace(file)
+	if err != nil {
+		e = err
+		return
+	}
+	if !c.NeedStdSymbol && mod == "" {
+		e = ErrStdSymbol
+		return
+	}
+
+	// Load external symbol on demands
+	if !c.LoadExternalSymbol && (!c.internal(symbol.Location) || symbol.Kind == SKUnknown) {
+		e = ErrExternalSymbol
+		return
+	}
+
+	// Construct Identity and save to visited
 	name := symbol.Name
 	if name == "" {
 		if refName == "" {
@@ -170,28 +189,12 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		// NOTICE: use refName as id when symbol name is missing
 		name = refName
 	}
-	file := symbol.Location.URI.File()
-	mod, path, err := c.spec.NameSpace(file)
-	if err != nil {
-		e = err
-		return
-	}
-
-	if !c.NeedStdSymbol && mod == "" {
-		e = ErrStdSymbol
-		return
-	}
-
 	tmp := uniast.NewIdentity(mod, path, name)
 	id = &tmp
+	// Save to visited ONLY WHEN no errors occur
 	visited[symbol] = id
 
-	// Load eternal symbol on demands
-	if !c.LoadExternalSymbol && (!c.internal(symbol.Location) || symbol.Kind == SKUnknown) {
-		e = ErrExternalSymbol
-		return
-	}
-
+	// Walk down from repo struct
 	if repo.Modules[mod] == nil {
 		repo.Modules[mod] = newModule(mod, "", c.Language)
 	}
