@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
@@ -147,12 +148,6 @@ func (c *PythonSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
 
 func (c *PythonSpec) IsEntityToken(tok lsp.Token) bool {
 	typ := tok.Type
-	if strings.HasPrefix(tok.Text, "from ") || strings.HasPrefix(tok.Text, "import ") {
-		// Python LSP highlights imported symbols as function/types
-		// We decide that imported symbols are not entities.
-		// In fact, they ARE, just in a different place.
-		return false
-	}
 	return typ == "function" || typ == "variable" || typ == "property" || typ == "class" || typ == "type"
 }
 
@@ -209,10 +204,6 @@ func (c *PythonSpec) IsMainFunction(sym lsp.DocumentSymbol) bool {
 }
 
 func (c *PythonSpec) IsEntitySymbol(sym lsp.DocumentSymbol) bool {
-	// Same as in IsEntityToken, we do not consider imported symbols as entities.
-	if strings.HasPrefix(sym.Text, "from ") || strings.HasPrefix(sym.Text, "import ") {
-		return false
-	}
 	typ := sym.Kind
 	return typ == lsp.SKObject || typ == lsp.SKMethod || typ == lsp.SKFunction || typ == lsp.SKVariable ||
 		typ == lsp.SKStruct || typ == lsp.SKEnum || typ == lsp.SKTypeParameter || typ == lsp.SKConstant || typ == lsp.SKClass
@@ -390,7 +381,39 @@ func (c *PythonSpec) GetUnloadedSymbol(from lsp.Token, define lsp.Location) (str
 	panic("TODO")
 }
 
-// TODO!
 func (c *PythonSpec) FileImports(content []byte) ([]uniast.Import, error) {
-	return nil, nil
+	// Reference:
+	// https://docs.python.org/3/reference/grammar.html
+	// There are two types of imports in Python:
+	// import-as: on ONE line
+	// 		import xxx as x, yyy as y
+	// from-import: on ONE line
+	// 		from ... import *
+	// 		from ... import xxx as x, yyy as y
+	//   or on POSSIBLY MULTIPLE lines, enclosed by parentheses
+	// 		from ... import ( xxx, yyy as y ... )
+	// And imports are simple stmts, so they MUST end with \n.
+	patterns := []string{
+		// Matches: import <anything> (on a single line)
+		`(?m)^import\s+(.*)$`,
+		// Matches: from <anything> import <anything> (on a single line, without parentheses)
+		`(?m)^from\s+(.*?)\s+import\s+([^()\n]*)$`,
+		// Matches: from <anything> import ( <anything> ) where <anything> can span multiple lines
+		`(?m)^from\s+(.*?)\s+import\s+\(([\s\S]*?)\)$`,
+	}
+
+	res := []uniast.Import{}
+	for _, p := range patterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, fmt.Errorf("error compiling regex pattern '%s': %w", p, err)
+		}
+		matches := re.FindAllStringSubmatch(string(content), -1) // -1 to find all non-overlapping matches
+		for _, match := range matches {
+			res = append(res, uniast.Import{
+				Path: match[0],
+			})
+		}
+	}
+	return res, nil
 }
