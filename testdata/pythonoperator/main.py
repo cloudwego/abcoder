@@ -13,21 +13,26 @@
 # limitations under the License.
 
 
-# fmt: off
-import abc
-import base64
+class A:
+    def __init__(self):
+        self.value = 10
 
-from os import path
-from sys import (
-    argv,
-    exit
-)
-from collections import defaultdict
+    def get_value(self):
+        return self.value
 
-from math import (
-cos,
-sin
+    def __add__(self, other):
+        if isinstance(other, A):
+            return A(self.value + other.value)
+        return NotImplemented
 
 
-                    )
-import copy
+def main():
+    a1 = A()
+    a2 = A()
+
+    print("Value of a1:", a1.get_value())
+    print("Value of a2:", a2.get_value())
+
+    # There should be a dependency from main to A.__add__
+    a3 = a1 + a2
+    print("Value of a3 (a1 + a2):", a3.get_value())
