@@ -24,15 +24,13 @@ import (
 const MaxWaitDuration = 5 * time.Second
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
-	// Use custom PyLSP.
 	return uniast.Python, "pylsp"
 }
 
 func CheckRepo(repo string) (string, time.Duration) {
 	openfile := ""
-	// TODO: check if the project compiles.
 
-	// NOTICE: wait for Rust projects based on code files
+	// Give the LSP sometime to initialize
 	_, size := utils.CountFiles(repo, ".py", "SKIPDIR")
 	wait := 2*time.Second + time.Second*time.Duration(size/1024)
 	if wait > MaxWaitDuration {
