@@ -86,11 +86,11 @@ type functionInfo struct {
 func switchSpec(l uniast.Language) LanguageSpec {
 	switch l {
 	case uniast.Rust:
-		return &rust.RustSpec{}
+		return rust.NewRustSpec()
 	case uniast.Cxx:
-		return &cxx.CxxSpec{}
+		return cxx.NewCxxSpec()
 	case uniast.Python:
-		return &python.PythonSpec{}
+		return python.NewPythonSpec()
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}

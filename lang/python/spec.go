@@ -17,10 +17,13 @@ package python
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/cloudwego/abcoder/lang/log"
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
@@ -29,10 +32,23 @@ type PythonSpec struct {
 	repo          string
 	topModuleName string
 	topModulePath string
+	sysPaths      []string
 }
 
 func NewPythonSpec() *PythonSpec {
-	return &PythonSpec{}
+	cmd := exec.Command("python", "-c", "import sys ; print('\\n'.join(sys.path))")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Error("Failed to get sys.path: %v\n", err)
+		return nil
+	}
+	sysPaths := strings.Split(string(output), "\n")
+	// Match more specific paths first
+	sort.Slice(sysPaths, func(i, j int) bool {
+		return len(sysPaths[i]) > len(sysPaths[j])
+	})
+	log.Info("PythonSpec: using sysPaths %+v\n", sysPaths)
+	return &PythonSpec{sysPaths: sysPaths}
 }
 
 func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
@@ -83,18 +99,11 @@ func (c *PythonSpec) NameSpace(path string) (string, string, error) {
 		return modName, pkgPath, nil
 	}
 
-	// XXX: hardcode
-	if strings.HasSuffix(path, "stdlib/3/builtins.pyi") {
-		// builtin module
-		return "builtins", "builtins", nil
-	}
-
-	// XXX: hardcoded python path
-	condaPrefix := "/home/zhenyang/anaconda3/envs/abcoder/lib/python3.11"
-	if strings.HasPrefix(path, condaPrefix) {
-		if strings.HasPrefix(path, condaPrefix+"/site-packages") {
-			// external module
-			relPath, err := filepath.Rel(condaPrefix+"/site-packages", path)
+	for _, sysPath := range c.sysPaths {
+		log.Error("PythonSpec: path %s sysPath %s\n", path, sysPath)
+		if strings.HasPrefix(path, sysPath) {
+			relPath, err := filepath.Rel(sysPath, path)
+			log.Error("PythonSpec: matched relPath %s, sysPath %s\n", relPath, sysPath)
 			if err != nil {
 				return "", "", err
 			}
@@ -107,18 +116,9 @@ func (c *PythonSpec) NameSpace(path string) (string, string, error) {
 			}
 			panic(fmt.Sprintf("Malformed Namespace %s, pkgPath %s", path, pkgPath))
 		}
-		// builtin module
-		modName := "builtins"
-		relPath, err := filepath.Rel(condaPrefix, path)
-		if err != nil {
-			return "", "", err
-		}
-		relPath = strings.TrimSuffix(relPath, ".py")
-		pkgPath := strings.ReplaceAll(relPath, string(os.PathSeparator), ".")
-		return modName, pkgPath, nil
 	}
-
-	panic(fmt.Sprintf("Unhandled Namespace %s", path))
+	log.Error("Namespace not found for path: %s\n", path)
+	return "", "", fmt.Errorf("namespace not found for path: %s", path)
 }
 
 func (c *PythonSpec) ShouldSkip(path string) bool {
