@@ -25,6 +25,7 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 
 # Quick Start
+It is easiest to start with Golang. For other languages, see language specific installations below.
 
 ## Use ABCoder as a MCP server
 
@@ -124,6 +125,37 @@ ABCoder currently supports the following languages:
 | C        | ✅           | ❌           |
 | Python   | Coming Soon | Coming Soon |
 
+# Language Specific Installations
+## Python
+* Install the language server: a custom pylsp (as a git submodule).
+  You might use conda or venv to keep a separate python package environment.
+```bash
+$ git submodule init
+$ git submodule update
+$ cd pylsp
+$ pip install -e .  # you might do this in a separate conda/venv environment
+$ export PATH=$(realpath ./bin):$PATH
+$ pylsp --version  # verify pylsp installation is successful
+```
+
+* Verify the installation:
+```
+# start from abcoder repository root dir
+$ go build
+$ ./
+```
+
+## Rust
+* Install the rust language via [rustup](https://www.rust-lang.org/tools/install).
+* Install the language server: rust-analyzer:
+```bash
+$ rustup component add rust-analyzer
+```
+* Verify installation:
+```bash
+$ go build
+$ ./abcoder parse rust testdata/rust2
+```
 
 # Getting Involved
 
