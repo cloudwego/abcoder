@@ -28,7 +28,6 @@
 - GetDefaultLSP()：映射用户输入 language 到具体的 lsp.Language，以及对应的 LSP 名称
 - CheckRepo()：检查用户仓库情况，根据各语言规范额处理工具链等问题，并返回默认打开的第一个文件（用于触发 LSP server），以及等候 sever 初始化完成的时间（根据仓库大小来决定）
 - **LanguageSpec interface**: 核心模块，用于处理非 LSP 通用的语法信息、比如判断一个 token 是否是标准库的符号、函数签名解析等：
-- ModulePatcher: 后处理模块，用于处理语言特殊的信息收集。比如 rust 的 use 符号收集（LSP 不收集）。可以不实现
 
 ### LaunguageSpec
 
@@ -89,17 +88,3 @@ type LanguageSpec interface {
 - Rust-parser 实现位置：[RustSpec](/lang/rust/spec.go)
 
 ```
-
-### ModulePatcher
-
-用于后处理收集完成的模块信息
-
-```go
-// ModulePatcher supplements some information for module
-type ModulePatcher interface {
-    // Patch is called after collect all symbols
-    Patch(ast *parse.Module)
-}
-```
-
-- Rust-parser 实现: [RustModulePatcher](/lang/rust/patch.go)
