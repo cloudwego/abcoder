@@ -28,7 +28,6 @@ Since UniAST is not completely equivalent to LSP, some language-specific behavio
 - GetDefaultLSP(): Map user input language to specific lsp.Language and corresponding LSP name
 - CheckRepo(): Check user repository status, handle toolchain issues according to language specifications, and return the first file to open by default (for triggering LSP server) and the waiting time for server initialization (determined by repository size)
 - **LanguageSpec interface**: Core module for handling non-LSP generic syntax information, such as determining if a token is a standard library symbol, function signature parsing, etc.
-- ModulePatcher: Post-processing module for handling language-specific information collection. For example, rust's use symbol collection (not collected by LSP). Can be left unimplemented
 
 ### LanguageSpec
 
@@ -83,15 +82,3 @@ type LanguageSpec interface {
 ```
 
 - Rust-parser implementation location: [RustSpec](/lang/rust/spec.go)
-
-### ModulePatcher
-
-```go
-// ModulePatcher supplements some information for module
-type ModulePatcher interface {
-    // Patch is called after collect all symbols
-    Patch(ast *parse.Module)
-}
-```
-
-- Rust-parser implementation: [RustModulePatcher](/lang/rust/patch.go)
