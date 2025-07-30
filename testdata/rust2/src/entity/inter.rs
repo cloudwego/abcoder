@@ -35,14 +35,14 @@ pub trait Addable {
 
 pub struct AnyInt(i64);
 
-impl AnyInt {
-    pub fn id() -> i64 {
-        0
-    }
-    pub fn add(&self, b: i64) -> i64 {
-        self.0 + b
-    }
-}
+//impl AnyInt {
+//    pub fn id() -> i64 {
+//        0
+//    }
+//    pub fn add(&self, b: i64) -> i64 {
+//        self.0 + b
+//    }
+//}
 
 impl Addable for AnyInt {
     fn add(&self, b: i64) -> i64 {
