@@ -86,5 +86,3 @@ type LanguageSpec interface {
 ```
 
 - Rust-parser 实现位置：[RustSpec](/lang/rust/spec.go)
-
-```
