@@ -25,8 +25,6 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 
 # Quick Start
-It is easiest to start with Golang. For other languages, see language specific installations below.
-
 ## Use ABCoder as a MCP server
 
 1. Install ABCoder:
@@ -41,12 +39,14 @@ It is easiest to start with Golang. For other languages, see language specific i
     abcoder parse {language} {repo-path} > xxx.json
     ```
 
-    For example:
+    For example, to parse a Go repository:
 
     ```bash
     git clone https://github.com/cloudwego/localsession.git localsession
     abcoder parse go localsession -o /abcoder-asts/localsession.json
     ```
+
+    To parse repositories in other languages, [install the corresponding langauge server first](./docs/lsp-installation-en.md).
 
 3. Integrate ABCoder's MCP tools into your AI agent.
 
@@ -113,49 +113,17 @@ $ exit
 
 - NOTICE: This feature is Work-In-Progress. It only supports code analysis at present.
 
-
 # Supported Languages
 
 ABCoder currently supports the following languages:
 
 | Language | Parser      | Writer      |
 | -------- | ----------- | ----------- |
-| Go       | ✅           | ✅           |
-| Rust     | ✅           | Coming Soon |
-| C        | ✅           | ❌           |
-| Python   | Coming Soon | Coming Soon |
+| Go       | ✅          | ✅          |
+| Rust     | ✅          | Coming Soon |
+| C        | ✅          | Coming Soon |
+| Python   | ✅          | Coming Soon |
 
-# Language Specific Installations
-## Python
-* Install the language server: a custom pylsp (as a git submodule).
-  You might use conda or venv to keep a separate python package environment.
-```bash
-$ git submodule init
-$ git submodule update
-$ cd pylsp
-$ pip install -e .  # you might do this in a separate conda/venv environment
-$ export PATH=$(realpath ./bin):$PATH
-$ pylsp --version  # verify pylsp installation is successful
-```
-
-* Verify the installation:
-```
-# start from abcoder repository root dir
-$ go build
-$ ./
-```
-
-## Rust
-* Install the rust language via [rustup](https://www.rust-lang.org/tools/install).
-* Install the language server: rust-analyzer:
-```bash
-$ rustup component add rust-analyzer
-```
-* Verify installation:
-```bash
-$ go build
-$ ./abcoder parse rust testdata/rust2
-```
 
 # Getting Involved
 
