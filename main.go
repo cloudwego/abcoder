@@ -76,6 +76,7 @@ func main() {
 	flags.BoolVar(&opts.LoadByPackages, "load-by-packages", false, "load by packages (only works for Go now)")
 	flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
 	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
+	flags.StringVar(&opts.IDLPkgType, "idl-pkg-type", "", "specify the idl package type (onlu works for Thrift now)")
 
 	var wopts lang.WriteOptions
 	flags.StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")

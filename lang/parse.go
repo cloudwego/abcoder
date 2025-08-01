@@ -32,6 +32,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
+	tparser "github.com/cloudwego/abcoder/lang/thrift/parser"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
@@ -107,8 +108,6 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		openfile, wait = rust.CheckRepo(repoPath)
 	case uniast.Cxx:
 		openfile, wait = cxx.CheckRepo(repoPath)
-	case uniast.Python:
-		openfile, wait = python.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -126,6 +125,8 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 		l, s = cxx.GetDefaultLSP()
 	case uniast.Python:
 		l, s = python.GetDefaultLSP()
+	case uniast.Thrift:
+		return "", "", nil
 	case uniast.Golang:
 		l = uniast.Golang
 		s = ""
@@ -156,6 +157,11 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (repo *uniast.Repository, err error) {
 	if opts.Language == uniast.Golang {
 		repo, err = callGoParser(ctx, repoPath, opts)
+		if err != nil {
+			return nil, err
+		}
+	} else if opts.Language == uniast.Thrift {
+		repo, err = callThriftParser(ctx, repoPath, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -197,6 +203,27 @@ func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOpti
 	}
 	goopts.Excludes = opts.Excludes
 	p := parser.NewParser(repoPath, repoPath, goopts)
+	repo, err := p.ParseRepo()
+	if err != nil {
+		return nil, err
+	}
+	return &repo, nil
+}
+
+func callThriftParser(ctx context.Context, repoPath string, opts collect.CollectOption) (*uniast.Repository, error) {
+	thriftopts := tparser.Options{}
+	if !opts.NoNeedComment {
+		thriftopts.CollectComment = true
+	}
+
+	if opts.IDLPkgType != "" {
+		thriftopts.TargetLanguage = opts.IDLPkgType
+	} else {
+		thriftopts.TargetLanguage = "go"
+	}
+
+	thriftopts.Excludes = opts.Excludes
+	p, err := tparser.NewParser(repoPath, thriftopts)
 	repo, err := p.ParseRepo()
 	if err != nil {
 		return nil, err
