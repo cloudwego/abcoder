@@ -20,6 +20,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 > * 在 Python 中则是，package 是一个目录，可能包含子 package。而且 package 也可能包含 module，是 package 目录下的 py 文件。
 > * 在 Rust 中根本没有 package 的说法，而是 crate（项目）包含了诸 module。module 可能包含子 module。
 > * 在 C 中就完全没有这两个东西。
+> * 在 Thrift 中就完全没有 module 的概念, 但是有各个语言的 namespace
 >
 > 不要把它们和 abcoder 的描述混淆！
 > 在 abcoder 中，除非另外说明，module(mod) / package(pkg) 的含义如下。
@@ -44,6 +45,8 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 	- Golang: 对应 package，如 github.com/cloudwego/hertz/pkg/app/server
 
 	- Rust: 对应 mod，如 [serde_json](https://crates.io/crates/serde_json): : [value](https://docs.rs/serde_json/1.0.114/serde_json/value/index.html)
+    - Thrift: 对应 namespace, 指定不同的 idl Package type 会获得不同的 namespace
+      - 例如: `go namespace test.main` -> `test.main`
 
 	- 提示: 这里应该尽量等同于代码文件中的 import (use) 路径，方便 LLM 理解
 

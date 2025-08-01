@@ -20,7 +20,8 @@ To ensure precise querying and scalable storage, `ModPath?PkgPath#SymbolName` is
 > * In Python, a package is a directory, which may contain sub-packages. A package can also contain modules, which are .py files inside the package directory.
 > * In Rust, the term package does not exist at all. Instead, a crate (project) contains multiple modules, and modules may include sub-modules.
 > * In C, neither concept exists at all.
->
+> * In Thrift, no concept of modules, but there are namespaces for each language.
+> 
 > Do not confuse them with the terminology used in abcoder!
 > In abcoder, unless otherwise specified, the module (mod) and package (pkg) are defined as follows:
 
@@ -44,6 +45,8 @@ To ensure precise querying and scalable storage, `ModPath?PkgPath#SymbolName` is
     - Golang: Corresponds to a package, e.g., github.com/cloudwego/hertz/pkg/app/server
 
     - Rust: Corresponds to a mod, e.g., [serde_json](https://crates.io/crates/serde_json)::[value](https://docs.rs/serde_json/1.0.114/serde_json/value/index.html)
+    - Thrift: corresponds to namespace, specifying a different idl package type results in a different namespace
+        - Example: `go namespace test.main` -> `test.main`
 
     - Note: This should be as equivalent as possible to the import (use) path in code files for easier LLM understanding
 
