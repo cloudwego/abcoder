@@ -40,6 +40,7 @@ type CollectOption struct {
 	NotNeedTest        bool
 	Excludes           []string
 	LoadByPackages     bool
+	IDLPkgType         string
 }
 
 type Collector struct {

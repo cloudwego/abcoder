@@ -118,12 +118,12 @@ $ exit
 ABCoder currently supports the following languages:
 
 | Language | Parser      | Writer      |
-| -------- | ----------- | ----------- |
-| Go       | ✅          | ✅          |
+| -------- | ----------- |-------------|
+| Go       | ✅          | ✅         |
 | Rust     | ✅          | Coming Soon |
 | C        | ✅          | Coming Soon |
 | Python   | ✅          | Coming Soon |
-
+| Thrift   | ✅          | Coming Soon |
 
 # Getting Involved
 
