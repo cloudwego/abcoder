@@ -183,30 +183,37 @@ func getTypeKind(n ast.Expr) TypeKind {
 	}
 }
 
-func getNamedTypes(typ types.Type) (tys []types.Object, isPointer bool, isNamed bool) {
+func getNamedTypes(typ types.Type, visited map[types.Type]bool) (tys []types.Object, isPointer bool, isNamed bool) {
+	if visited[typ] {
+		return nil, false, false
+	}
+
+	visited[typ] = true
+	defer delete(visited, typ)
+
 	switch t := typ.(type) {
 	case *types.Pointer:
 		isPointer = true
-		typs, _, isNamed2 := getNamedTypes(t.Elem())
+		var typs []types.Object
+		typs, _, isNamed = getNamedTypes(t.Elem(), visited)
 		tys = append(tys, typs...)
-		isNamed = isNamed2
 	case *types.Slice:
-		typs, _, _ := getNamedTypes(t.Elem())
+		typs, _, _ := getNamedTypes(t.Elem(), visited)
 		tys = append(tys, typs...)
 	case *types.Array:
-		typs, _, _ := getNamedTypes(t.Elem())
+		typs, _, _ := getNamedTypes(t.Elem(), visited)
 		tys = append(tys, typs...)
 	case *types.Chan:
-		typs, _, _ := getNamedTypes(t.Elem())
+		typs, _, _ := getNamedTypes(t.Elem(), visited)
 		tys = append(tys, typs...)
 	case *types.Tuple:
 		for i := 0; i < t.Len(); i++ {
-			typs, _, _ := getNamedTypes(t.At(i).Type())
+			typs, _, _ := getNamedTypes(t.At(i).Type(), visited)
 			tys = append(tys, typs...)
 		}
 	case *types.Map:
-		typs2, _, _ := getNamedTypes(t.Elem())
-		typs1, _, _ := getNamedTypes(t.Key())
+		typs2, _, _ := getNamedTypes(t.Elem(), visited)
+		typs1, _, _ := getNamedTypes(t.Key(), visited)
 		tys = append(tys, typs1...)
 		tys = append(tys, typs2...)
 	case *types.Named:
@@ -214,32 +221,32 @@ func getNamedTypes(typ types.Type) (tys []types.Object, isPointer bool, isNamed 
 		isNamed = true
 	case *types.Struct:
 		for i := 0; i < t.NumFields(); i++ {
-			typs, _, _ := getNamedTypes(t.Field(i).Type())
+			typs, _, _ := getNamedTypes(t.Field(i).Type(), visited)
 			tys = append(tys, typs...)
 		}
 	case *types.Interface:
 		for i := 0; i < t.NumEmbeddeds(); i++ {
-			typs, _, _ := getNamedTypes(t.EmbeddedType(i))
+			typs, _, _ := getNamedTypes(t.EmbeddedType(i), visited)
 			tys = append(tys, typs...)
 		}
 		for i := 0; i < t.NumExplicitMethods(); i++ {
-			typs, _, _ := getNamedTypes(t.ExplicitMethod(i).Type())
+			typs, _, _ := getNamedTypes(t.ExplicitMethod(i).Type(), visited)
 			tys = append(tys, typs...)
 		}
 	case *types.TypeParam:
-		typs, _, _ := getNamedTypes(t.Constraint())
+		typs, _, _ := getNamedTypes(t.Constraint(), visited)
 		tys = append(tys, typs...)
 	case *types.Alias:
 		var typs []types.Object
-		typs, isPointer, isNamed = getNamedTypes(t.Rhs())
+		typs, isPointer, isNamed = getNamedTypes(t.Rhs(), visited)
 		tys = append(tys, typs...)
 	case *types.Signature:
 		for i := 0; i < t.Params().Len(); i++ {
-			typs, _, _ := getNamedTypes(t.Params().At(i).Type())
+			typs, _, _ := getNamedTypes(t.Params().At(i).Type(), visited)
 			tys = append(tys, typs...)
 		}
 		for i := 0; i < t.Results().Len(); i++ {
-			typs, _, _ := getNamedTypes(t.Results().At(i).Type())
+			typs, _, _ := getNamedTypes(t.Results().At(i).Type(), visited)
 			tys = append(tys, typs...)
 		}
 	}
