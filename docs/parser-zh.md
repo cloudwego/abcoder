@@ -31,11 +31,9 @@
 
 ### LaunguageSpec
 
-```
 用于在 LSP 符号收集过程中转换为 UniAST 所需信息，并且这些信息非 LSP 通用定义
 
 ```go
-
 // Detailed implementation used for collect LSP symbols and transform them to UniAST
 type LanguageSpec interface {
     // initialize a root workspace, and return all modules [modulename=>abs-path] inside
@@ -50,7 +48,7 @@ type LanguageSpec interface {
     ShouldSkip(path string) bool
 
     // FileImports parse file codes to get its imports
-	FileImports(content []byte) ([]uniast.Import, error)
+    FileImports(content []byte) ([]uniast.Import, error)
 
     // return the first declaration token of a symbol, as Type-Name
     DeclareTokenOfSymbol(sym DocumentSymbol) int

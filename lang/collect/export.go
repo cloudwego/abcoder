@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -80,7 +79,6 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
 
-	fmt.Fprintf(os.Stderr, "collected files: %v\n", c.files)
 	for fp, f := range c.files {
 		rel, err := filepath.Rel(c.repo, fp)
 		if err != nil {

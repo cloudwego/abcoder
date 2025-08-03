@@ -144,7 +144,7 @@ func main() {
 		if flagOutput != nil && *flagOutput != "" {
 			wopts.OutputDir = *flagOutput
 		} else {
-			wopts.OutputDir = filepath.Base(repo.Name)
+			wopts.OutputDir = filepath.Base(repo.Path)
 		}
 
 		if err := lang.Write(context.Background(), repo, wopts); err != nil {
