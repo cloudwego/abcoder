@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -79,34 +80,19 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
 
-	// connect file with package on demands
-	// for p, m := range repo.Modules {
-	// 	if p == "" || strings.Contains(p, "@") {
-	// 		continue
-	// 	}
-	// 	for _, f := range m.Files {
-	// 		if f.Package != "" {
-	// 			continue
-	// 		}
-	// 		_, pkgpath, err := c.spec.NameSpace(filepath.Join(c.repo, f.Path))
-	// 		if err != nil {
-	// 			continue
-	// 		}
-	// 		f.Package = pkgpath
-	// 	}
-	// }
+	fmt.Fprintf(os.Stderr, "collected files: %v\n", c.files)
 	for fp, f := range c.files {
-		if f.Package != "" {
-			continue
-		}
 		rel, err := filepath.Rel(c.repo, fp)
 		if err != nil {
 			continue
 		}
+
 		modpath, pkgpath, err := c.spec.NameSpace(fp)
 		if err != nil {
 			continue
 		}
+
+		// connect file to package
 		if modpath == "" || strings.Contains(modpath, "@") {
 			continue
 		}
@@ -114,11 +100,15 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		if !ok {
 			continue
 		}
+
+		m.Files[rel] = f
+		if pkgpath == "" || f.Package != "" {
+			continue
+		}
 		if _, ok := m.Packages[pkgpath]; !ok {
 			continue
 		}
 		f.Package = pkgpath
-		m.Files[rel] = f
 	}
 
 	return &repo, nil
@@ -199,25 +189,15 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		repo.Modules[mod] = newModule(mod, "", c.Language)
 	}
 	module := repo.Modules[mod]
-	if repo.Modules[mod].Packages[path] == nil {
-		repo.Modules[mod].Packages[path] = uniast.NewPackage(path)
+	if module.Packages[path] == nil {
+		module.Packages[path] = uniast.NewPackage(path)
 	}
 	pkg := repo.Modules[mod].Packages[path]
 	if c.spec.IsMainFunction(*symbol) {
 		pkg.IsMain = true
 	}
 
-	var relfile string
-	if c.internal(symbol.Location) {
-		relfile, _ = filepath.Rel(c.repo, file)
-	} else {
-		relfile = filepath.Base(file)
-	}
 	fileLine := c.fileLine(symbol.Location)
-	// collect files
-	if module.Files[relfile] == nil {
-		module.Files[relfile] = uniast.NewFile(relfile)
-	}
 
 	content := symbol.Text
 	public := c.spec.IsPublicSymbol(*symbol)

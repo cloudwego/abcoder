@@ -59,6 +59,7 @@ Language:
    rust         for rust codes
    cxx          for c codes (cpp support is on the way)
    go           for golang codes
+   python       for python codes
 `
 
 func main() {
