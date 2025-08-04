@@ -189,7 +189,6 @@ func getNamedTypes(typ types.Type, visited map[types.Type]bool) (tys []types.Obj
 	}
 
 	visited[typ] = true
-	defer delete(visited, typ)
 
 	switch t := typ.(type) {
 	case *types.Pointer:
