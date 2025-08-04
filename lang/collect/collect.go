@@ -168,7 +168,11 @@ func (c *Collector) Collect(ctx context.Context) error {
 
 		file := c.files[path]
 		if file == nil {
-			file = uniast.NewFile(path)
+			rel, err := filepath.Rel(c.repo, path)
+			if err != nil {
+				return err
+			}
+			file = uniast.NewFile(rel)
 			c.files[path] = file
 		}
 
@@ -180,8 +184,9 @@ func (c *Collector) Collect(ctx context.Context) error {
 		uses, err := c.spec.FileImports(content)
 		if err != nil {
 			log.Error("parse file %s use statements failed: %v", path, err)
+		} else {
+			file.Imports = uses
 		}
-		file.Imports = uses
 
 		// collect symbols
 		uri := NewURI(path)
@@ -210,7 +215,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 		return nil
 	}
 	if err := filepath.Walk(c.repo, scanner); err != nil {
-		return err
+		log.Error("scan files failed: %v", err)
 	}
 
 	// collect some extra metadata

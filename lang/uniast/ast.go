@@ -30,7 +30,7 @@ const (
 	Golang  Language = "go"
 	Rust    Language = "rust"
 	Cxx     Language = "cxx"
-	Python  Language = "python"
+	Python  Language = "python"<<<<<<< thrift
 	Thrift  Language = "thrift"
 	Unknown Language = ""
 )
@@ -80,10 +80,11 @@ type NodeGraph map[string]*Node
 
 // Repository
 type Repository struct {
+	ASTVersion string
 	Name       string             `json:"id"` // module name
+	Path       string             // repo path
 	Modules    map[string]*Module // module name => module
 	Graph      NodeGraph          // node id => node
-	ASTVersion string
 }
 
 func (r Repository) ID() string {
@@ -100,9 +101,11 @@ func (r Repository) InternalModules() []*Module {
 	return ret
 }
 
+// NOTICE: Repository.Path is set as name by default, if th name isn't a path, set path somewhere
 func NewRepository(name string) Repository {
 	ret := Repository{
 		Name:       name,
+		Path:       name,
 		Modules:    map[string]*Module{},
 		Graph:      map[string]*Node{},
 		ASTVersion: Version,
@@ -183,8 +186,8 @@ type Module struct {
 	Name         string               // go module name
 	Dir          string               // relative path to repo
 	Packages     map[PkgPath]*Package // pkage import path => Package
-	Dependencies map[string]string    // module name => module_path@version
-	Files        map[string]*File     // relative path => file info
+	Dependencies map[string]string    `json:",omitempty"`              // module name => module_path@version
+	Files        map[string]*File     `json:",omitempty"`              // relative path => file info
 	CompressData *string              `json:"compress_data,omitempty"` // module compress info
 }
 
