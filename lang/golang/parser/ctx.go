@@ -446,7 +446,8 @@ func (p *GoParser) collectTypes(ctx *fileContext, typ ast.Expr, st *Type, inline
 
 // get type id and tells if it is std or builtin
 func (ctx *fileContext) getTypeinfo(typ types.Type) (ti typeInfo) {
-	tobjs, isPointer, isNamed := getNamedTypes(typ)
+	visited := make(map[types.Type]bool)
+	tobjs, isPointer, isNamed := getNamedTypes(typ, visited)
 	ti.IsPointer = isPointer
 	ti.Ty = typ
 	ti.IsNamed = isNamed
