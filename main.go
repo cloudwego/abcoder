@@ -59,6 +59,7 @@ Language:
    rust         for rust codes
    cxx          for c codes (cpp support is on the way)
    go           for golang codes
+   python       for python codes
 `
 
 func main() {
@@ -143,7 +144,7 @@ func main() {
 		if flagOutput != nil && *flagOutput != "" {
 			wopts.OutputDir = *flagOutput
 		} else {
-			wopts.OutputDir = filepath.Base(repo.Name)
+			wopts.OutputDir = filepath.Base(repo.Path)
 		}
 
 		if err := lang.Write(context.Background(), repo, wopts); err != nil {

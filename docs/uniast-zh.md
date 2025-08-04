@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.1.2)
+# Universal Abstract-Syntax-Tree Specification (v0.1.3)
 
 Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言无关的代码上下文数据结构，表示某个仓库代码的统一抽象语法树。收集了语言实体（函数、类型、常（变）量）的定义及其相互依赖关系，用于后续的 AI 理解、coding-workflow 开发。
 
@@ -101,6 +101,10 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 
 
 - Graph: AST Node 的依赖拓扑图，见下文【Graph】
+
+- Path: 仓库的文件目录，通常应该为绝对路径
+
+- ASTVersion: 解析时使用的 UniAST 版本
 
 
 ### Module
