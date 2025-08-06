@@ -28,7 +28,6 @@ use http::{Server, Request as HttpRequest, Response::{IntoResponse, StatusCode a
 		return
 	}
 	dependencyTree := BuildDependencyTree(useStatements)
-	//PrintTree(dependencyTree, "")
 	for _, r := range dependencyTree.Children {
 		uses := ConvertTreeToUse(r, "")
 		for _, u := range uses {
