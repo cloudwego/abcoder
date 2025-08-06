@@ -20,11 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 )
-
-const GOPLS_INIT_DELAY = 2 * time.Second
-const RLS_INIT_DELAY = 3 * time.Second
 
 func GetTestDataRoot() string {
 	rootDir, err := filepath.Abs("../../testdata")
@@ -37,7 +33,32 @@ func GetTestDataRoot() string {
 	return rootDir
 }
 
-func listTests(lang string) []string {
+func MakeTmpTestdir(reset bool) string {
+	rootDir := GetTestDataRoot()
+	tmpDir := filepath.Join(rootDir, "tmp")
+	if reset {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			panic("Failed to remove old tmp directory: " + err.Error())
+		}
+	}
+	if _, err := os.Stat(tmpDir); os.IsNotExist(err) {
+		if err := os.Mkdir(tmpDir, 0755); err != nil {
+			panic("Failed to create tmp directory: " + err.Error())
+		}
+	}
+	return tmpDir
+}
+
+func GetTestAstFile(name string) string {
+	rootDir := GetTestDataRoot()
+	astFile := filepath.Join(rootDir, "asts", name+".json")
+	if _, err := os.Stat(astFile); os.IsNotExist(err) {
+		panic(fmt.Sprintf("AST file does not exist: %s", astFile))
+	}
+	return astFile
+}
+
+func ListTests(lang string) []string {
 	var testcases []string
 	test_root := filepath.Join(GetTestDataRoot(), lang)
 	entries, err := os.ReadDir(test_root)
@@ -55,18 +76,6 @@ func listTests(lang string) []string {
 	return testcases
 }
 
-func GolangTests() []string {
-	return listTests("golang")
-}
-
-func RustTests() []string {
-	return listTests("rust")
-}
-
-func PythonTests() []string {
-	return listTests("python")
-}
-
-func CTests() []string {
-	return listTests("c")
+func FirstTest(lang string) string {
+	return ListTests(lang)[0]
 }

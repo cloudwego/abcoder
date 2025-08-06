@@ -20,63 +20,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
-	"github.com/cloudwego/abcoder/lang/testutils"
+	"github.com/cloudwego/abcoder/lang/uniast"
 )
-
-var goTestCase *string
-var rustTestCase *string
-var golangLSP *LSPClient
-var rustLSP *LSPClient
-
-func initGoLSP() {
-	sync.OnceFunc(func() {
-		goTestCase = &(testutils.GolangTests()[0])
-		var err error
-		golangLSP, err = NewLSPClient(*goTestCase, "", 0, ClientOptions{
-			Server:   "gopls",
-			Language: "go",
-			Verbose:  true,
-		})
-		if err != nil {
-			panic(fmt.Sprintf("Failed to initialize Go LSP client: %v", err))
-		}
-		time.Sleep(testutils.GOPLS_INIT_DELAY)
-	})()
-}
-
-func initRustLSP() {
-	sync.OnceFunc(func() {
-		rustTestCase = &testutils.RustTests()[0]
-		var err error
-		rustLSP, err = NewLSPClient(*rustTestCase, "", 0, ClientOptions{
-			Server:   "rust-analyzer",
-			Language: "rust",
-			Verbose:  true,
-		})
-		if err != nil {
-			panic(fmt.Sprintf("Failed to initialize Rust LSP client: %v", err))
-		}
-		time.Sleep(testutils.RLS_INIT_DELAY)
-	})()
-}
-
-func TestClientInit(t *testing.T) {
-	initGoLSP()
-	initRustLSP()
-	// Basically a must-pass since we just panicked on failure
-	t.Run("initLSPClients", func(t *testing.T) {
-		if golangLSP == nil {
-			t.Fatal("Golang LSP client is not initialized")
-		}
-		if rustLSP == nil {
-			t.Fatal("Rust LSP client is not initialized")
-		}
-	})
-}
 
 func checkSymNames(t *testing.T, symbols map[Range]*DocumentSymbol, expectedNames []string) {
 	t.Helper()
@@ -108,8 +55,13 @@ func checkSymNames(t *testing.T, symbols map[Range]*DocumentSymbol, expectedName
 }
 
 func TestGolangLSP(t *testing.T) {
-	initGoLSP()
-	uri := NewURI(*goTestCase + "/pkg/entity/entity.go")
+	golangLSP, goTestCase, err := InitLSPForFirstTest(uniast.Golang, "gopls")
+	if err != nil {
+		t.Fatalf("Failed to initialize Golang LSP client: %v", err)
+	}
+	defer golangLSP.Close()
+
+	uri := NewURI(goTestCase + "/pkg/entity/entity.go")
 	// documentSymbol
 	expectedSymNames := `(MyStruct).String
 (MyStructC).String
@@ -162,10 +114,14 @@ V1`
 }
 
 func TestRustLSP(t *testing.T) {
-	initRustLSP()
+	rustLSP, rustTestCase, err := InitLSPForFirstTest(uniast.Rust, "rust-analyzer")
+	if err != nil {
+		t.Fatalf("Failed to initialize rust LSP client: %v", err)
+	}
+	defer rustLSP.Close()
 
 	// documentSymbol
-	entity_mod_uri := NewURI(*rustTestCase + "/src/entity/mod.rs")
+	entity_mod_uri := NewURI(rustTestCase + "/src/entity/mod.rs")
 	expectedSymNames := `a
 A
 add
@@ -248,7 +204,7 @@ Output`
 	})
 
 	// definition
-	main_uri := NewURI(*rustTestCase + "/src/main.rs")
+	main_uri := NewURI(rustTestCase + "/src/main.rs")
 	t.Run("definition", func(t *testing.T) {
 		for _, pos := range []Position{
 			{Line: 37, Character: 23},
