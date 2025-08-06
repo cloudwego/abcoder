@@ -22,11 +22,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cloudwego/abcoder/lang/testutils"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
 func TestWriter_WriteRepo(t *testing.T) {
-	repo, err := uniast.LoadRepo("../../../../tmp_compress/localsession.json")
+	astFile := testutils.GetTestAstFile("localsession")
+	repo, err := uniast.LoadRepo(astFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,17 +48,18 @@ func TestWriter_WriteRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				Options: Options{
-					CompilerPath: "1.18",
+					CompilerPath: "true", // DO NOT RUN go mod tidy
 				},
 			},
 			args:    args{repo: repo},
 			wantErr: false,
 		},
 	}
+	tmproot := testutils.MakeTmpTestdir(true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := NewWriter(tt.fields.Options)
-			if err := w.WriteRepo(tt.args.repo, "../../../../tmp/localsession2"); (err != nil) != tt.wantErr {
+			if err := w.WriteRepo(tt.args.repo, tmproot); (err != nil) != tt.wantErr {
 				t.Errorf("Writer.WriteRepo() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

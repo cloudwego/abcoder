@@ -17,8 +17,6 @@
 package patch
 
 import (
-	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/cloudwego/abcoder/lang/testutils"
@@ -36,22 +34,18 @@ func TestPatcher(t *testing.T) {
 	}
 
 	// Load repo from git
-	tmproot := testutils.MakeTmpTestdir(true)
 	repoURL := "github.com/cloudwego/localsession"
-	repoDir := tmproot + "/localsession"
-	t.Logf("Cloning repo %s to %s...", repoURL, repoDir)
-	cmd := exec.Command("git", "clone", "--depth", "1", "--branch", "main", "https://"+repoURL, repoDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git clone failed: %v", err)
+	repoDir, err := testutils.GitCloneFast(repoURL, "localsession", "main")
+	if err != nil {
+		t.Fatalf("failed to clone repo: %v", err)
 	}
 
 	// Create patcher with options
+	tmpRoot := testutils.MakeTmpTestdir(true)
 	patcher := NewPatcher(repo, Options{
-		RepoDir:        repoDir,
-		OutDir:         tmproot + "/localsession2",
-		DefaultLanuage: uniast.Golang,
+		RepoDir:         repoDir,
+		OutDir:          tmpRoot + "/localsession2",
+		DefaultLanguage: uniast.Golang,
 	})
 
 	// Create a test patch

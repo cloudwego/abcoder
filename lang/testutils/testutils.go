@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -67,6 +68,29 @@ func MakeTmpTestdir(reset bool) string {
 		}
 	}
 	return tmpDir
+}
+
+func GitCloneFast(repoURL, dir, branch string) (string, error) {
+	rootDir := GetTestDataRoot()
+	repoDir := filepath.Join(rootDir, "repos", dir)
+	if _, err := os.Stat(repoDir); !os.IsNotExist(err) {
+		cmd := exec.Command("git", "-C", repoDir, "status")
+		if err := cmd.Run(); err == nil {
+			return repoDir, nil
+		} else {
+			return "", fmt.Errorf("bad existing repo %s: %w", repoDir, err)
+		}
+	}
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create repo directory: %w", err)
+	}
+	cmd := exec.Command("git", "clone", "--depth", "1", "--branch", branch, "https://"+repoURL, repoDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git clone failed: %w", err)
+	}
+	return repoDir, nil
 }
 
 func GetTestAstFile(name string) string {

@@ -16,21 +16,23 @@ package parser
 
 import (
 	"encoding/json"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/cloudwego/abcoder/lang/testutils"
 	. "github.com/cloudwego/abcoder/lang/uniast"
 )
+
+const localSessURL = "github.com/cloudwego/localsession"
 
 func Test_goParser_ParseRepo(t *testing.T) {
 	type fields struct {
 		modName     string
 		homePageDir string
+		id          Identity
 	}
 	tests := []struct {
 		name   string
@@ -39,40 +41,31 @@ func Test_goParser_ParseRepo(t *testing.T) {
 		{
 			name: "test",
 			fields: fields{
-				modName:     "github.com/cloudwego/localsession",
-				homePageDir: "../../../tmp/localsession",
+				modName:     localSessURL,
+				homePageDir: "localsession",
+				id:          NewIdentity(localSessURL, localSessURL+"/backup", "RecoverCtxOnDemands"),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			abs, _ := filepath.Abs(tt.fields.homePageDir)
-			println(abs)
-			p := newGoParser(tt.fields.modName, tt.fields.homePageDir, Options{
+			repoDir, err := testutils.GitCloneFast(tt.fields.modName, tt.fields.homePageDir, "main")
+			if err != nil {
+				t.Fatalf("failed to clone repo %s", err)
+			}
+			p := newGoParser(tt.fields.modName, repoDir, Options{
 				ReferCodeDepth: 1,
 				NeedTest:       true,
 			})
 			r, err := p.ParseRepo()
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("failed to parse repo %s", err)
 			}
 			r.BuildGraph()
-			// spew.Dump(p)
-			pj, err := json.MarshalIndent(r, "", "  ")
+			_, err = p.getNode(tt.fields.id)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("failed to get node %s", err)
 			}
-			_ = pj
-			_ = os.WriteFile("ast.json", pj, 0644)
-			n, err := p.getNode(NewIdentity("github.com/cloudwego/localsession", "github.com/cloudwego/localsession/backup", "RecoverCtxOnDemands"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			jf, err := json.MarshalIndent(n, "", "  ")
-			if err != nil {
-				t.Fatalf("json.Marshal() error = %v", err)
-			}
-			os.WriteFile("node.json", jf, 0644)
 		})
 	}
 }
@@ -93,7 +86,7 @@ func Test_goParser_ParseDirs(t *testing.T) {
 		{
 			name: "test",
 			args: args{
-				homePageDir: "../../../testdata/golang",
+				homePageDir: testutils.FirstTest("go"),
 				modName:     "a.b/c",
 				pkg:         "a.b/c/cmd",
 				opts: Options{
@@ -137,7 +130,6 @@ type Struct struct {
 		t.Fatal(err)
 	}
 	ast.Inspect(node, func(n ast.Node) bool {
-		fmt.Printf("%#v\n", n)
 		if sel, ok := n.(*ast.SelectorExpr); ok {
 			println("selector:", string(GetRawContent(fset, []byte(src), sel, false)))
 		}
@@ -157,6 +149,10 @@ func Test_goParser_ParseNode(t *testing.T) {
 		pkgPath string
 		name    string
 	}
+	localSessionDir, err := testutils.GitCloneFast(localSessURL, "localsession", "main")
+	if err != nil {
+		t.Fatalf("failed to clone repo %s", err)
+	}
 	tests := []struct {
 		name    string
 		fields  fields
@@ -167,7 +163,7 @@ func Test_goParser_ParseNode(t *testing.T) {
 			name: "test",
 			fields: fields{
 				modName:     "github.com/cloudwego/localsession",
-				homePageDir: "../../../tmp/localsession",
+				homePageDir: localSessionDir,
 			},
 			args: args{
 				pkgPath: "github.com/modern-go/gls",
