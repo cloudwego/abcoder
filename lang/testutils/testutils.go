@@ -19,11 +19,31 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 )
 
+// Hack to get the project root directory from go tests.
+// Go tests start from the directory where the test file is located,
+// causing the relative path to testdata files to be unstable.
 func GetTestDataRoot() string {
-	rootDir, err := filepath.Abs("../../testdata")
+	_, currentFilePath, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("failed to get caller information")
+	}
+	projectRoot := filepath.Dir(currentFilePath)
+	for {
+		goModPath := filepath.Join(projectRoot, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			break
+		}
+		parentDir := filepath.Dir(projectRoot)
+		if parentDir == projectRoot {
+			panic("could not find project root (go.mod not found)")
+		}
+		projectRoot = parentDir
+	}
+	rootDir, err := filepath.Abs(filepath.Join(projectRoot, "testdata"))
 	if err != nil {
 		panic("Failed to get absolute path of testdata: " + err.Error())
 	}
