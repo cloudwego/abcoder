@@ -159,14 +159,15 @@ func (i Import) Equals(other Import) bool {
 }
 
 func NewFile(path string) *File {
-	// abs, _ := filepath.Abs(path)
 	ret := File{
 		Path: path,
 	}
 	return &ret
 }
 
-func (m Module) SetFile(path string, file *File) {
+// Create a NEW entry in m.Files for file.
+// If entry already exists, do nothing.
+func (m Module) CreateFile(path string, file *File) {
 	if m.Files == nil {
 		m.Files = map[string]*File{}
 	}

@@ -104,7 +104,7 @@ next_dep:
 	f := mod.GetFile(patch.File)
 	if f == nil {
 		f = uniast.NewFile(patch.File)
-		mod.SetFile(patch.File, f)
+		mod.CreateFile(patch.File, f)
 	}
 
 	fl := node.FileLine()
