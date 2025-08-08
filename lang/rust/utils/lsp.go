@@ -17,10 +17,12 @@ package utils
 import (
 	"context"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cloudwego/abcoder/lang/log"
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
 )
 
@@ -113,7 +115,13 @@ func hasIdent(text string, token string) bool {
 	// 		continue
 	// 	}
 	// }
-	return strings.Contains(text, token)
+	// match regex: \<token\> in text
+	if token == "" {
+		log.Error("token cannot be empty")
+		return false
+	}
+	ptn := regexp.MustCompile(`\b` + regexp.QuoteMeta(token) + `\b`)
+	return ptn.MatchString(text)
 }
 
 // func isAlpha(r byte) bool {

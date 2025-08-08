@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func Test_Rust(t *testing.T) {
+func TestRustDependencyTree(t *testing.T) {
 	useStatements, err := ParseUseStatements(`use http::Method as HttpMethod;
 use http::{Server, Request as HttpRequest, Response::{IntoResponse, StatusCode as HttpStatusCode}};
 `)
@@ -28,10 +28,27 @@ use http::{Server, Request as HttpRequest, Response::{IntoResponse, StatusCode a
 		return
 	}
 	dependencyTree := BuildDependencyTree(useStatements)
-	for _, r := range dependencyTree.Children {
-		uses := ConvertTreeToUse(r, "")
-		for _, u := range uses {
-			fmt.Println(u)
+	if len(dependencyTree.Children) != 1 {
+		t.Fatalf("Expected 1 child, got %d", len(dependencyTree.Children))
+	}
+	uses := ConvertTreeToUse(dependencyTree.Children[0], "")
+	usePaths := make([]string, len(uses))
+	for i, u := range uses {
+		usePaths[i] = u.Path
+	}
+	expectedPaths := []string{
+		"use http::Method as HttpMethod;",
+		"use http::Server;",
+		"use http::Request as HttpRequest;",
+		"use http::Response::IntoResponse;",
+		"use http::Response::StatusCode as HttpStatusCode;",
+	}
+	if len(usePaths) != len(expectedPaths) {
+		t.Fatalf("Expected %d paths, got %d", len(expectedPaths), len(usePaths))
+	}
+	for i := range usePaths {
+		if usePaths[i] != expectedPaths[i] {
+			t.Fatalf("Index %d, Expected path\n%s\nbut got\n%s", i, expectedPaths[i], usePaths[i])
 		}
 	}
 }

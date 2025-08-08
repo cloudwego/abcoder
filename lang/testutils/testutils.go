@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 )
@@ -118,6 +119,18 @@ func ListTests(lang string) []string {
 		return filepath.Base(testcases[i]) < filepath.Base(testcases[j])
 	})
 	return testcases
+}
+
+func TestPath(name, lang string) string {
+	testcases := ListTests(lang)
+	for _, test := range testcases {
+		ptn := fmt.Sprintf("^\\d+_%s$", regexp.QuoteMeta(name))
+		matched, _ := regexp.MatchString(ptn, filepath.Base(test))
+		if matched {
+			return test
+		}
+	}
+	panic(fmt.Sprintf("Test case %s not found in language %s, available: %v", name, lang, testcases))
 }
 
 func FirstTest(lang string) string {
