@@ -17,103 +17,50 @@ package collect
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
+	"github.com/cloudwego/abcoder/lang/testutils"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
-var testroot = "../../../testdata"
-
 func TestCollector_Collect(t *testing.T) {
-	root := testroot + "/rust2"
-
-	root, _ = filepath.Abs(root)
 	log.SetLogLevel(log.DebugLevel)
-	rustLSP, err := lsp.NewLSPClient(root, root+"/src/main.rs", time.Second*5, lsp.ClientOptions{
-		Server:   "rust-analyzer",
-		Language: "rust",
-		Verbose:  true,
-	})
+	rustLSP, rustTestCase, err := lsp.InitLSPForFirstTest(uniast.Rust, "rust-analyzer")
 	if err != nil {
-		fmt.Printf("Failed to initialize rust LSP client: %v", err)
+		t.Fatalf("Failed to initialize rust LSP client: %v", err)
 	}
 	defer rustLSP.Close()
 
-	tests := []struct {
-		name    string
-		want    *uniast.Repository
-		wantErr bool
-	}{
-		{
-			name:    "rust",
-			want:    &uniast.Repository{},
-			wantErr: false,
-		},
-	}
-	dir := testroot
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := NewCollector(root, rustLSP)
-			c.LoadExternalSymbol = true
-			err := c.Collect(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collector.Collect() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			js1, err := json.Marshal(c.syms)
-			if err != nil {
-				t.Fatalf("Marshal symbols failed: %v", err)
-			}
-			if err := os.WriteFile(dir+"/symbols.json", js1, 0644); err != nil {
-				t.Fatalf("Write json failed: %v", err)
-			}
-			// if !reflect.DeepEqual(got, tt.want) {
-			// 	t.Errorf("Collector.Collect() = %#v, want %#v", got, tt.want)
-			// }
-			// for sym, content := range c.symbols {
-			// 	if sym.Name == "add" {
-			// 		t.Logf("symbol: %#v, content:%s", sym, content)
-			// 	}
-			// }
-			js3, err := json.Marshal(c.deps)
-			if err != nil {
-				t.Fatalf("Marshal deps failed: %v", err)
-			}
-			if err := os.WriteFile(dir+"/deps.json", js3, 0644); err != nil {
-				t.Fatalf("Write json failed: %v", err)
-			}
-			js4, err := json.Marshal(c.funcs)
-			if err != nil {
-				t.Fatalf("Marshal methods failed: %v", err)
-			}
-			if err := os.WriteFile(dir+"/funcs.json", js4, 0644); err != nil {
-				t.Fatalf("Write json failed: %v", err)
-			}
-			js5, err := json.Marshal(c.vars)
-			if err != nil {
-				t.Fatalf("Marshal methods failed: %v", err)
-			}
-			if err := os.WriteFile(dir+"/vars.json", js5, 0644); err != nil {
-				t.Fatalf("Write json failed: %v", err)
-			}
+	t.Run("rustCollect", func(t *testing.T) {
+		c := NewCollector(rustTestCase, rustLSP)
+		c.LoadExternalSymbol = true
+		err := c.Collect(context.Background())
+		if err != nil {
+			t.Fatalf("Collector.Collect() failed = %v\n", err)
+		}
 
-			repo, err := c.Export(context.Background())
+		outdir := testutils.MakeTmpTestdir(true)
+		marshals := []struct {
+			val  any
+			name string
+		}{
+			{&c.syms, "symbols"},
+			{&c.deps, "deps"},
+			{&c.funcs, "funcs"},
+			{&c.vars, "vars"},
+			{&c.repo, "repo"},
+		}
+		for _, m := range marshals {
+			js, err := json.Marshal(m.val)
 			if err != nil {
-				t.Fatalf("export repo failed: %v", err)
+				t.Fatalf("Marshal %s failed: %v", m.name, err)
 			}
-			js6, err := json.Marshal(repo)
-			if err != nil {
-				t.Fatalf("Marshal methods failed: %v", err)
+			if err := os.WriteFile(outdir+"/"+m.name+".json", js, 0644); err != nil {
+				t.Fatalf("Write json %s failed: %v", m.name, err)
 			}
-			if err := os.WriteFile(dir+"/repo.json", js6, 0644); err != nil {
-				t.Fatalf("Write json failed: %v", err)
-			}
-		})
-	}
+		}
+	})
 }

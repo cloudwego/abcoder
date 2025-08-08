@@ -54,11 +54,10 @@ func ChunkHead(text string, textPos Position, pos Position) string {
 }
 
 // calculate the relative index of a position to a text
-func RelativePostionWithLines(lines []int, textPos Position, pos Position) int {
+func RelativePostionWithLines(lines []int, basePos Position, pos Position) int {
 	// find the line of the position
-	l := pos.Line - textPos.Line
-
-	return lines[l] + pos.Character - textPos.Character
+	l := pos.Line - basePos.Line
+	return lines[l] + pos.Character - basePos.Character
 }
 
 func PositionOffset(file_uri string, text string, pos Position) int {
@@ -67,10 +66,6 @@ func PositionOffset(file_uri string, text string, pos Position) int {
 		return -1
 	}
 	lines := utils.CountLinesCached(file_uri, text)
-
-	// lines := utils.CountLinesPooled(text)
-	// defer utils.PutCount(lines)
-
 	return RelativePostionWithLines(*lines, Position{Line: 0, Character: 0}, pos)
 }
 

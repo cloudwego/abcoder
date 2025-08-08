@@ -46,7 +46,7 @@ see [UniAST Specification](docs/uniast-zh.md)
     abcoder parse go localsession -o /abcoder-asts/localsession.json
     ```
 
-    To parse repositories in other languages, [install the corresponding langauge server first](./docs/lsp-installation-en.md).
+    To parse repositories in other languages, [install the corresponding language server first](./docs/lsp-installation-en.md).
 
 3. Integrate ABCoder's MCP tools into your AI agent.
 
@@ -80,7 +80,7 @@ see [UniAST Specification](docs/uniast-zh.md)
     
 - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
     
-- Try to use [the recommaned prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
+- Try to use [the recommened prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
 
 
 ## Use ABCoder as an Agent (WIP)

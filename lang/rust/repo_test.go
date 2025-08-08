@@ -19,20 +19,24 @@ import (
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
+	"github.com/cloudwego/abcoder/lang/testutils"
 )
 
 func TestCheckRepo(t *testing.T) {
 	type args struct {
 		repo string
 	}
+	rust2Path := testutils.TestPath("rust2", "rust")
 	tests := []struct {
 		name  string
 		args  args
 		want  string
 		want1 time.Duration
 	}{
-		{"rust2", args{"/home/duanyi.aster/Rust/ABCoder/testdata/rust2"}, "/home/duanyi.aster/Rust/ABCoder/testdata/rust2/src/main.rs", time.Second * 15},
-		{"live", args{"/home/duanyi.aster/Rust/ABCoder/tmp/live"}, "/home/duanyi.aster/Rust/ABCoder/tmp/live/src/env.rs", time.Minute * 1},
+		{"rust2",
+			args{rust2Path},
+			rust2Path + "/src/main.rs",
+			time.Second * 15},
 	}
 
 	log.SetLogLevel(log.DebugLevel)

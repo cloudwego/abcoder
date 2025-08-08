@@ -19,29 +19,39 @@ package patch
 import (
 	"testing"
 
+	"github.com/cloudwego/abcoder/lang/testutils"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
-var root = "../../../tmp"
-
+// Expected to fail because the AST file contains local paths.
 func TestPatcher(t *testing.T) {
-	// Load repository
-	repo, err := uniast.LoadRepo(root + "/localsession.json")
+	// Load AST
+	t.Logf("Loading AST file for localsession...")
+	astFile := testutils.GetTestAstFile("localsession")
+	repo, err := uniast.LoadRepo(astFile)
 	if err != nil {
-		t.Errorf("failed to load repo: %v", err)
+		t.Fatalf("failed to load repo: %v", err)
+	}
+
+	// Load repo from git
+	repoURL := "github.com/cloudwego/localsession"
+	repoDir, err := testutils.GitCloneFast(repoURL, "localsession", "main")
+	if err != nil {
+		t.Fatalf("failed to clone repo: %v", err)
 	}
 
 	// Create patcher with options
+	tmpRoot := testutils.MakeTmpTestdir(true)
 	patcher := NewPatcher(repo, Options{
-		RepoDir:        root + "/localsession",
-		OutDir:         root + "/localsession2",
-		DefaultLanuage: uniast.Golang,
+		RepoDir:         repoDir,
+		OutDir:          tmpRoot + "/localsession2",
+		DefaultLanguage: uniast.Golang,
 	})
 
 	// Create a test patch
 	testPatches := []Patch{
 		{
-			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "DefaultOptions"},
+			Id: uniast.Identity{ModPath: repoURL, PkgPath: repoURL + "/backup", Name: "DefaultOptions"},
 			Codes: `func DefaultOptions() Options {
 	ret := Options{
 		Enable:         false,
@@ -57,7 +67,7 @@ func TestPatcher(t *testing.T) {
 			},
 		},
 		{
-			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "DefaultOptions2"},
+			Id: uniast.Identity{ModPath: repoURL, PkgPath: repoURL + "/backup", Name: "DefaultOptions2"},
 			Codes: `func DefaultOptions2() Options {
 	ret := Options{
 		Enable:         false,
@@ -69,7 +79,7 @@ func TestPatcher(t *testing.T) {
 			Type: uniast.FUNC,
 		},
 		{
-			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "TestCase"},
+			Id: uniast.Identity{ModPath: repoURL, PkgPath: repoURL + "/backup", Name: "TestCase"},
 			Codes: `type TestCase struct {
 				Enable bool
 			}`,
@@ -77,7 +87,7 @@ func TestPatcher(t *testing.T) {
 			Type: uniast.TYPE,
 		},
 		{
-			Id: uniast.Identity{ModPath: "github.com/cloudwego/localsession", PkgPath: "github.com/cloudwego/localsession/backup", Name: "TestFunc"},
+			Id: uniast.Identity{ModPath: repoURL, PkgPath: repoURL + "/backup", Name: "TestFunc"},
 			Codes: `
 			func TestFunc(t *testing.T) {}`,
 			File: "backup/abcoder_test.go",
@@ -91,12 +101,14 @@ func TestPatcher(t *testing.T) {
 	// Apply the patches
 	for _, testPatch := range testPatches {
 		if err := patcher.Patch(testPatch); err != nil {
-			t.Errorf("failed to patch: %v", err)
+			t.Fatalf("failed to patch: %v", err)
 		}
 	}
 
 	// Flush changes
 	if err := patcher.Flush(); err != nil {
-		t.Errorf("failed to flush: %v", err)
+		t.Fatalf("failed to flush: %v", err)
 	}
+
+	// TODO: check patching work as expected
 }

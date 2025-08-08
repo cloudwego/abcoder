@@ -448,6 +448,7 @@ func (c *RustSpec) collect(i *int, lines []string, path string, rets map[string]
 			// if err != nil {
 			// 	rel = dir
 			// }
+			// TODO: duplicate append
 			c.crates = append(c.crates, Module{
 				Name: m[1],
 				Path: dir,

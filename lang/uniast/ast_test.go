@@ -20,27 +20,25 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/cloudwego/abcoder/lang/testutils"
 )
 
-var testdata = "../../testdata"
-
 func TestRepository_BuildGraph(t *testing.T) {
-	var r Repository
-	data, err := os.ReadFile(testdata + "/ast/localsession.json")
+	astFile := testutils.GetTestAstFile("localsession")
+	r, err := LoadRepo(astFile)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(data, &r); err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to load repo: %v", err)
 	}
 	if err := r.BuildGraph(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to build graph: %v", err)
 	}
 	if js, err := json.Marshal(r); err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to marshal repo: %v", err)
 	} else {
-		if err := os.WriteFile(testdata+"/ast/localsession_g.json", js, os.FileMode(0644)); err != nil {
-			t.Fatal(err)
+		astFileWithGraph := testutils.GetTestDataRoot() + "/asts/localsession_g.json"
+		if err := os.WriteFile(astFileWithGraph, js, 0644); err != nil {
+			t.Fatalf("failed to write repo with graph: %v", err)
 		}
 	}
 }

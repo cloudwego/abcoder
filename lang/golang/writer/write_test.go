@@ -22,11 +22,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cloudwego/abcoder/lang/testutils"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
 func TestWriter_WriteRepo(t *testing.T) {
-	repo, err := uniast.LoadRepo("../../../../tmp_compress/localsession.json")
+	astFile := testutils.GetTestAstFile("localsession")
+	repo, err := uniast.LoadRepo(astFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,17 +48,18 @@ func TestWriter_WriteRepo(t *testing.T) {
 			name: "test",
 			fields: fields{
 				Options: Options{
-					CompilerPath: "1.18",
+					CompilerPath: "true", // DO NOT RUN go mod tidy
 				},
 			},
 			args:    args{repo: repo},
 			wantErr: false,
 		},
 	}
+	tmproot := testutils.MakeTmpTestdir(true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := NewWriter(tt.fields.Options)
-			if err := w.WriteRepo(tt.args.repo, "../../../../tmp/localsession2"); (err != nil) != tt.wantErr {
+			if err := w.WriteRepo(tt.args.repo, tmproot); (err != nil) != tt.wantErr {
 				t.Errorf("Writer.WriteRepo() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -64,9 +67,14 @@ func TestWriter_WriteRepo(t *testing.T) {
 }
 
 func TestPatcher_PatchImports(t *testing.T) {
-	data, err := os.ReadFile("../../../../tmp/localsession/gls.go")
+	repoDir, err := testutils.GitCloneFast("github.com/cloudwego/localsession", "localsession", "main")
 	if err != nil {
-		t.Errorf("fail read file %v", err)
+		t.Errorf("fail to clone repo %v", err)
+	}
+	glsFile := repoDir + "/gls.go"
+	data, err := os.ReadFile(glsFile)
+	if err != nil {
+		t.Errorf("fail read file %v file: %s", err, glsFile)
 		return
 	}
 	alias1 := string("_")
@@ -88,15 +96,6 @@ func TestPatcher_PatchImports(t *testing.T) {
 	_ "runtime"
 )
 `), 1)
-	data2, err := os.ReadFile("../../../../tmp/localsession/backup/xx_test.go")
-	if err != nil {
-		t.Errorf("fail read file %v", err)
-		return
-	}
-	data2 = bytes.Replace(data2, []byte(`package backup
-`), []byte(`package backup
-import "fmt"
-`), 1)
 
 	type args struct {
 		file *uniast.File
@@ -107,35 +106,17 @@ import "fmt"
 		want    []byte
 		wantErr bool
 	}{
-		// {
-		// 	name: "empty new",
-		// 	args: args{
-		// 		file: &uniast.File{
-		// 			Name:    "gls.go",
-		// 			Imports: []uniast.Import{},
-		// 			Path:    "gls.go",
-		// 		},
-		// 	},
-		// 	want:    data,
-		// 	wantErr: false,
-		// },
-		// {
-		// 	name: "empty old",
-		// 	args: args{
-		// 		file: &uniast.File{
-		// 			Name: "backup/xx_test.go",
-		// 			Imports: []uniast.Import{
-		// 				{
-		// 					Path:  `"fmt"`,
-		// 					Alias: nil,
-		// 				},
-		// 			},
-		// 			Path: "backup/xx_test.go",
-		// 		},
-		// 	},
-		// 	want:    data2,
-		// 	wantErr: false,
-		// },
+		{
+			name: "empty new",
+			args: args{
+				file: &uniast.File{
+					Imports: []uniast.Import{},
+					Path:    glsFile,
+				},
+			},
+			want:    data,
+			wantErr: false,
+		},
 		{
 			name: "add",
 			args: args{
@@ -146,7 +127,7 @@ import "fmt"
 							Alias: &alias1,
 						},
 					},
-					Path: "gls.go",
+					Path: glsFile,
 				},
 			},
 			want:    data1,
@@ -158,7 +139,8 @@ import "fmt"
 		t.Run(tt.name, func(t *testing.T) {
 			old, err := os.ReadFile(tt.args.file.Path)
 			if err != nil {
-				t.Errorf("fail read file %v", err)
+				println("wtf", tt.args.file.Path)
+				t.Errorf("fail read file %v file: %s", err, tt.args.file.Path)
 				return
 			}
 			got, err := p.PatchImports(tt.args.file.Imports, old)
