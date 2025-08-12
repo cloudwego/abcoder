@@ -60,9 +60,9 @@ func (p *Patcher) SetPatchNodes(ps Patches) {
 }
 
 type Options struct {
-	RepoDir        string
-	OutDir         string
-	DefaultLanuage uniast.Language
+	RepoDir         string
+	OutDir          string
+	DefaultLanguage uniast.Language
 }
 
 func NewPatcher(repo *uniast.Repository, opts Options) *Patcher {
@@ -97,14 +97,14 @@ next_dep:
 
 	mod := p.repo.GetModule(patch.Id.ModPath)
 	if mod == nil {
-		mod = uniast.NewModule(patch.Id.ModPath, "", p.DefaultLanuage)
+		mod = uniast.NewModule(patch.Id.ModPath, "", p.DefaultLanguage)
 		p.repo.SetModule(patch.Id.ModPath, mod)
 	}
 
 	f := mod.GetFile(patch.File)
 	if f == nil {
 		f = uniast.NewFile(patch.File)
-		mod.SetFile(patch.File, f)
+		mod.CreateFile(patch.File, f)
 	}
 
 	fl := node.FileLine()
@@ -231,7 +231,7 @@ func (p *Patcher) Flush() error {
 
 func (p *Patcher) getLangWriter(lang uniast.Language) uniast.Writer {
 	if lang == "" || lang == uniast.Unknown {
-		lang = p.DefaultLanuage
+		lang = p.DefaultLanguage
 	}
 	switch lang {
 	case uniast.Golang:
