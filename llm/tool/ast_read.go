@@ -491,6 +491,8 @@ func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*Get
 			grps = append(grps, NewNodeID(grp.Identity))
 		}
 		resp.Nodes = append(resp.Nodes, NodeStruct{
+			ModPath:      node.Identity.ModPath,
+			PkgPath:      node.Identity.PkgPath,
 			Name:         node.Identity.Name,
 			Type:         node.Type.String(),
 			Codes:        node.Content(),
