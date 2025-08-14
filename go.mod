@@ -14,6 +14,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/invopop/jsonschema v0.13.0
 	github.com/mark3labs/mcp-go v0.34.0
+	github.com/pkg/errors v0.9.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/stretchr/testify v1.10.0
@@ -67,7 +68,6 @@ require (
 	github.com/openai/openai-go v1.10.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect

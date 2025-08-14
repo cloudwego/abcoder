@@ -295,6 +295,26 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 					return false
 				}
 				return false
+			} else if obj, ok := use.(*types.Var); ok {
+				// collect global var
+				addPkgVarDep := func() {
+					pkg := obj.Pkg()
+					if pkg == nil {
+						return
+					}
+					path := pkg.Path()
+					mod, err := ctx.GetMod(path)
+					if err != nil {
+						return
+					}
+					id := NewIdentity(mod, path, obj.Name())
+					dep := NewDependency(id, ctx.FileLine(ident))
+					infos.globalVars = InsertDependency(infos.globalVars, dep)
+				}
+				// check if it is a global var
+				if isPkgScope(obj.Parent()) {
+					addPkgVarDep()
+				}
 			}
 		}
 	} else if sel, ok := expr.X.(*ast.SelectorExpr); ok {
