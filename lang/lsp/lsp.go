@@ -15,6 +15,7 @@
 package lsp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,9 +25,35 @@ import (
 	"sort"
 	"strings"
 
+	sitter "github.com/smacker/go-tree-sitter"
+
 	"github.com/cloudwego/abcoder/lang/utils"
 	"github.com/sourcegraph/go-lsp"
 )
+
+func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}) error {
+	var raw json.RawMessage
+	err := cli.Conn.Call(ctx, method, params, &raw)
+	if err != nil {
+		return err
+	}
+
+	if cli.Verbose {
+		// pretty print json
+		var prettyJSON bytes.Buffer
+		if err := json.Indent(&prettyJSON, raw, "", "  "); err != nil {
+			fmt.Printf("LSP Response for %s (raw): %s\n", method, string(raw))
+		} else {
+			fmt.Printf("LSP Response for %s: %s\n", method, prettyJSON.String())
+		}
+	}
+
+	if err := json.Unmarshal(raw, result); err != nil {
+		return fmt.Errorf("failed to unmarshal LSP response for %s: %w. Raw: %s", method, err, string(raw))
+	}
+
+	return nil
+}
 
 // The SymbolKind values are defined at https://microsoft.github.io/language-server-protocol/specification.
 const (
@@ -60,6 +87,13 @@ const (
 )
 
 type SymbolKind = lsp.SymbolKind
+
+type SymbolRole int
+
+const (
+	DEFINITION SymbolRole = 1
+	REFERENCE  SymbolRole = 2
+)
 
 type Position lsp.Position
 
@@ -157,8 +191,33 @@ type DocumentSymbol struct {
 	Children []*DocumentSymbol `json:"children"`
 	Text     string            `json:"text"`
 	Tokens   []Token           `json:"tokens"`
+	Node     *sitter.Node      `json:"-"`
+	Role     SymbolRole        `json:"-"`
 }
 
+// TypeHierarchyItem represents a node in the type hierarchy tree.
+//
+// @since 3.17.0
+type TypeHierarchyItem struct {
+	Name           string      `json:"name"`
+	Kind           SymbolKind  `json:"kind"`
+	Detail         string      `json:"detail,omitempty"`
+	URI            DocumentURI `json:"uri"`
+	Range          Range       `json:"range"`
+	SelectionRange Range       `json:"selectionRange"`
+	Data           interface{} `json:"data,omitempty"`
+}
+
+func (cli *LSPClient) WorkspaceSymbols(ctx context.Context, query string) ([]DocumentSymbol, error) {
+	req := lsp.WorkspaceSymbolParams{
+		Query: query,
+	}
+	var resp []DocumentSymbol
+	if err := cli.Call(ctx, "workspace/symbol", req, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
 func (s *DocumentSymbol) MarshalJSON() ([]byte, error) {
 	if s == nil {
 		return []byte("null"), nil
@@ -195,7 +254,11 @@ type Token struct {
 }
 
 func (t *Token) String() string {
-	return fmt.Sprintf("%s %s %v %s", t.Text, t.Type, t.Modifiers, t.Location)
+	modifiers := ""
+	if len(t.Modifiers) > 0 {
+		modifiers = fmt.Sprintf("[%s]", strings.Join(t.Modifiers, ","))
+	}
+	return fmt.Sprintf("%s %s%s %s", t.Text, t.Type, modifiers, t.Location)
 }
 
 type DidOpenTextDocumentParams struct {
@@ -395,6 +458,22 @@ func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Posit
 		f.Definitions = make(map[Position][]Location)
 	}
 	f.Definitions[pos] = resp
+	return resp, nil
+}
+
+func (cli *LSPClient) Declaration(ctx context.Context, uri DocumentURI, pos Position) ([]Location, error) {
+	// call
+	req := lsp.TextDocumentPositionParams{
+		TextDocument: lsp.TextDocumentIdentifier{
+			URI: lsp.DocumentURI(uri),
+		},
+		Position: lsp.Position(pos),
+	}
+	var resp []Location
+	if err := cli.Call(ctx, "textDocument/declaration", req, &resp); err != nil {
+		return nil, err
+	}
+
 	return resp, nil
 }
 
@@ -618,15 +697,54 @@ func getSemanticTokenModifier(bitset int, semanticTokenModifiers []string) []str
 	return result
 }
 
-func (cli *LSPClient) WorkspaceSymbols(ctx context.Context, query string) ([]DocumentSymbol, error) {
-	req := lsp.WorkspaceSymbolParams{
-		Query: query,
+func (cli *LSPClient) Hover(ctx context.Context, uri DocumentURI, line, character int) (*lsp.Hover, error) {
+	if cli.provider != nil {
+		// The type assertion is safe because the provider is for the specific language.
+		return cli.provider.Hover(ctx, cli, uri, line, character)
 	}
-	var resp []DocumentSymbol
-	if err := cli.Call(ctx, "workspace/symbol", req, &resp); err != nil {
-		return nil, err
+	// Default hover implementation (or return an error if not supported)
+	// Default implementation (or return an error if not supported)
+	return nil, fmt.Errorf("Hover not supported for this language")
+}
+
+func (cli *LSPClient) Implementation(ctx context.Context, uri DocumentURI, pos Position) ([]Location, error) {
+	if cli.provider != nil {
+		return cli.provider.Implementation(ctx, cli, uri, pos)
 	}
-	return resp, nil
+	// Default implementation (or return an error if not supported)
+	return nil, fmt.Errorf("implementation not supported for this language")
+}
+
+func (cli *LSPClient) WorkspaceSearchSymbols(ctx context.Context, query string) ([]lsp.SymbolInformation, error) {
+	if cli.provider != nil {
+		return cli.provider.WorkspaceSearchSymbols(ctx, cli, query)
+	}
+	// Default implementation (or return an error if not supported)
+	return nil, fmt.Errorf("WorkspaceSearchSymbols not supported for this language")
+}
+
+func (cli *LSPClient) PrepareTypeHierarchy(ctx context.Context, uri DocumentURI, pos Position) ([]TypeHierarchyItem, error) {
+	if cli.provider != nil {
+		return cli.provider.PrepareTypeHierarchy(ctx, cli, uri, pos)
+	}
+	// Default implementation (or return an error if not supported)
+	return nil, fmt.Errorf("PrepareTypeHierarchy not supported for this language")
+}
+
+func (cli *LSPClient) TypeHierarchySupertypes(ctx context.Context, item TypeHierarchyItem) ([]TypeHierarchyItem, error) {
+	if cli.provider != nil {
+		return cli.provider.TypeHierarchySupertypes(ctx, cli, item)
+	}
+	// Default implementation (or return an error if not supported)
+	return nil, fmt.Errorf("TypeHierarchySupertypes not supported for this language")
+}
+
+func (cli *LSPClient) TypeHierarchySubtypes(ctx context.Context, item TypeHierarchyItem) ([]TypeHierarchyItem, error) {
+	if cli.provider != nil {
+		return cli.provider.TypeHierarchySubtypes(ctx, cli, item)
+	}
+	// Default implementation (or return an error if not supported)
+	return nil, fmt.Errorf("TypeHierarchySubtypes not supported for this language")
 }
 
 func (cli *LSPClient) FileStructure(ctx context.Context, file DocumentURI) ([]*DocumentSymbol, error) {
@@ -640,6 +758,18 @@ func (cli *LSPClient) FileStructure(ctx context.Context, file DocumentURI) ([]*D
 		symbols = append(symbols, sym)
 	}
 	return constructSymbolHierarchy(symbols), nil
+}
+
+func FindSymbolByName(symbols []*DocumentSymbol, name string) *DocumentSymbol {
+	for _, s := range symbols {
+		if s.Name == name {
+			return s
+		}
+		if child := FindSymbolByName(s.Children, name); child != nil {
+			return child
+		}
+	}
+	return nil
 }
 
 // constructSymbolHierarchy constructs a symbol hierarchy through range relation and represents it in DocumentSymbol.Children.

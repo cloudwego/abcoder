@@ -17,8 +17,12 @@ package collect
 import (
 	"context"
 	"encoding/json"
+	"github.com/cloudwego/abcoder/lang/java"
+	javaLsp "github.com/cloudwego/abcoder/lang/java/lsp"
 	"os"
 	"testing"
+
+	"path/filepath"
 
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
@@ -26,6 +30,39 @@ import (
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
+func TestCollector_CollectByTreeSitter_Java(t *testing.T) {
+	log.SetLogLevel(log.DebugLevel)
+	javaTestCase := "../../testdata/java/1_advanced"
+
+	t.Run("javaCollect", func(t *testing.T) {
+
+		lsp.RegisterProvider(uniast.Java, &javaLsp.JavaProvider{})
+
+		openfile, wait := java.CheckRepo(javaTestCase)
+		l, s := java.GetDefaultLSP()
+		client, err := lsp.NewLSPClient(javaTestCase, openfile, wait, lsp.ClientOptions{
+			Server:   s,
+			Language: l,
+			Verbose:  false,
+		})
+
+		c := NewCollector(javaTestCase, client)
+		c.Language = uniast.Java
+		_, err = c.ScannerByTreeSitter(context.Background())
+		if err != nil {
+			t.Fatalf("Collector.CollectByTreeSitter() failed = %v\n", err)
+		}
+
+		if len(c.files) == 0 {
+			t.Fatalf("Expected have file, but got %d", len(c.files))
+		}
+
+		expectedFile := filepath.Join(javaTestCase, "/src/main/java/org/example/test.json")
+		if _, ok := c.files[expectedFile]; ok {
+			t.Fatalf("Expected file %s not found", expectedFile)
+		}
+	})
+}
 func TestCollector_Collect(t *testing.T) {
 	log.SetLogLevel(log.DebugLevel)
 	rustLSP, rustTestCase, err := lsp.InitLSPForFirstTest(uniast.Rust, "rust-analyzer")

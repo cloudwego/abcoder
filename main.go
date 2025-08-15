@@ -114,6 +114,13 @@ func main() {
 			opts.LSP = *flagLsp
 		}
 
+		javaHome := flags.String("java-home", "", "java home")
+		lspOptions := make(map[string]string)
+		if len(*javaHome) != 0 {
+			lspOptions["java.home"] = *javaHome
+		}
+		opts.LspOptions = lspOptions
+
 		out, err := lang.Parse(context.Background(), uri, opts)
 		if err != nil {
 			log.Error("Failed to parse: %v\n", err)
