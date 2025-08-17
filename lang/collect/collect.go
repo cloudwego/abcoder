@@ -29,6 +29,7 @@ import (
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
+	"github.com/cloudwego/abcoder/lang/typescript"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
@@ -91,6 +92,8 @@ func switchSpec(l uniast.Language) LanguageSpec {
 		return cxx.NewCxxSpec()
 	case uniast.Python:
 		return python.NewPythonSpec()
+	case uniast.Typescript:
+		return typescript.NewTypescriptSpec()
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}

@@ -219,7 +219,14 @@ func (rwc rwc) Close() error {
 // start a LSP process and return its io
 func startLSPSever(path string) (io.ReadWriteCloser, error) {
 	// Launch rust-analyzer
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, "--stdio")
+	cmd.Env = append(os.Environ(), "PATH=/usr/local/bin/:"+os.Getenv("PATH"))
+	abc, err := exec.LookPath("typescript-language-server")
+	if err != nil {
+		fmt.Println("未找到 typescript-language-server 命令:", err)
+	} else {
+		fmt.Println("找到 typescript-language-server 命令在:", abc)
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

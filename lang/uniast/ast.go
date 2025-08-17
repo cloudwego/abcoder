@@ -27,11 +27,12 @@ import (
 type Language string
 
 const (
-	Golang  Language = "go"
-	Rust    Language = "rust"
-	Cxx     Language = "cxx"
-	Python  Language = "python"
-	Unknown Language = ""
+	Golang     Language = "go"
+	Rust       Language = "rust"
+	Cxx        Language = "cxx"
+	Python     Language = "python"
+	Typescript Language = "typescript"
+	Unknown    Language = ""
 )
 
 func (l Language) String() string {
@@ -44,6 +45,8 @@ func (l Language) String() string {
 		return "cxx"
 	case Python:
 		return "python"
+	case Typescript:
+		return "typescript"
 	default:
 		return string(l)
 	}
@@ -64,6 +67,8 @@ func NewLanguage(lang string) (l Language) {
 		return Cxx
 	case "python":
 		return Python
+	case "typescript":
+		return Typescript
 	default:
 		return Unknown
 	}
