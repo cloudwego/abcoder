@@ -1,4 +1,4 @@
-import { Project } from 'ts-morph';
+import { Project, ts } from 'ts-morph';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Repository, Node, Relation, Identity, Function, Type, Var } from '../types/uniast';
@@ -37,6 +37,48 @@ export class RepositoryParser {
           forceConsistentCasingInFileNames: true
         }
       });
+      const tsConfigQueue: string[] = [configPath];
+      const processedTsConfigs = new Set<string>();
+      while (tsConfigQueue.length > 0) {
+        const currentTsConfig = path.resolve(tsConfigQueue.shift()!);
+        if (processedTsConfigs.has(currentTsConfig)) {
+          continue;
+        }
+        processedTsConfigs.add(currentTsConfig);
+
+        const tsConfig_ = ts.readConfigFile(
+          currentTsConfig, ts.sys.readFile
+        );
+        if(tsConfig_.error) {
+          console.warn("parse tsconfig error", tsConfig_.error)
+          continue;
+        }
+        const parsedConfig = ts.parseJsonConfigFileContent(
+          tsConfig_.config,
+          ts.sys,
+          path.dirname(currentTsConfig)
+        );
+        if(parsedConfig.errors.length > 0) {
+          parsedConfig.errors.forEach(err => {
+            console.warn("parse tsconfig warning:", err.messageText)
+          });
+        }
+        this.project.addSourceFilesAtPaths(parsedConfig.fileNames);
+        // Get references
+        const references = parsedConfig.projectReferences;
+        if (!references) {
+          continue;
+        }
+        for (const ref of references) {
+          const resolvedRef = ts.resolveProjectReferencePath(ref);
+          if (resolvedRef.length > 0) {
+            const refPath = path.resolve(path.dirname(currentTsConfig), resolvedRef);
+            if(fs.existsSync(refPath)) {
+              tsConfigQueue.push(refPath);
+            }
+          }
+        }
+      }
     } else {
       // if tsconfig.json does not exist, use default configuration
       this.project = new Project({

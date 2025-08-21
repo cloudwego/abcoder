@@ -22,10 +22,12 @@ export class SymbolResolver {
   private resolutionCache = new Map<string, ResolvedSymbol | null>();
   private packageJsonCache = new Map<string, any>();
   private mainPackageName: string;
+  private cannotResolveSymbolNames: Set<string> = new Set();
 
   constructor(project: Project, projectRoot: string) {
     this.project = project;
     this.projectRoot = this.normalizePath(projectRoot);
+    this.cannotResolveSymbolNames = new Set();
 
     // Pre-cache the main package.json to avoid repeated file reads
     const mainPackageJsonPath = path.join(this.projectRoot, 'package.json');
@@ -59,7 +61,11 @@ export class SymbolResolver {
     const definitionNode = this.findActualDefinition(symbol);
 
     if (!definitionNode) {
-      console.warn(`Symbol not found: ${symbol.getName()}.`)
+      // Log unresolved symbols only once
+      if (!this.cannotResolveSymbolNames.has(symbol.getName())) {
+        this.cannotResolveSymbolNames.add(symbol.getName());
+        console.warn(`Symbol not found: ${symbol.getName()}.`)
+      }
       this.resolutionCache.set(cacheKey, null);
       return null;
     }
@@ -143,7 +149,9 @@ export class SymbolResolver {
   
     const declarations = current.getDeclarations();
     if (declarations.length === 0) { 
-      if (lastCurrent) {
+      if (lastCurrent && !this.cannotResolveSymbolNames.has(lastCurrent.getName())) {
+        // Log unresolved symbols only once
+        this.cannotResolveSymbolNames.add(lastCurrent.getName());
         console.log("Can't parse: " + lastCurrent.getName(), ". Possibly this library has no .d.ts")
       }
       return null;
