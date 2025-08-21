@@ -74,6 +74,7 @@ testdata/jsons
 
 src/lang/testdata
 *.json
+!ts-parser/**/*.json
 
 tools
 abcoder

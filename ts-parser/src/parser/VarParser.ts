@@ -1,0 +1,510 @@
+import { 
+  SourceFile, 
+  VariableDeclaration, 
+  PropertyDeclaration, 
+  EnumMember, 
+  Node, 
+  SyntaxKind,
+  Project,
+} from 'ts-morph';
+import { Var as UniVar, Dependency } from '../types/uniast';
+import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
+import { PathUtils } from '../utils/path-utils';
+
+export class VarParser {
+  private symbolResolver: SymbolResolver;
+  private pathUtils: PathUtils;
+
+  constructor(project: Project, projectRoot: string) {
+    this.symbolResolver = new SymbolResolver(project, projectRoot);
+    this.pathUtils = new PathUtils(projectRoot);
+  }
+
+  parseVars(sourceFile: SourceFile, moduleName: string, packagePath: string): Record<string, UniVar> {
+    const vars: Record<string, UniVar> = {};
+
+    // Parse variable declarations - only file-level (not inside any scope)
+    const variableDeclarations = sourceFile.getVariableDeclarations();
+    for (const varDecl of variableDeclarations) {
+      // Skip if this variable is not at file level
+      if (!this.isAtFileLevel(varDecl)) {
+        continue;
+      }
+      
+      // Skip if this variable declares a function (arrow function or function expression)
+      const initializer = varDecl.getInitializer();
+      if (initializer) {
+        if (initializer.getKind() === SyntaxKind.ArrowFunction || 
+            initializer.getKind() === SyntaxKind.FunctionExpression) {
+          continue;
+        }
+      }
+      
+      const varObjs = this.parseVariableDestructuring(varDecl, moduleName, packagePath, sourceFile);
+      for (const varObj of varObjs) {
+        vars[varObj.Name] = varObj;
+      }
+    }
+
+    // Parse property declarations in classes - only file-level class properties
+    const classes = sourceFile.getClasses();
+    for (const cls of classes) {
+      // Skip if this class is not at file level
+      if (!this.isAtFileLevel(cls)) {
+        continue;
+      }
+      
+      const properties = cls.getProperties();
+      for (const prop of properties) {
+        // Skip if this property is not at file level
+        if (!this.isAtFileLevel(prop)) {
+          continue;
+        }
+        
+        // Skip if this property declares a function (arrow function or function expression)
+        const initializer = prop.getInitializer();
+        if (initializer) {
+          if (initializer.getKind() === SyntaxKind.ArrowFunction || 
+              initializer.getKind() === SyntaxKind.FunctionExpression) {
+            continue;
+          }
+        }
+        
+        const varObjs = this.parsePropertyDestructuring(prop, moduleName, packagePath, sourceFile);
+        for (const varObj of varObjs) {
+          vars[varObj.Name] = varObj;
+        }
+      }
+    }
+
+    // Parse enum members - only file-level enums
+    const enums = sourceFile.getEnums();
+    for (const enumDecl of enums) {
+      // Skip if this enum is not at file level
+      if (!this.isAtFileLevel(enumDecl)) {
+        continue;
+      }
+      
+      const members = enumDecl.getMembers();
+      for (const member of members) {
+        const memberObj = this.parseEnumMember(member, moduleName, packagePath, sourceFile);
+        vars[memberObj.Name] = memberObj;
+      }
+    }
+
+    return vars;
+  }
+
+  private parseVariableDestructuring(varDecl: VariableDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar[] {
+    const results: UniVar[] = [];
+    
+    // Handle destructuring patterns
+    if (varDecl.getNameNode().getKind() === SyntaxKind.ObjectBindingPattern || 
+        varDecl.getNameNode().getKind() === SyntaxKind.ArrayBindingPattern) {
+      return this.extractDestructuredVariables(varDecl, moduleName, packagePath, sourceFile);
+    }
+    
+    // Handle regular variable declarations
+    let name = varDecl.getName();
+    const sym = varDecl.getSymbol();
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    
+    const startLine = varDecl.getStartLineNumber();
+    const startOffset = varDecl.getStart();
+    const endOffset = varDecl.getEnd();
+    const content = varDecl.getFullText();
+    
+    const parent = varDecl.getVariableStatement();
+    const isExported = parent ? (parent.isExported() || parent.isDefaultExport()) : false;
+    const isConst = parent ? parent.getDeclarationKind() === 'const' : false;
+    const isPointer = this.isPointerType(varDecl);
+
+    // Parse type
+    const typeNode = varDecl.getTypeNode();
+    let type: Dependency | undefined;
+    if (typeNode) {
+      const typeSymbol = typeNode.getSymbol();
+      if (typeSymbol) {
+        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol);
+        if (resolvedSymbol && !resolvedSymbol.isExternal) {
+          type = {
+            ModPath: resolvedSymbol.moduleName || moduleName,
+            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+            Name: resolvedSymbol.name,
+            File: resolvedSymbol.filePath,
+            Line: resolvedSymbol.line,
+            StartOffset: resolvedSymbol.startOffset,
+            EndOffset: resolvedSymbol.endOffset
+          };
+        }
+      }
+    }
+
+    // Parse dependencies from initializer
+    const dependencies = this.extractInitializerDependencies(varDecl, moduleName, packagePath, sourceFile);
+
+    results.push({
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      IsExported: isExported,
+      IsConst: isConst,
+      IsPointer: isPointer,
+      Content: content,
+      Type: type,
+      Dependencies: dependencies,
+      Groups: []
+    });
+
+    return results;
+  }
+
+  private parsePropertyDestructuring(prop: PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar[] {
+    const results: UniVar[] = [];
+    
+    // Handle destructuring patterns in property declarations
+    if (prop.getNameNode().getKind() === SyntaxKind.ObjectBindingPattern || 
+        prop.getNameNode().getKind() === SyntaxKind.ArrayBindingPattern) {
+      return this.extractDestructuredVariables(prop, moduleName, packagePath, sourceFile);
+    }
+    
+    // Handle regular property declarations
+    let name = prop.getName();
+    const sym = prop.getSymbol();
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    
+    const startLine = prop.getStartLineNumber();
+    const startOffset = prop.getStart();
+    const endOffset = prop.getEnd();
+    const content = prop.getFullText();
+    
+    const parent = prop.getParent();
+    let isExported = false;
+    if (Node.isClassDeclaration(parent)) {
+      isExported = parent.isExported() || parent.isDefaultExport();
+    }
+    
+    const isConst = false;
+    const isPointer = this.isPointerType(prop);
+
+    // Parse type
+    const typeNode = prop.getTypeNode();
+    let type: Dependency | undefined;
+    if (typeNode) {
+      const typeSymbol = typeNode.getSymbol();
+      if (typeSymbol) {
+        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol);
+        if (resolvedSymbol && !resolvedSymbol.isExternal) {
+          type = {
+            ModPath: resolvedSymbol.moduleName || moduleName,
+            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+            Name: resolvedSymbol.name,
+            File: resolvedSymbol.filePath,
+            Line: resolvedSymbol.line,
+            StartOffset: resolvedSymbol.startOffset,
+            EndOffset: resolvedSymbol.endOffset
+          };
+        }
+      }
+    }
+
+    // Parse dependencies from initializer
+    const dependencies = this.extractInitializerDependencies(prop, moduleName, packagePath, sourceFile);
+
+    results.push({
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      IsExported: isExported,
+      IsConst: isConst,
+      IsPointer: isPointer,
+      Content: content,
+      Type: type,
+      Dependencies: dependencies,
+      Groups: []
+    });
+
+    return results;
+  }
+
+  private parseEnumMember(member: EnumMember, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar {
+    let name = member.getName();
+    const sym = member.getSymbol();
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    
+    const startLine = member.getStartLineNumber();
+    const startOffset = member.getStart();
+    const endOffset = member.getEnd();
+    const content = member.getFullText();
+    
+    const parent = member.getParent();
+    let isExported = false;
+    if (Node.isEnumDeclaration(parent)) {
+      isExported = parent.isExported() || parent.isDefaultExport();
+    }
+    
+    const isConst = true;
+    const isPointer = false;
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      IsExported: isExported,
+      IsConst: isConst,
+      IsPointer: isPointer,
+      Content: content,
+      Type: undefined,
+      Dependencies: [],
+      Groups: []
+    };
+  }
+
+  private extractDestructuredVariables(node: VariableDeclaration | PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar[] {
+    const results: UniVar[] = [];
+    const nameNode = node.getNameNode();
+    
+    // Get the initializer for dependency extraction
+    const dependencies = this.extractInitializerDependencies(node, moduleName, packagePath, sourceFile);
+    
+    // Recursively extract all identifiers from destructuring patterns
+    this.extractIdentifiersFromPattern(nameNode, node, moduleName, packagePath, sourceFile, dependencies, results);
+    
+    return results;
+  }
+
+  private extractIdentifiersFromPattern(
+    patternNode: Node,
+    parentNode: VariableDeclaration | PropertyDeclaration,
+    moduleName: string,
+    packagePath: string,
+    sourceFile: SourceFile,
+    dependencies: Dependency[],
+    results: UniVar[]
+  ): void {
+    if (Node.isIdentifier(patternNode)) {
+      // Simple identifier
+      results.push(this.createUniVar(patternNode.getText(), patternNode, parentNode, moduleName, packagePath, sourceFile, dependencies));
+    } else if (Node.isBindingElement(patternNode)) {
+      // Handle binding elements
+      const nameNode = patternNode.getNameNode();
+      if (Node.isIdentifier(nameNode)) {
+        results.push(this.createUniVar(nameNode.getText(), nameNode, parentNode, moduleName, packagePath, sourceFile, dependencies));
+      } else {
+        // Recursively handle nested patterns
+        this.extractIdentifiersFromPattern(nameNode, parentNode, moduleName, packagePath, sourceFile, dependencies, results);
+      }
+    } else if (Node.isObjectBindingPattern(patternNode)) {
+      // Handle object destructuring
+      const elements = patternNode.getElements();
+      for (const element of elements) {
+        this.extractIdentifiersFromPattern(element, parentNode, moduleName, packagePath, sourceFile, dependencies, results);
+      }
+    } else if (Node.isArrayBindingPattern(patternNode)) {
+      // Handle array destructuring
+      const elements = patternNode.getElements();
+      for (const element of elements) {
+        this.extractIdentifiersFromPattern(element, parentNode, moduleName, packagePath, sourceFile, dependencies, results);
+      }
+    }
+  }
+
+  private createUniVar(
+    varName: string,
+    element: any,
+    parentNode: VariableDeclaration | PropertyDeclaration,
+    moduleName: string,
+    packagePath: string,
+    sourceFile: SourceFile,
+    dependencies: Dependency[]
+  ): UniVar {
+    const startLine = element.getStartLineNumber();
+    const startOffset = element.getStart();
+    const endOffset = element.getEnd();
+    const content = element.getFullText();
+    
+    let isExported = false;
+    let isConst = false;
+    
+    if (Node.isVariableDeclaration(parentNode)) {
+      const parent = parentNode.getVariableStatement();
+      isExported = parent ? (parent.isExported() || parent.isDefaultExport()) : false;
+      isConst = parent ? parent.getDeclarationKind() === 'const' : false;
+    } else if (Node.isPropertyDeclaration(parentNode)) {
+      const parent = parentNode.getParent();
+      if (Node.isClassDeclaration(parent)) {
+        isExported = parent.isExported() || parent.isDefaultExport();
+      }
+    }
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: varName,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      IsExported: isExported,
+      IsConst: isConst,
+      IsPointer: this.isPointerType(element),
+      Content: content,
+      Type: undefined,
+      Dependencies: dependencies,
+      Groups: []
+    };
+  }
+
+  private extractInitializerDependencies(node: VariableDeclaration | PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): Dependency[] {
+    const dependencies: Dependency[] = [];
+    const visited = new Set<string>();
+    
+    const initializer = node.getInitializer();
+    if (!initializer) return dependencies;
+    
+    // Get the variable declaration's position range
+    const varStart = node.getStart();
+    const varEnd = node.getEnd();
+    
+    // Extract the source object/array that the destructuring is from
+    const sourceSymbol = initializer.getSymbol();
+    if (sourceSymbol) {
+      const resolvedSymbol = this.symbolResolver.resolveSymbol(sourceSymbol);
+      if (resolvedSymbol && !resolvedSymbol.isExternal) {
+        // Check if the dependency is defined outside this variable declaration
+        if (!this.isDependencyDefinedWithinVariable(resolvedSymbol, varStart, varEnd)) {
+          const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            dependencies.push({
+              ModPath: resolvedSymbol.moduleName || moduleName,
+              PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+              Name: resolvedSymbol.name,
+              File: resolvedSymbol.filePath,
+              Line: resolvedSymbol.line,
+              StartOffset: resolvedSymbol.startOffset,
+              EndOffset: resolvedSymbol.endOffset
+            });
+          }
+        }
+      }
+    }
+    
+    // Extract identifiers that are defined outside this variable declaration
+    const identifiers = initializer.getDescendantsOfKind(SyntaxKind.Identifier);
+    for (const identifier of identifiers) {
+      // Skip if this identifier is part of a property access (struct field access)
+      const parent = identifier.getParent();
+      if (parent && Node.isPropertyAccessExpression(parent) && parent.getNameNode() === identifier) {
+        continue;
+      }
+      
+      const symbol = identifier.getSymbol();
+      if (!symbol) {
+        continue;
+      }
+
+      const decls = symbol.getDeclarations()
+      if(decls.length === 0) {
+        continue;
+      }
+      const isLocal = decls.some(decl => 
+        decl.getAncestors().includes(initializer)
+      );
+
+      if(isLocal) {
+        continue
+      }
+
+      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+      if (resolvedSymbol && !resolvedSymbol.isExternal) {
+        const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          dependencies.push({
+            ModPath: resolvedSymbol.moduleName || moduleName,
+            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+            Name: resolvedSymbol.name,
+            File: resolvedSymbol.filePath,
+            Line: resolvedSymbol.line,
+            StartOffset: resolvedSymbol.startOffset,
+            EndOffset: resolvedSymbol.endOffset
+          });
+        }
+      }
+    }
+    
+    return dependencies;
+  }
+
+  private isDependencyDefinedWithinVariable(resolvedSymbol: any, varStart: number, varEnd: number): boolean {
+    // Check if the dependency's declaration is within the variable declaration's range
+    if (resolvedSymbol.startOffset !== undefined && resolvedSymbol.endOffset !== undefined) {
+      return resolvedSymbol.startOffset >= varStart && resolvedSymbol.endOffset <= varEnd;
+    }
+    return false;
+  }
+
+  private isPointerType(_: any): boolean {
+    return false;
+  }
+
+  private getRelativePath(filePath: string): string {
+    return this.pathUtils.getRelativePath(filePath);
+  }
+
+  private getPkgPath(packagePath: string): string {
+    return this.pathUtils.getPkgPath(packagePath);
+  }
+
+
+  private isAtFileLevel(node: any): boolean {
+    let parent = node.getParent();
+    
+    while (parent) {
+      const kind = parent.getKind();
+      // Check if this is a file-level declaration (direct child of SourceFile)
+      if (kind === SyntaxKind.SourceFile) {
+        return true;
+      }
+      // If we hit any scoped construct, it's not file-level
+      if (
+        kind === SyntaxKind.FunctionDeclaration ||
+        kind === SyntaxKind.FunctionExpression ||
+        kind === SyntaxKind.ArrowFunction ||
+        kind === SyntaxKind.MethodDeclaration ||
+        kind === SyntaxKind.Constructor ||
+        kind === SyntaxKind.GetAccessor ||
+        kind === SyntaxKind.SetAccessor ||
+        kind === SyntaxKind.ClassDeclaration ||
+        kind === SyntaxKind.InterfaceDeclaration ||
+        kind === SyntaxKind.EnumDeclaration ||
+        kind === SyntaxKind.ModuleDeclaration
+      ) {
+        return false;
+      }
+      
+      parent = parent.getParent();
+    }
+    
+    return false;
+  }
+}

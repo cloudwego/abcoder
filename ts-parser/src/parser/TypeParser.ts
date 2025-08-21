@@ -1,0 +1,440 @@
+import { 
+  SourceFile, 
+  ClassDeclaration, 
+  InterfaceDeclaration, 
+  TypeAliasDeclaration, 
+  EnumDeclaration, 
+  SyntaxKind,
+  TypeNode,
+  SymbolFlags,
+  ClassExpression
+} from 'ts-morph';
+import { Type as UniType, Dependency } from '../types/uniast';
+import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
+import { PathUtils } from '../utils/path-utils';
+import { TypeUtils } from '../utils/type-utils';
+
+export class TypeParser {
+  private symbolResolver: SymbolResolver;
+  private pathUtils: PathUtils;
+
+  constructor(projectRoot: string) {
+    this.symbolResolver = new SymbolResolver(null as any, projectRoot);
+    this.pathUtils = new PathUtils(projectRoot);
+  }
+
+  parseTypes(sourceFile: SourceFile, moduleName: string, packagePath: string): Record<string, UniType> {
+    const types: Record<string, UniType> = {};
+
+    // Parse class declarations
+    const classes = sourceFile.getClasses();
+    for (const cls of classes) {
+      const typeObj = this.parseClass(cls, moduleName, packagePath, sourceFile);
+      types[typeObj.Name] = typeObj;
+    }
+
+    // Parse class expressions (anonymous classes)
+    const classExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.ClassExpression);
+    for (let i = 0; i < classExpressions.length; i++) {
+      const classExpr = classExpressions[i];
+      const typeObj = this.parseClassExpression(classExpr, moduleName, packagePath, sourceFile, i);
+      types[typeObj.Name] = typeObj;
+    }
+
+    // Parse interface declarations
+    const interfaces = sourceFile.getInterfaces();
+    for (const iface of interfaces) {
+      const typeObj = this.parseInterface(iface, moduleName, packagePath, sourceFile);
+      types[typeObj.Name] = typeObj;
+    }
+
+    // Parse type alias declarations
+    const typeAliases = sourceFile.getTypeAliases();
+    for (const typeAlias of typeAliases) {
+      const typeObj = this.parseTypeAlias(typeAlias, moduleName, packagePath, sourceFile);
+      types[typeObj.Name] = typeObj;
+    }
+
+    // Parse enum declarations
+    const enums = sourceFile.getEnums();
+    for (const enumDecl of enums) {
+      const typeObj = this.parseEnum(enumDecl, moduleName, packagePath, sourceFile);
+      types[typeObj.Name] = typeObj;
+    }
+
+    return types;
+  }
+
+  private parseClass(cls: ClassDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniType {
+
+    const sym = cls.getSymbol();
+    let name = cls.getName() || 'AnonymousClass';
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    const startLine = cls.getStartLineNumber();
+    const startOffset = cls.getStart();
+    const endOffset = cls.getEnd();
+    const content = cls.getFullText();
+    const isExported = cls.isExported() || cls.isDefaultExport();
+
+    // Parse methods
+    const methods: Record<string, any> = {};
+    const classMethods = cls.getMethods();
+    for (const method of classMethods) {
+      const methodName = method.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse implemented interfaces and extended classes
+    const implementsInterfaces: Dependency[] = [];
+    const extendsClasses: Dependency[] = [];
+    
+    const heritageClauses = cls.getHeritageClauses();
+    for (const clause of heritageClauses) {
+      const clauseType = clause.getToken();
+      const typeNodes = clause.getTypeNodes();
+      
+      for (const typeNode of typeNodes) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+        if (clauseType === SyntaxKind.ImplementsKeyword) {
+          implementsInterfaces.push(...dependencies);
+        } else if (clauseType === SyntaxKind.ExtendsKeyword) {
+          extendsClasses.push(...dependencies);
+        }
+      }
+    }
+
+    // Parse property types
+    const propertyTypes: Dependency[] = [];
+    const properties = cls.getProperties();
+    for (const prop of properties) {
+      const propType = prop.getTypeNode();
+      if (propType) {
+        const typeDependencies = this.extractTypeDependencies(propType, moduleName, packagePath);
+        propertyTypes.push(...typeDependencies);
+      }
+    }
+
+    // Combine implements and extends into Implements, but filter out external symbols
+    const allImplements = [...implementsInterfaces, ...extendsClasses, ...propertyTypes];
+    
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      TypeKind: 'struct',
+      Content: content,
+      Methods: methods,
+      Implements: allImplements,
+      SubStruct: [],
+      InlineStruct: []
+    };
+  }
+
+  private parseInterface(iface: InterfaceDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniType {
+    const sym = iface.getSymbol();
+    let name = iface.getName() || 'AnonymousInterface';
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    const startLine = iface.getStartLineNumber();
+    const startOffset = iface.getStart();
+    const endOffset = iface.getEnd();
+    const content = iface.getFullText();
+    const isExported = iface.isExported() || iface.isDefaultExport();
+
+    // Parse methods
+    const methods: Record<string, any> = {};
+    const interfaceMethods = iface.getMethods();
+    for (const method of interfaceMethods) {
+      const methodName = method.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse extended interfaces
+    const extendsInterfaces: Dependency[] = [];
+    const heritageClauses = iface.getHeritageClauses();
+    for (const clause of heritageClauses) {
+      if (clause.getToken() === SyntaxKind.ExtendsKeyword) {
+        const typeNodes = clause.getTypeNodes();
+        for (const typeNode of typeNodes) {
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+          extendsInterfaces.push(...dependencies);
+        }
+      }
+    }
+
+    // Parse property types
+    const propertyTypes: Dependency[] = [];
+    const properties = iface.getProperties();
+    for (const prop of properties) {
+      const propType = prop.getTypeNode();
+      if (propType) {
+        const typeDependencies = this.extractTypeDependencies(propType, moduleName, packagePath);
+        propertyTypes.push(...typeDependencies);
+      }
+    }
+
+    // Parse method signatures
+    const methodTypes: Dependency[] = [];
+    const methodSignatures = iface.getMethods();
+    for (const method of methodSignatures) {
+      const returnType = method.getReturnTypeNode();
+      if (returnType) {
+        const typeDependencies = this.extractTypeDependencies(returnType, moduleName, packagePath);
+        methodTypes.push(...typeDependencies);
+      }
+
+      const parameters = method.getParameters();
+      for (const param of parameters) {
+        const paramType = param.getTypeNode();
+        if (paramType) {
+          const typeDependencies = this.extractTypeDependencies(paramType, moduleName, packagePath);
+          methodTypes.push(...typeDependencies);
+        }
+      }
+    }
+
+    // Combine extends interfaces and other dependencies into Implements, but filter out external symbols
+    const allImplements = [...extendsInterfaces, ...propertyTypes, ...methodTypes];
+    
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      TypeKind: 'interface',
+      Content: content,
+      Methods: methods,
+      Implements: allImplements,
+      SubStruct: [],
+      InlineStruct: []
+    };
+  }
+
+  private parseTypeAlias(typeAlias: TypeAliasDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniType {
+
+    const sym = typeAlias.getSymbol();
+    let name = typeAlias.getName() || 'AnonymousTypeAlias';
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    const startLine = typeAlias.getStartLineNumber();
+    const startOffset = typeAlias.getStart();
+    const endOffset = typeAlias.getEnd();
+    const content = typeAlias.getFullText();
+    const isExported = typeAlias.isExported() || typeAlias.isDefaultExport();
+
+    // Extract type dependencies from the type alias
+    const typeDependencies: Dependency[] = [];
+    const typeNode = typeAlias.getTypeNode();
+    if (typeNode) {
+      const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+      typeDependencies.push(...dependencies);
+    }
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      TypeKind: 'typedef',
+      Content: content,
+      Methods: {},
+      Implements: typeDependencies,
+      SubStruct: [],
+      InlineStruct: []
+    };
+  }
+
+  private parseEnum(enumDecl: EnumDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniType {
+    const sym = enumDecl.getSymbol();
+    let name = enumDecl.getName() || 'AnonymousEnum';
+    if (sym) {
+      name = assignSymbolName(sym);
+    }
+    const startLine = enumDecl.getStartLineNumber();
+    const startOffset = enumDecl.getStart();
+    const endOffset = enumDecl.getEnd();
+    const content = enumDecl.getFullText();
+    const isExported = enumDecl.isExported() || enumDecl.isDefaultExport();
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      TypeKind: 'enum',
+      Content: content,
+      Methods: {},
+      Implements: [],
+      SubStruct: [],
+      InlineStruct: []
+    };
+  }
+
+  /**
+   * Extract all type dependencies from a type expression
+   * This handles union types, intersection types, generics, arrays, etc.
+   * Uses SymbolResolver for consistent dependency resolution, similar to extractTypeReferences
+   */
+  private extractTypeDependencies(typeNode: TypeNode, moduleName: string, packagePath: string): Dependency[] {
+    const dependencies: Dependency[] = [];
+    const visited = new Set<string>();
+
+    // Extract from identifiers and find their definitions
+    const identifiers = typeNode.getDescendantsOfKind(SyntaxKind.Identifier);
+    
+    for (const identifier of identifiers) {
+      const symbol = identifier.getSymbol();
+      if (!symbol || (symbol.getFlags() & (SymbolFlags.Type | SymbolFlags.TypeAlias | SymbolFlags.TypeLiteral)) === 0) {
+        continue;
+      }
+
+      const typeName = identifier.getText();
+      if (this.isPrimitiveType(typeName)) continue;
+
+      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+      // if symbol is not external, add it to dependencies
+      if (resolvedSymbol && !resolvedSymbol.isExternal) {
+        const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          let dep : Dependency = {
+            ModPath: resolvedSymbol.moduleName || moduleName,
+            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+            Name: resolvedSymbol.name,
+            File: resolvedSymbol.filePath,
+            Line: resolvedSymbol.line,
+            StartOffset: resolvedSymbol.startOffset,
+            EndOffset: resolvedSymbol.endOffset
+          };
+          if (
+            dep.ModPath === moduleName &&
+            dep.PkgPath === packagePath &&
+            typeNode.getStart() <= resolvedSymbol.startOffset &&
+            resolvedSymbol.endOffset <= typeNode.getEnd()
+          ) continue;
+          dependencies.push(dep);
+        }
+      }
+    }
+
+    return dependencies;
+  }
+
+
+  private isPrimitiveType(typeName: string): boolean {
+    return TypeUtils.isPrimitiveType(typeName);
+  }
+
+  private getRelativePath(filePath: string): string {
+    return this.pathUtils.getRelativePath(filePath);
+  }
+
+  private getPkgPath(packagePath: string): string {
+    return this.pathUtils.getPkgPath(packagePath);
+  }
+
+  private parseClassExpression(classExpr: ClassExpression, moduleName: string, packagePath: string, sourceFile: SourceFile, index: number): UniType {
+    const sym = classExpr.getSymbol();
+    let name = `AnonymousClass_${index}`;
+    if (sym) {
+      const symbolName = assignSymbolName(sym);
+      if (symbolName && symbolName !== 'AnonymousClass') {
+        name = symbolName;
+      }
+    }
+    
+    const startLine = classExpr.getStartLineNumber();
+    const startOffset = classExpr.getStart();
+    const endOffset = classExpr.getEnd();
+    const content = classExpr.getFullText();
+    
+    // Parse methods
+    const methods: Record<string, any> = {};
+    const classMethods = classExpr.getMethods();
+    for (const method of classMethods) {
+      const methodName = method.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse implemented interfaces and extended classes
+    const implementsInterfaces: Dependency[] = [];
+    const extendsClasses: Dependency[] = [];
+    
+    const heritageClauses = classExpr.getHeritageClauses();
+    for (const clause of heritageClauses) {
+      const clauseType = clause.getToken();
+      const typeNodes = clause.getTypeNodes();
+      
+      for (const typeNode of typeNodes) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+        
+        if (clauseType === SyntaxKind.ImplementsKeyword) {
+          implementsInterfaces.push(...dependencies);
+        } else if (clauseType === SyntaxKind.ExtendsKeyword) {
+          extendsClasses.push(...dependencies);
+        }
+      }
+    }
+
+    // Parse property types
+    const propertyTypes: Dependency[] = [];
+    const properties = classExpr.getProperties();
+    for (const prop of properties) {
+      const propType = prop.getTypeNode();
+      if (propType) {
+        const typeDependencies = this.extractTypeDependencies(propType, moduleName, packagePath);
+        propertyTypes.push(...typeDependencies);
+      }
+    }
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: name,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: false, // Anonymous classes are not exported
+      TypeKind: 'struct',
+      Content: content,
+      Methods: methods,
+      Implements: [...implementsInterfaces, ...extendsClasses, ...propertyTypes],
+      SubStruct: [],
+      InlineStruct: []
+    };
+  }
+}
