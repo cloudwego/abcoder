@@ -22,7 +22,7 @@ export class ModuleParser {
     this.tsConfigCache = TsConfigCache.getInstance();
   }
 
-  async parseModule(modulePath: string, relativeDir: string, options: { loadExternalSymbols?: boolean, noDist?: boolean } = {}): Promise<Module> {
+  async parseModule(modulePath: string, relativeDir: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Module> {
     const packageJsonPath = path.join(modulePath, 'package.json');
     let packageJson: any = {};
     
@@ -42,7 +42,8 @@ export class ModuleParser {
     const analyzer = new TypeScriptStructureAnalyzer(modulePath);
     const structure = analyzer.analyze({ 
       loadExternalSymbols: options.loadExternalSymbols,
-      noDist: options.noDist 
+      noDist: options.noDist,
+      srcPatterns: options.srcPatterns
     });
 
     // Parse packages

@@ -79,7 +79,7 @@ export class RepositoryParser {
     return TsConfigCache.getInstance().getCurrentConfigPath('');
   }
 
-  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean } = {}): Promise<Repository> {
+  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Repository> {
     const absolutePath = path.resolve(repoPath);
     
     const repository: Repository = {

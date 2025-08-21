@@ -14,11 +14,4 @@ export class TypeUtils {
   static isPrimitiveType(typeName: string): boolean {
     return this.PRIMITIVE_TYPES.has(typeName.toLowerCase());
   }
-
-  /**
-   * Extract base type name from complex type expressions
-   */
-  static extractBaseTypeName(typeName: string): string {
-    return typeName.split('<')[0].split('&')[0].split('|')[0].trim();
-  }
 }
