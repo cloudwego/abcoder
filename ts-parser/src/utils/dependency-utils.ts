@@ -1,6 +1,7 @@
 import { Identifier, Node, SymbolFlags, SyntaxKind, Type, TypeNode, TypeReferenceNode } from 'ts-morph';
 import { Dependency } from '../types/uniast';
 import { SymbolResolver } from './symbol-resolver';
+import { PathUtils } from './path-utils';
 
 export class DependencyUtils {
   private symbolResolver: SymbolResolver;
@@ -107,30 +108,7 @@ export class DependencyUtils {
     return results;
   }
 
-  extractAtomicType(type: Type): Type[] {
-    const results: Type[] = [];
-    function visit(t: Type) {
-      if (t.isUnion && t.isUnion()) {
-        t.getUnionTypes().forEach(visit);
-      } else if (t.isIntersection && t.isIntersection()) {
-        t.getIntersectionTypes().forEach(visit);
-      } else if (t.isArray && t.isArray()) {
-        visit(t.getArrayElementTypeOrThrow());
-      } else if (t.getAliasTypeArguments && t.getAliasTypeArguments().length > 0) {
-        t.getAliasTypeArguments().forEach(visit);
-      } else if (t.getTypeArguments && t.getTypeArguments().length > 0) {
-        t.getTypeArguments().forEach(visit);
-      } else {
-        results.push(t);
-      }
-    }
-    
-    visit(type);
-    return results;
-  }
-
   private getPkgPath(packagePath: string): string {
-    const PathUtils = require('./path-utils').PathUtils;
     const pathUtils = new PathUtils(this.projectRoot);
     return pathUtils.getPkgPath(packagePath);
   }

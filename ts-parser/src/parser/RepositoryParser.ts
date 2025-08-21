@@ -14,19 +14,18 @@ export class RepositoryParser {
     this.tsConfigCache = TsConfigCache.getInstance();
 
     
+    let configPath =  path.join(projectRoot, 'tsconfig.json');
 
-    // 设置全局 tsconfig 路径（如果提供）
+    // If a custom tsconfig path is provided, use it
     if (tsConfigPath) {
       let absoluteTsConfigPath = tsConfigPath;
       if (!path.isAbsolute(absoluteTsConfigPath)) {
         absoluteTsConfigPath = path.join(projectRoot, absoluteTsConfigPath);
       }
+      configPath = absoluteTsConfigPath;
       this.tsConfigCache.setGlobalConfigPath(absoluteTsConfigPath);
     }
-    
-    // get current tsconfig path
-    const configPath = this.tsConfigCache.getCurrentConfigPath(projectRoot);
-    
+        
     if (fs.existsSync(configPath)) {
       // if tsconfig.json exists, use it to configure the project
       this.project = new Project({
@@ -114,12 +113,6 @@ export class RepositoryParser {
     this.moduleParser = new ModuleParser(this.project, projectRoot);
   }
 
-  /**
-   * get current tsconfig path
-   */
-  public static getTsConfigPath(): string | null {
-    return TsConfigCache.getInstance().getCurrentConfigPath('');
-  }
 
   async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Repository> {
     const absolutePath = path.resolve(repoPath);
