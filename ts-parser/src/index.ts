@@ -20,6 +20,7 @@ program
   .option('-t, --tsconfig <file>', 'Path to tsconfig.json file (relative to project root if not absolute)')
   .option('--no-dist', 'Ignore dist folder and its contents', false)
   .option('--pretty', 'Pretty print JSON output', false)
+  .option('--src <dirs>', 'Directory paths to include (comma-separated)', (value) => value.split(','))
   .action(async (directory, options) => {
     try {
       const repoPath = path.resolve(directory);
@@ -34,7 +35,8 @@ program
       const parser = new RepositoryParser(repoPath, options.tsconfig);
       const repository = await parser.parseRepository(repoPath, {
         loadExternalSymbols: false,
-        noDist: options.noDist
+        noDist: options.noDist,
+        srcPatterns: options.src
       });
 
       const outputPath = path.resolve(options.output);

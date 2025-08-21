@@ -18,6 +18,9 @@ Arguments:
 |--------|-------------|
 | -o, --output <file> | Output file path (default: "output.json") |
 | -t, --tsconfig <file> | Path to tsconfig.json file, if you provide a relative path, it will be relative to **the directory of the input file** (default: "tsconfig.json") |
+| --no-dist | Ignore dist folder and its contents |
+| --pretty | Pretty print JSON output |
+| --src <dirs> | Directory paths to include (comma-separated) |
 | -h, --help | display help for command |
 
 

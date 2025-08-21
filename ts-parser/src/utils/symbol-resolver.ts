@@ -39,6 +39,7 @@ export class SymbolResolver {
       }
     } catch (e) {
       // ignore
+      console.warn("Failed during parsing package.json: " + e)
     }
   }
 

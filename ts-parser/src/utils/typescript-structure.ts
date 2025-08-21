@@ -44,7 +44,7 @@ export class TypeScriptStructureAnalyzer {
     this.tsConfigCache = TsConfigCache.getInstance();
   }
 
-  analyze(options: { loadExternalSymbols?: boolean, noDist?: boolean } = {}): TypeScriptStructure {
+  analyze(options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): TypeScriptStructure {
     const structure: TypeScriptStructure = {
       modules: new Map(),
       packages: new Map(),
@@ -101,7 +101,7 @@ export class TypeScriptStructureAnalyzer {
   }
 
 
-  private analyzePackages(module: ModuleInfo, options: { noDist?: boolean } = {}): PackageInfo[] {
+  private analyzePackages(module: ModuleInfo, options: { noDist?: boolean, srcPatterns?: string[] } = {}): PackageInfo[] {
     const packages: PackageInfo[] = [];
     const sourceDirs = this.findSourceDirectories(module, options);
 
@@ -113,7 +113,13 @@ export class TypeScriptStructureAnalyzer {
     return packages;
   }
 
-  private findSourceDirectories(module: ModuleInfo, options: { noDist?: boolean } = {}): string[] {
+  private findSourceDirectories(module: ModuleInfo, options: { noDist?: boolean, srcPatterns?: string[] } = {}): string[] {
+    // Handle srcPatterns if provided
+    if (options.srcPatterns && options.srcPatterns.length > 0) {
+      return this.findDirectoriesByPatterns(module.path, options.srcPatterns, options);
+    }
+
+    // Original behavior when no srcPatterns provided
     const dirs: string[] = [];
     const packageJson = module.packageJson;
 
@@ -125,14 +131,6 @@ export class TypeScriptStructureAnalyzer {
     }
     if (config.outDir && !(options.noDist && config.outDir === 'dist')) {
       dirs.push(path.join(module.path, config.outDir));
-    }
-
-    // Check package.json for main entry
-    if (packageJson.main) {
-      const mainDir = path.dirname(path.join(module.path, packageJson.main));
-      if (fs.existsSync(mainDir)) {
-        dirs.push(mainDir);
-      }
     }
 
     // Default source directories
@@ -150,6 +148,26 @@ export class TypeScriptStructureAnalyzer {
 
     // Remove duplicates and ensure paths exist
     return [...new Set(dirs)].filter(dir => fs.existsSync(dir));
+  }
+
+  private findDirectoriesByPatterns(modulePath: string, patterns: string[], options: { noDist?: boolean }): string[] {
+    const matchedDirs = new Set<string>();
+    
+    for (const pattern of patterns) {
+      // 精确路径匹配，直接拼接并检查是否存在
+      const fullPath = path.join(modulePath, pattern);
+      
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
+        // 检查是否需要跳过 dist 目录
+        if (options.noDist && path.basename(fullPath) === 'dist') {
+          continue;
+        }
+        
+        matchedDirs.add(fullPath);
+      }
+    }
+    
+    return Array.from(matchedDirs);
   }
 
   private createPackagesFromDirectory(module: ModuleInfo, sourceDir: string, options: { noDist?: boolean } = {}): PackageInfo[] {
@@ -198,7 +216,7 @@ export class TypeScriptStructureAnalyzer {
     return packages;
   }
 
-  private findTypeScriptFiles(dir: string, options: { noDist?: boolean } = {}): string[] {
+  private findTypeScriptFiles(dir: string, options: { noDist?: boolean, srcPatterns?: string[] } = {}): string[] {
     const files: string[] = [];
     
     function traverse(currentDir: string) {
