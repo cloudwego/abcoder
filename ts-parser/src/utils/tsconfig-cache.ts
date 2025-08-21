@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as JSON5 from 'json5';
+import { ts } from 'ts-morph';
 
 
 export interface TsConfigData {
@@ -8,6 +9,7 @@ export interface TsConfigData {
   paths?: Record<string, string[]>;
   rootDir?: string;
   outDir?: string;
+  fileNames?: string[];
   [key: string]: any;
 }
 
@@ -45,6 +47,7 @@ export class TsConfigCache {
     // Get tsconfig.json path
     const configPath = customPath || this.globalConfigPath || path.join(projectRoot, 'tsconfig.json');
     const resolvedPath = path.resolve(configPath);
+    const emptyConfig: TsConfigData = {};
 
     // If cache exists, return directly
     if (this.cache.has(resolvedPath)) {
@@ -53,18 +56,36 @@ export class TsConfigCache {
 
     // If file does not exist, return empty object
     if (!fs.existsSync(resolvedPath)) {
-      const emptyConfig: TsConfigData = {};
       this.cache.set(resolvedPath, emptyConfig);
       return emptyConfig;
     }
 
     try {
+      const tsConfig_ = ts.readConfigFile(
+        resolvedPath, ts.sys.readFile
+      );
+      if (tsConfig_.error) {
+        console.warn(`Failed to read tsconfig.json at ${this.globalConfigPath}:`, tsConfig_.error);
+        return emptyConfig;
+      }
+      const parsedConfig = ts.parseJsonConfigFileContent(
+        tsConfig_.config,
+        ts.sys,
+        path.dirname(configPath)
+      );
+      if(parsedConfig.errors.length > 0) {
+        parsedConfig.errors.forEach(err => {
+          console.warn("parse tsconfig warning:", err.messageText)
+        });
+      }
+
       const tsconfig = JSON5.parse(fs.readFileSync(resolvedPath, 'utf8'));
       const configData: TsConfigData = {
         compilerOptions: tsconfig.compilerOptions || {},
         paths: tsconfig.compilerOptions?.paths || {},
         rootDir: tsconfig.compilerOptions?.rootDir,
         outDir: tsconfig.compilerOptions?.outDir,
+        fileNames: parsedConfig.fileNames || [],
         ...tsconfig
       };
       
@@ -106,12 +127,5 @@ export class TsConfigCache {
    */
   public clearCache(): void {
     this.cache.clear();
-  }
-
-  /**
-   * Get current tsconfig.json path
-   */
-  public getCurrentConfigPath(projectRoot: string): string {
-    return this.globalConfigPath || path.join(projectRoot, 'tsconfig.json');
   }
 }

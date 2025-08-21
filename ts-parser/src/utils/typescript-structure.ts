@@ -125,7 +125,16 @@ export class TypeScriptStructureAnalyzer {
 
     // Get tsconfig.json configuration
     const config = this.tsConfigCache.getTsConfig(module.path);
+
+    // Default: all directories in tsconfig.json
+    if(config.fileNames && config.fileNames.length > 0) {
+      const dirSet = new Set<string>();
+      config.fileNames.forEach(file => { dirSet.add(path.dirname(file)); });
+      dirs.push(...Array.from(dirSet));
+      return dirs.filter(dir => fs.existsSync(dir));
+    }
     
+    // Fallback to rootDir and outDir
     if (config.rootDir) {
       dirs.push(path.join(module.path, config.rootDir));
     }
@@ -154,11 +163,11 @@ export class TypeScriptStructureAnalyzer {
     const matchedDirs = new Set<string>();
     
     for (const pattern of patterns) {
-      // 精确路径匹配，直接拼接并检查是否存在
+      // Assuming patterns are relative to modulePath
       const fullPath = path.join(modulePath, pattern);
       
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        // 检查是否需要跳过 dist 目录
+        // Check if the directory matches the noDist option
         if (options.noDist && path.basename(fullPath) === 'dist') {
           continue;
         }
