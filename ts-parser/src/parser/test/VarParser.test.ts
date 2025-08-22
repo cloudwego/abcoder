@@ -31,6 +31,21 @@ describe('VarParser', () => {
       cleanup();
     });
 
+    it('should parse export default at different point', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        const defaultExport = 'default';
+        export default defaultExport
+      `);
+      
+      const parser = new VarParser(project, process.cwd());
+      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+
+      expect(vars['defaultExport']).toBeDefined();
+      expect(vars['defaultExport'].IsExported).toBe(true);
+      
+      cleanup();
+    });
+
     it('should parse enum members', () => {
       const { project, sourceFile, cleanup } = createTestProject(`
         enum Color {
