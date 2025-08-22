@@ -1,4 +1,4 @@
-import { Project, Symbol, Node, SyntaxKind, SymbolFlags } from 'ts-morph';
+import { Project, Symbol, Node, SyntaxKind, SymbolFlags, Identifier, PropertyAccessExpression, VariableDeclaration, PropertyDeclaration } from 'ts-morph';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as JSON5 from 'json5';
@@ -48,7 +48,7 @@ export class SymbolResolver {
   /**
    * Resolve a symbol to its actual definition point, following imports and exports.
    */
-  resolveSymbol(symbol: Symbol): ResolvedSymbol | null {
+  resolveSymbol<T extends Node>(symbol: Symbol, expression: T): ResolvedSymbol | null {
     const declarations = symbol.getDeclarations();
     if (!declarations || declarations.length === 0) {
       return null;
@@ -59,8 +59,9 @@ export class SymbolResolver {
     }
 
     const definitionNode = this.findActualDefinition(symbol);
+    const definitionSymbol = definitionNode?.getSymbol();
 
-    if (!definitionNode) {
+    if (!definitionNode || !definitionSymbol) {
       // Log unresolved symbols only once
       if (!this.cannotResolveSymbolNames.has(symbol.getName())) {
         this.cannotResolveSymbolNames.add(symbol.getName());
@@ -77,13 +78,15 @@ export class SymbolResolver {
     const moduleInfo = this.extractModuleInfo(filePath, isExternal);
     const packageInfo = this.extractPackageInfo(filePath, isExternal);
 
+    const exprSourceFile = expression.getSourceFile().getFilePath();
+
     const resolved: ResolvedSymbol = {
-      name: assignSymbolName(symbol), // Use the original symbol name
-      filePath: this.getRelativePath(filePath),
-      line: definitionNode.getStartLineNumber(),
-      column: definitionNode.getStartLinePos(),
-      startOffset: definitionNode.getStart(),
-      endOffset: definitionNode.getEnd(),
+      name: assignSymbolName(definitionSymbol), // Use the original symbol name
+      filePath: this.getRelativePath(exprSourceFile),
+      line: expression.getStartLineNumber(),
+      column: expression.getStartLinePos(),
+      startOffset: expression.getStart(),
+      endOffset: expression.getEnd(),
       isExternal,
       moduleName: moduleInfo.name,
       packagePath: packageInfo.path,
@@ -91,6 +94,19 @@ export class SymbolResolver {
 
     this.resolutionCache.set(cacheKey, resolved);
     return resolved;
+  }
+
+  resolveSymbolWithSource<T extends Node>(symbol: Symbol, expression: T): [ResolvedSymbol, string] | [null, null] {
+    this.resolveSymbol(symbol, expression)
+    const declarations = symbol.getDeclarations();
+    if (!declarations || declarations.length === 0) {
+      return [null, null];
+    }
+    const cacheKey = `${declarations[0].getSourceFile().getFilePath()}#${symbol.getEscapedName()}`;
+    if (this.resolutionCache.has(cacheKey)) {
+      return [this.resolutionCache.get(cacheKey)!, declarations[0].getSourceFile().getFilePath()];
+    }
+    return [null, null];
   }
 
   /**

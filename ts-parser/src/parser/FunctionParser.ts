@@ -380,7 +380,7 @@ export class FunctionParser {
       if (Node.isIdentifier(expression)) {
         const symbol = expression.getSymbol();
         if (symbol) {
-          const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+          const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, expression);
           if (resolvedSymbol) {
             const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
             if (!visited.has(key)) {
@@ -445,7 +445,7 @@ export class FunctionParser {
 
     if (!methodSymbol) return;
 
-    const resolvedSymbol = this.symbolResolver.resolveSymbol(methodSymbol);
+    const resolvedSymbol = this.symbolResolver.resolveSymbol(methodSymbol, propAccess);
     if (!resolvedSymbol) return;
 
     // Handle method names like 'getX' -> 'getX'
@@ -500,7 +500,7 @@ export class FunctionParser {
         const symbol = typeRef.getSymbol();
 
         if (symbol) {
-          const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+          const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, typeNode);
           if (resolvedSymbol && !resolvedSymbol.isExternal) {
             typeName = resolvedSymbol.name
             const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${typeName}`;
@@ -593,7 +593,7 @@ export class FunctionParser {
       if (this.isPrimitiveType(varName)) continue;
 
       // Use symbol resolver
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, identifier);
       if (resolvedSymbol && !resolvedSymbol.isExternal) {
         varName = resolvedSymbol.name
         const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${varName}`;

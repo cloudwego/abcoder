@@ -1,4 +1,4 @@
-import { Identifier, Node, SymbolFlags, SyntaxKind, Type, TypeNode, TypeReferenceNode } from 'ts-morph';
+import { Identifier, Node, SymbolFlags, SyntaxKind, Type, TypeNode, TypeReferenceNode, VariableDeclaration } from 'ts-morph';
 import { Dependency } from '../types/uniast';
 import { SymbolResolver } from './symbol-resolver';
 import { PathUtils } from './path-utils';
@@ -16,16 +16,31 @@ export class DependencyUtils {
    * Extract dependencies from identifiers in a node
    */
   extractDependenciesFromIdentifiers(
-    node: any, 
+    node: VariableDeclaration | Identifier, 
     moduleName: string, 
     packagePath: string
   ): Dependency[] {
     const dependencies: Dependency[] = [];
     const visited = new Set<string>();
     
-    const identifiers = node.getDescendantsOfKind(SyntaxKind.Identifier);
+    // If this is a variable declaration, get the initializer
+    let targetNode: Node = node;
+    if (Node.isVariableDeclaration(node)) {
+      const initializer = node.getInitializer();
+      if (!initializer) {
+        return dependencies;
+      }
+      targetNode = initializer;
+    }
+    
+    const identifiers = targetNode.getDescendantsOfKind(SyntaxKind.Identifier);
     
     for (const identifier of identifiers) {
+      // Skip the variable name itself
+      if (Node.isVariableDeclaration(node) && identifier === node.getNameNode()) {
+        continue;
+      }
+      
       // Skip function calls, constructors, property names, etc.
       const parent = identifier.getParent();
       if (
@@ -41,7 +56,7 @@ export class DependencyUtils {
 
       const symbol = identifier.getSymbol();
       if (symbol) {
-        const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+        const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, identifier);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
           if (!visited.has(key)) {

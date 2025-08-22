@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 
+const ABCED = 123321
+
+const [aaaaa, bbbbb] = (() => { const a = 123; const b = 345; return [a * b * ABCED * Math.random(), a * b * ABCED * Math.random()] })()
+
 export interface ValidationError {
   field: string;
   message: string;
