@@ -1,0 +1,49 @@
+{
+  "name": "ts-parser-utils-test",
+  "version": "1.0.0",
+  "description": "Test suite for TypeScript parser utilities",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose"
+  },
+  "keywords": ["typescript", "parser", "testing"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.5",
+    "@types/node": "^20.6.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "ts-morph": "^23.0.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": ["<rootDir>"],
+    "testMatch": ["**/*.test.ts"],
+    "collectCoverageFrom": [
+      "**/*.ts",
+      "!**/*.d.ts",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/temp/**"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"],
+    "setupFilesAfterEnv": ["<rootDir>/setup.ts"],
+    "moduleFileExtensions": ["ts", "js", "json"],
+    "testPathIgnorePatterns": ["/node_modules/", "/dist/", "/temp/"],
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "maxWorkers": 1,
+    "maxConcurrency": 1
+  }
+}

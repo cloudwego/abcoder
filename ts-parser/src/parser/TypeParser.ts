@@ -320,7 +320,7 @@ export class TypeParser {
       const typeName = identifier.getText();
       if (this.isPrimitiveType(typeName)) continue;
 
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, identifier);
       // if symbol is not external, add it to dependencies
       if (resolvedSymbol && !resolvedSymbol.isExternal) {
         const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;

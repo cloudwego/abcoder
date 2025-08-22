@@ -6,9 +6,10 @@ import {
   Node, 
   SyntaxKind,
   Project,
+  Identifier,
 } from 'ts-morph';
 import { Var as UniVar, Dependency } from '../types/uniast';
-import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
+import { assignSymbolName, ResolvedSymbol, SymbolResolver } from '../utils/symbol-resolver';
 import { PathUtils } from '../utils/path-utils';
 
 export class VarParser {
@@ -127,7 +128,7 @@ export class VarParser {
     if (typeNode) {
       const typeSymbol = typeNode.getSymbol();
       if (typeSymbol) {
-        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol);
+        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol, varDecl);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           type = {
             ModPath: resolvedSymbol.moduleName || moduleName,
@@ -201,7 +202,7 @@ export class VarParser {
     if (typeNode) {
       const typeSymbol = typeNode.getSymbol();
       if (typeSymbol) {
-        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol);
+        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol, prop);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           type = {
             ModPath: resolvedSymbol.moduleName || moduleName,
@@ -286,7 +287,7 @@ export class VarParser {
     const dependencies = this.extractInitializerDependencies(node, moduleName, packagePath, sourceFile);
     
     // Recursively extract all identifiers from destructuring patterns
-    this.extractIdentifiersFromPattern(nameNode, node, moduleName, packagePath, sourceFile, dependencies, results);
+    this.extractIdentifiersFromPattern(nameNode, node, moduleName, packagePath, sourceFile, dependencies, results, node);
     
     return results;
   }
@@ -298,51 +299,57 @@ export class VarParser {
     packagePath: string,
     sourceFile: SourceFile,
     dependencies: Dependency[],
-    results: UniVar[]
+    results: UniVar[],
+    originNode: Node
   ): void {
     if (Node.isIdentifier(patternNode)) {
       // Simple identifier
-      results.push(this.createUniVar(patternNode.getText(), patternNode, parentNode, moduleName, packagePath, sourceFile, dependencies));
+      const uniVar = this.createUniVar(originNode.getText(), patternNode, parentNode, moduleName, packagePath, sourceFile, dependencies)
+      uniVar && results.push(uniVar);
     } else if (Node.isBindingElement(patternNode)) {
       // Handle binding elements
       const nameNode = patternNode.getNameNode();
       if (Node.isIdentifier(nameNode)) {
-        results.push(this.createUniVar(nameNode.getText(), nameNode, parentNode, moduleName, packagePath, sourceFile, dependencies));
+        const uniVar = this.createUniVar(originNode.getText(), nameNode, parentNode, moduleName, packagePath, sourceFile, dependencies)
+        uniVar && results.push(uniVar);
       } else {
         // Recursively handle nested patterns
-        this.extractIdentifiersFromPattern(nameNode, parentNode, moduleName, packagePath, sourceFile, dependencies, results);
+        this.extractIdentifiersFromPattern(nameNode, parentNode, moduleName, packagePath, sourceFile, dependencies, results, originNode);
       }
     } else if (Node.isObjectBindingPattern(patternNode)) {
       // Handle object destructuring
       const elements = patternNode.getElements();
       for (const element of elements) {
-        this.extractIdentifiersFromPattern(element, parentNode, moduleName, packagePath, sourceFile, dependencies, results);
+        this.extractIdentifiersFromPattern(element, parentNode, moduleName, packagePath, sourceFile, dependencies, results, originNode);
       }
     } else if (Node.isArrayBindingPattern(patternNode)) {
       // Handle array destructuring
       const elements = patternNode.getElements();
       for (const element of elements) {
-        this.extractIdentifiersFromPattern(element, parentNode, moduleName, packagePath, sourceFile, dependencies, results);
+        this.extractIdentifiersFromPattern(element, parentNode, moduleName, packagePath, sourceFile, dependencies, results, originNode);
       }
     }
   }
 
   private createUniVar(
-    varName: string,
-    element: any,
+    content: string,
+    element: Identifier,
     parentNode: VariableDeclaration | PropertyDeclaration,
     moduleName: string,
     packagePath: string,
     sourceFile: SourceFile,
     dependencies: Dependency[]
-  ): UniVar {
+  ): UniVar | null {
     const startLine = element.getStartLineNumber();
     const startOffset = element.getStart();
     const endOffset = element.getEnd();
-    const content = element.getFullText();
     
     let isExported = false;
     let isConst = false;
+    const symbol = element.getSymbol()
+    if (!symbol) {
+      return null
+    }
     
     if (Node.isVariableDeclaration(parentNode)) {
       const parent = parentNode.getVariableStatement();
@@ -358,7 +365,7 @@ export class VarParser {
     return {
       ModPath: moduleName,
       PkgPath: this.getPkgPath(packagePath),
-      Name: varName,
+      Name: assignSymbolName(symbol),
       File: this.getRelativePath(sourceFile.getFilePath()),
       Line: startLine,
       StartOffset: startOffset,
@@ -387,10 +394,10 @@ export class VarParser {
     // Extract the source object/array that the destructuring is from
     const sourceSymbol = initializer.getSymbol();
     if (sourceSymbol) {
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(sourceSymbol);
+      const [resolvedSymbol, filePath] = this.symbolResolver.resolveSymbolWithSource(sourceSymbol, node);
       if (resolvedSymbol && !resolvedSymbol.isExternal) {
         // Check if the dependency is defined outside this variable declaration
-        if (!this.isDependencyDefinedWithinVariable(resolvedSymbol, varStart, varEnd)) {
+        if (!this.isDependencyDefinedWithinVariable(resolvedSymbol, varStart, varEnd, this.pathUtils.getRelativePath(filePath))) {
           const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
           if (!visited.has(key)) {
             visited.add(key);
@@ -434,7 +441,7 @@ export class VarParser {
         continue
       }
 
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol);
+      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, node);
       if (resolvedSymbol && !resolvedSymbol.isExternal) {
         const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
         if (!visited.has(key)) {
@@ -455,7 +462,9 @@ export class VarParser {
     return dependencies;
   }
 
-  private isDependencyDefinedWithinVariable(resolvedSymbol: any, varStart: number, varEnd: number): boolean {
+  private isDependencyDefinedWithinVariable(resolvedSymbol: ResolvedSymbol, varStart: number, varEnd: number, sourceFilePath: string): boolean {
+    // resolvedSymbol.filePath -> symbol where is been used
+    if (resolvedSymbol.filePath !== sourceFilePath) return false;
     // Check if the dependency's declaration is within the variable declaration's range
     if (resolvedSymbol.startOffset !== undefined && resolvedSymbol.endOffset !== undefined) {
       return resolvedSymbol.startOffset >= varStart && resolvedSymbol.endOffset <= varEnd;
