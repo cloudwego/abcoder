@@ -7,7 +7,8 @@ import {
   SyntaxKind,
   TypeNode,
   SymbolFlags,
-  ClassExpression
+  ClassExpression,
+  Symbol
 } from 'ts-morph';
 import { Type as UniType, Dependency } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -17,6 +18,7 @@ import { TypeUtils } from '../utils/type-utils';
 export class TypeParser {
   private symbolResolver: SymbolResolver;
   private pathUtils: PathUtils;
+  private defaultExported: Symbol | undefined
 
   constructor(projectRoot: string) {
     this.symbolResolver = new SymbolResolver(null as any, projectRoot);
@@ -25,6 +27,7 @@ export class TypeParser {
 
   parseTypes(sourceFile: SourceFile, moduleName: string, packagePath: string): Record<string, UniType> {
     const types: Record<string, UniType> = {};
+    this.defaultExported = sourceFile.getDefaultExportSymbol()?.getAliasedSymbol()
 
     // Parse class declarations
     const classes = sourceFile.getClasses();
@@ -76,7 +79,7 @@ export class TypeParser {
     const startOffset = cls.getStart();
     const endOffset = cls.getEnd();
     const content = cls.getFullText();
-    const isExported = cls.isExported() || cls.isDefaultExport();
+    const isExported = cls.isExported() || cls.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
     // Parse methods
     const methods: Record<string, any> = {};
@@ -151,7 +154,7 @@ export class TypeParser {
     const startOffset = iface.getStart();
     const endOffset = iface.getEnd();
     const content = iface.getFullText();
-    const isExported = iface.isExported() || iface.isDefaultExport();
+    const isExported = iface.isExported() || iface.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
     // Parse methods
     const methods: Record<string, any> = {};
@@ -241,7 +244,7 @@ export class TypeParser {
     const startOffset = typeAlias.getStart();
     const endOffset = typeAlias.getEnd();
     const content = typeAlias.getFullText();
-    const isExported = typeAlias.isExported() || typeAlias.isDefaultExport();
+    const isExported = typeAlias.isExported() || typeAlias.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
     // Extract type dependencies from the type alias
     const typeDependencies: Dependency[] = [];
@@ -279,7 +282,7 @@ export class TypeParser {
     const startOffset = enumDecl.getStart();
     const endOffset = enumDecl.getEnd();
     const content = enumDecl.getFullText();
-    const isExported = enumDecl.isExported() || enumDecl.isDefaultExport();
+    const isExported = enumDecl.isExported() || enumDecl.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
     return {
       ModPath: moduleName,

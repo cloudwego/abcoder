@@ -11,7 +11,8 @@ import {
   SyntaxKind,
   ParameterDeclaration,
   PropertyAccessExpression,
-  VariableDeclaration
+  VariableDeclaration,
+  Symbol
 } from 'ts-morph';
 import { Function as UniFunction, Dependency, Receiver } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -25,6 +26,7 @@ export class FunctionParser {
   private projectRoot: string;
   private pathUtils: PathUtils;
   private dependencyUtils: DependencyUtils;
+  private defaultExportSymbol: Symbol | undefined;
 
   constructor(project: Project, projectRoot: string) {
     this.project = project;
@@ -36,6 +38,8 @@ export class FunctionParser {
 
   parseFunctions(sourceFile: SourceFile, moduleName: string, packagePath: string): Record<string, UniFunction> {
     const functions: Record<string, UniFunction> = {};
+
+    this.defaultExportSymbol = sourceFile.getDefaultExportSymbol()?.getAliasedSymbol()
 
     // Parse function declarations
     const functionDeclarations = sourceFile.getFunctions();
@@ -118,7 +122,7 @@ export class FunctionParser {
     const endOffset = func.getEnd();
     const content = func.getFullText();
     const signature = this.extractSignature(func);
-    const isExported = func.isExported() || func.isDefaultExport();
+    const isExported = func.isExported() || func.isDefaultExport() || (this.defaultExportSymbol === symbol && symbol !== undefined);
 
     // Parse parameters
     const params = this.parseParameters(func.getParameters(), moduleName, packagePath, sourceFile);
@@ -172,9 +176,10 @@ export class FunctionParser {
     const signature = this.extractSignature(method);
 
     const parent = method.getParent();
+    const parentSym = parent.getSymbol()
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
-      isExported = parent.isExported() || parent.isDefaultExport();
+      isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
     }
 
     // Parse receiver
@@ -274,7 +279,8 @@ export class FunctionParser {
     const parent = ctor.getParent();
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
-      isExported = parent.isExported() || parent.isDefaultExport();
+      const parentSym = parent.getSymbol()
+      isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
     }
 
     // Parse parameters
@@ -328,7 +334,7 @@ export class FunctionParser {
 
     // Determine export status from the variable declaration
     const parent = varDecl.getVariableStatement();
-    const isExported = parent ? (parent.isExported() || parent.isDefaultExport()) : false;
+    const isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === arrowFunc.getSymbol() && this.defaultExportSymbol !== undefined)) : false;
 
     return {
       ModPath: moduleName,

@@ -7,6 +7,7 @@ import {
   SyntaxKind,
   Project,
   Identifier,
+  Symbol,
 } from 'ts-morph';
 import { Var as UniVar, Dependency } from '../types/uniast';
 import { assignSymbolName, ResolvedSymbol, SymbolResolver } from '../utils/symbol-resolver';
@@ -15,6 +16,7 @@ import { PathUtils } from '../utils/path-utils';
 export class VarParser {
   private symbolResolver: SymbolResolver;
   private pathUtils: PathUtils;
+  private defaultExportedSym: Symbol | undefined
 
   constructor(project: Project, projectRoot: string) {
     this.symbolResolver = new SymbolResolver(project, projectRoot);
@@ -23,6 +25,7 @@ export class VarParser {
 
   parseVars(sourceFile: SourceFile, moduleName: string, packagePath: string): Record<string, UniVar> {
     const vars: Record<string, UniVar> = {};
+    this.defaultExportedSym = sourceFile.getDefaultExportSymbol()?.getAliasedSymbol()
 
     // Parse variable declarations - only file-level (not inside any scope)
     const variableDeclarations = sourceFile.getVariableDeclarations();
@@ -118,7 +121,7 @@ export class VarParser {
     const content = varDecl.getFullText();
     
     const parent = varDecl.getVariableStatement();
-    const isExported = parent ? (parent.isExported() || parent.isDefaultExport()) : false;
+    const isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (sym === this.defaultExportedSym && sym !== undefined)) : false;
     const isConst = parent ? parent.getDeclarationKind() === 'const' : false;
     const isPointer = this.isPointerType(varDecl);
 
@@ -190,7 +193,7 @@ export class VarParser {
     const parent = prop.getParent();
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
-      isExported = parent.isExported() || parent.isDefaultExport();
+      isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
     }
     
     const isConst = false;
@@ -255,7 +258,7 @@ export class VarParser {
     const parent = member.getParent();
     let isExported = false;
     if (Node.isEnumDeclaration(parent)) {
-      isExported = parent.isExported() || parent.isDefaultExport();
+      isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
     }
     
     const isConst = true;
@@ -353,12 +356,12 @@ export class VarParser {
     
     if (Node.isVariableDeclaration(parentNode)) {
       const parent = parentNode.getVariableStatement();
-      isExported = parent ? (parent.isExported() || parent.isDefaultExport()) : false;
+      isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined)) : false;
       isConst = parent ? parent.getDeclarationKind() === 'const' : false;
     } else if (Node.isPropertyDeclaration(parentNode)) {
       const parent = parentNode.getParent();
       if (Node.isClassDeclaration(parent)) {
-        isExported = parent.isExported() || parent.isDefaultExport();
+        isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
       }
     }
 
