@@ -38,7 +38,7 @@ describe('SymbolResolver', () => {
         const symbol = variableDeclaration?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, variableDeclaration!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('myVariable');
         expect(resolvedSymbol?.isExternal).toBe(false);
@@ -61,7 +61,7 @@ describe('SymbolResolver', () => {
         const symbol = functionDeclaration?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, functionDeclaration!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('myFunction');
       } finally {
@@ -83,7 +83,7 @@ describe('SymbolResolver', () => {
         const symbol = classDeclaration?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, classDeclaration!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('MyClass');
       } finally {
@@ -105,7 +105,7 @@ describe('SymbolResolver', () => {
         const symbol = interfaceDeclaration?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, interfaceDeclaration!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('MyInterface');
       } finally {
@@ -125,7 +125,7 @@ describe('SymbolResolver', () => {
         const symbol = typeAlias?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, typeAlias!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('MyType');
       } finally {
@@ -148,7 +148,7 @@ describe('SymbolResolver', () => {
         const symbol = enumDeclaration?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, enumDeclaration!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('MyEnum');
       } finally {
@@ -171,7 +171,7 @@ describe('SymbolResolver', () => {
         const symbol = method?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, method!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('MyClass.myMethod');
       } finally {
@@ -195,7 +195,7 @@ describe('SymbolResolver', () => {
         const symbol = member?.getSymbol();
         expect(symbol).toBeDefined();
 
-        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!);
+        const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, member!);
         expect(resolvedSymbol).toBeDefined();
         expect(resolvedSymbol?.name).toBe('MyEnum.VALUE_A');
       } finally {
@@ -241,7 +241,7 @@ describe('SymbolResolver', () => {
 
         const symbol = importedIdentifier?.getSymbol();
         if (symbol) {
-          const resolvedSymbol = symbolResolver.resolveSymbol(symbol);
+          const resolvedSymbol = symbolResolver.resolveSymbol(symbol, importedIdentifier!);
           expect(resolvedSymbol).toBeDefined();
           expect(resolvedSymbol?.name).toBe('exportedValue');
         }
@@ -258,11 +258,14 @@ describe('SymbolResolver', () => {
 
       const moduleContent = `
         const defaultExport = { value: 42 };
+        export const namedExport = defaultExport;
         export default defaultExport;
       `;
       const mainContent = `
         import myDefault from './module';
+        import { namedExport as namedExportAlias } from './module';
         const localValue = myDefault.value;
+        const localNamedValue = namedExportAlias.value;
       `;
 
       fs.writeFileSync(path.join(tempDir, 'module.ts'), moduleContent);
@@ -286,11 +289,21 @@ describe('SymbolResolver', () => {
         const importedIdentifier = identifiers?.find(id => id.getText() === 'myDefault');
         expect(importedIdentifier).toBeDefined();
 
-        const symbol = importedIdentifier?.getSymbol();
+        let symbol = importedIdentifier?.getSymbol();
         if (symbol) {
-          const resolvedSymbol = symbolResolver.resolveSymbol(symbol);
+          const resolvedSymbol = symbolResolver.resolveSymbol(symbol, importedIdentifier!);
           expect(resolvedSymbol).toBeDefined();
           expect(resolvedSymbol?.name).toBe('defaultExport');
+        }
+
+        const namedImportIdentifier = identifiers?.find(id => id.getText() === 'namedExportAlias');
+        expect(namedImportIdentifier).toBeDefined();
+
+        symbol = namedImportIdentifier?.getSymbol();
+        if (symbol) {
+          const resolvedSymbol = symbolResolver.resolveSymbol(symbol, namedImportIdentifier!);
+          expect(resolvedSymbol).toBeDefined();
+          expect(resolvedSymbol?.name).toBe('namedExport');
         }
       } finally {
         if (fs.existsSync(tempDir)) {
@@ -335,7 +348,7 @@ describe('SymbolResolver', () => {
 
         const symbol = importedIdentifier?.getSymbol();
         if (symbol) {
-          const resolvedSymbol = symbolResolver.resolveSymbol(symbol);
+          const resolvedSymbol = symbolResolver.resolveSymbol(symbol!, importedIdentifier!);
           expect(resolvedSymbol).toBeDefined();
           expect(resolvedSymbol?.name).toBe('a');
         }
@@ -393,14 +406,14 @@ describe('SymbolResolver', () => {
         
         if (symbol) {
           // First resolution
-          const resolved1 = symbolResolver.resolveSymbol(symbol);
+          const resolved1 = symbolResolver.resolveSymbol(symbol!, variableDeclaration!);
           expect(resolved1).toBeDefined();
 
           // Clear cache
           symbolResolver.clearCache();
 
           // Second resolution should work the same
-          const resolved2 = symbolResolver.resolveSymbol(symbol);
+          const resolved2 = symbolResolver.resolveSymbol(symbol!, variableDeclaration!);
           expect(resolved2).toBeDefined();
           expect(resolved2?.name).toBe(resolved1?.name);
         }
