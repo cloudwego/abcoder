@@ -13,6 +13,38 @@ describe('FunctionParser', () => {
           return param.length;
         }
         
+        function defaultFunction() {
+          return 'default';
+        }
+
+        export default defaultFunction
+      `);
+      
+      const parser = new FunctionParser(project, process.cwd());
+      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+
+      
+      expect(functions['simpleFunction']).toBeDefined();
+      expect(functions['exportedFunction']).toBeDefined();
+      expect(functions['defaultFunction']).toBeDefined();
+      
+      expect(functions['simpleFunction']?.Exported).toBe(false);
+      expect(functions['exportedFunction']?.Exported).toBe(true);
+      expect(functions['defaultFunction']?.Exported).toBe(true);
+      
+      cleanup();
+    });
+
+    it('should parse function declarations 2', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        function simpleFunction() {
+          return 'hello';
+        }
+        
+        export function exportedFunction(param: string): number {
+          return param.length;
+        }
+        
         export default function defaultFunction() {
           return 'default';
         }
