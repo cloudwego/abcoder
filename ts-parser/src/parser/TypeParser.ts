@@ -14,15 +14,18 @@ import { Type as UniType, Dependency } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
 import { PathUtils } from '../utils/path-utils';
 import { TypeUtils } from '../utils/type-utils';
+import { DependencyUtils } from '../utils/dependency-utils';
 
 export class TypeParser {
   private symbolResolver: SymbolResolver;
   private pathUtils: PathUtils;
   private defaultExported: Symbol | undefined
+  private dependencyUtils: DependencyUtils;
 
   constructor(projectRoot: string) {
     this.symbolResolver = new SymbolResolver(null as any, projectRoot);
     this.pathUtils = new PathUtils(projectRoot);
+    this.dependencyUtils = new DependencyUtils(this.symbolResolver, projectRoot);
   }
 
   parseTypes(sourceFile: SourceFile, moduleName: string, packagePath: string): Record<string, UniType> {
@@ -132,19 +135,8 @@ export class TypeParser {
       }
     }
 
-    // Parse property types
-    const propertyTypes: Dependency[] = [];
-    const properties = cls.getProperties();
-    for (const prop of properties) {
-      const propType = prop.getTypeNode();
-      if (propType) {
-        const typeDependencies = this.extractTypeDependencies(propType, moduleName, packagePath);
-        propertyTypes.push(...typeDependencies);
-      }
-    }
-
     // Combine implements and extends into Implements, but filter out external symbols
-    const allImplements = [...implementsInterfaces, ...extendsClasses, ...propertyTypes];
+    const allImplements = [...implementsInterfaces, ...extendsClasses];
 
     return {
       ModPath: moduleName,
@@ -200,40 +192,8 @@ export class TypeParser {
         }
       }
     }
-
-    // Parse property types
-    const propertyTypes: Dependency[] = [];
-    const properties = iface.getProperties();
-    for (const prop of properties) {
-      const propType = prop.getTypeNode();
-      if (propType) {
-        const typeDependencies = this.extractTypeDependencies(propType, moduleName, packagePath);
-        propertyTypes.push(...typeDependencies);
-      }
-    }
-
-    // Parse method signatures
-    const methodTypes: Dependency[] = [];
-    const methodSignatures = iface.getMethods();
-    for (const method of methodSignatures) {
-      const returnType = method.getReturnTypeNode();
-      if (returnType) {
-        const typeDependencies = this.extractTypeDependencies(returnType, moduleName, packagePath);
-        methodTypes.push(...typeDependencies);
-      }
-
-      const parameters = method.getParameters();
-      for (const param of parameters) {
-        const paramType = param.getTypeNode();
-        if (paramType) {
-          const typeDependencies = this.extractTypeDependencies(paramType, moduleName, packagePath);
-          methodTypes.push(...typeDependencies);
-        }
-      }
-    }
-
     // Combine extends interfaces and other dependencies into Implements, but filter out external symbols
-    const allImplements = [...extendsInterfaces, ...propertyTypes, ...methodTypes];
+    const allImplements = [...extendsInterfaces];
 
     return {
       ModPath: moduleName,
@@ -332,18 +292,14 @@ export class TypeParser {
     const visited = new Set<string>();
 
     // Extract from identifiers and find their definitions
-    const identifiers = typeNode.getDescendantsOfKind(SyntaxKind.Identifier);
+    const types = this.dependencyUtils.extractAtomicTypeReferences(typeNode);
 
-    for (const identifier of identifiers) {
-      const symbol = identifier.getSymbol();
-      if (!symbol || (symbol.getFlags() & (SymbolFlags.Type | SymbolFlags.TypeAlias | SymbolFlags.TypeLiteral)) === 0) {
+    for (const t of types) {
+      const symbol = t.getSymbol();
+      if (!symbol) {
         continue;
       }
-
-      const typeName = identifier.getText();
-      if (this.isPrimitiveType(typeName)) continue;
-
-      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, identifier);
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
       // if symbol is not external, add it to dependencies
       if (!resolvedSymbol || resolvedSymbol.isExternal) {
         continue;
@@ -443,16 +399,6 @@ export class TypeParser {
       }
     }
 
-    // Parse property types
-    const propertyTypes: Dependency[] = [];
-    const properties = classExpr.getProperties();
-    for (const prop of properties) {
-      const propType = prop.getTypeNode();
-      if (propType) {
-        const typeDependencies = this.extractTypeDependencies(propType, moduleName, packagePath);
-        propertyTypes.push(...typeDependencies);
-      }
-    }
 
     return {
       ModPath: moduleName,
@@ -466,7 +412,7 @@ export class TypeParser {
       TypeKind: 'struct',
       Content: content,
       Methods: methods,
-      Implements: [...implementsInterfaces, ...extendsClasses, ...propertyTypes],
+      Implements: [...implementsInterfaces, ...extendsClasses],
       SubStruct: [],
       InlineStruct: []
     };
