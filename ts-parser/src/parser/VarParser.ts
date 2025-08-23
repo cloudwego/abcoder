@@ -131,7 +131,7 @@ export class VarParser {
     if (typeNode) {
       const typeSymbol = typeNode.getSymbol();
       if (typeSymbol) {
-        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol, varDecl);
+        const [resolvedSymbol, _] = this.symbolResolver.resolveSymbol(typeSymbol, varDecl);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           type = {
             ModPath: resolvedSymbol.moduleName || moduleName,
@@ -205,7 +205,7 @@ export class VarParser {
     if (typeNode) {
       const typeSymbol = typeNode.getSymbol();
       if (typeSymbol) {
-        const resolvedSymbol = this.symbolResolver.resolveSymbol(typeSymbol, prop);
+        const [resolvedSymbol, _] = this.symbolResolver.resolveSymbol(typeSymbol, prop);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           type = {
             ModPath: resolvedSymbol.moduleName || moduleName,
@@ -390,35 +390,42 @@ export class VarParser {
     const initializer = node.getInitializer();
     if (!initializer) return dependencies;
     
-    // Get the variable declaration's position range
-    const varStart = node.getStart();
-    const varEnd = node.getEnd();
     
-    // Extract the source object/array that the destructuring is from
+    // Extract single symbol
     const sourceSymbol = initializer.getSymbol();
     if (sourceSymbol) {
-      const [resolvedSymbol, filePath] = this.symbolResolver.resolveSymbolWithSource(sourceSymbol, node);
-      if (resolvedSymbol && !resolvedSymbol.isExternal) {
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(sourceSymbol, node);
+      if (resolvedSymbol && !resolvedSymbol.isExternal && resolvedRealSymbol) {
         // Check if the dependency is defined outside this variable declaration
-        if (!this.isDependencyDefinedWithinVariable(resolvedSymbol, varStart, varEnd, this.pathUtils.getRelativePath(filePath))) {
-          const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
-          if (!visited.has(key)) {
-            visited.add(key);
-            dependencies.push({
-              ModPath: resolvedSymbol.moduleName || moduleName,
-              PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-              Name: resolvedSymbol.name,
-              File: resolvedSymbol.filePath,
-              Line: resolvedSymbol.line,
-              StartOffset: resolvedSymbol.startOffset,
-              EndOffset: resolvedSymbol.endOffset
-            });
+        const decls = resolvedRealSymbol.getDeclarations()
+        if(decls.length > 0) {
+          const defStart = decls[0].getStart();
+          const defEnd = decls[0].getEnd();
+          if (
+            moduleName !== resolvedSymbol.moduleName ||
+            packagePath !== resolvedSymbol.packagePath ||
+            defEnd > node.getEnd() ||
+            defStart < node.getStart()
+          ) {
+            const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+            if (!visited.has(key)) {
+              visited.add(key);
+              dependencies.push({
+                ModPath: resolvedSymbol.moduleName || moduleName,
+                PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+                Name: resolvedSymbol.name,
+                File: resolvedSymbol.filePath,
+                Line: resolvedSymbol.line,
+                StartOffset: resolvedSymbol.startOffset,
+                EndOffset: resolvedSymbol.endOffset
+              });
+            }
           }
         }
       }
     }
     
-    // Extract identifiers that are defined outside this variable declaration
+    // Extract identifiers if it's a expression
     const identifiers = initializer.getDescendantsOfKind(SyntaxKind.Identifier);
     for (const identifier of identifiers) {
       // Skip if this identifier is part of a property access (struct field access)
@@ -444,35 +451,27 @@ export class VarParser {
         continue
       }
 
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, node);
+      const [resolvedSymbol, _] = this.symbolResolver.resolveSymbol(symbol, node);
       if (resolvedSymbol && !resolvedSymbol.isExternal) {
         const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
-        if (!visited.has(key)) {
-          visited.add(key);
-          dependencies.push({
-            ModPath: resolvedSymbol.moduleName || moduleName,
-            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-            Name: resolvedSymbol.name,
-            File: resolvedSymbol.filePath,
-            Line: resolvedSymbol.line,
-            StartOffset: resolvedSymbol.startOffset,
-            EndOffset: resolvedSymbol.endOffset
-          });
+        if (visited.has(key)) {
+          continue
         }
+        visited.add(key);
+        const dep = {
+          ModPath: resolvedSymbol.moduleName || moduleName,
+          PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+          Name: resolvedSymbol.name,
+          File: resolvedSymbol.filePath,
+          Line: resolvedSymbol.line,
+          StartOffset: resolvedSymbol.startOffset,
+          EndOffset: resolvedSymbol.endOffset
+        }
+        dependencies.push(dep);
       }
     }
     
     return dependencies;
-  }
-
-  private isDependencyDefinedWithinVariable(resolvedSymbol: ResolvedSymbol, varStart: number, varEnd: number, sourceFilePath: string): boolean {
-    // resolvedSymbol.filePath -> symbol where is been used
-    if (resolvedSymbol.filePath !== sourceFilePath) return false;
-    // Check if the dependency's declaration is within the variable declaration's range
-    if (resolvedSymbol.startOffset !== undefined && resolvedSymbol.endOffset !== undefined) {
-      return resolvedSymbol.startOffset >= varStart && resolvedSymbol.endOffset <= varEnd;
-    }
-    return false;
   }
 
   private isPointerType(_: any): boolean {
