@@ -1,3 +1,4 @@
+import path from 'path';
 import { VarParser } from '../VarParser';
 import { createTestProject, expectToBeDefined } from './test-utils';
 
@@ -14,7 +15,11 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
 
 
       
@@ -38,7 +43,11 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
 
       expect(vars['defaultExport']).toBeDefined();
       expect(vars['defaultExport'].IsExported).toBe(true);
@@ -67,7 +76,12 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
       
       expect(vars['Color.Red']).toBeDefined();
       expect(vars['Color.Green']).toBeDefined();
@@ -100,7 +114,12 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
       
       expect(vars['a']).toBeDefined();
       expect(vars['b']).toBeDefined();
@@ -126,7 +145,12 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
       
       expect(vars['first']).toBeDefined();
       expect(vars['second']).toBeDefined();
@@ -154,7 +178,12 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
 
       
       expect(vars['name']).toBeDefined();
@@ -187,10 +216,25 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
       
       const usesDeps = expectToBeDefined(vars['usesDeps']);
       expect(usesDeps.Dependencies).toBeDefined();
+      expect(usesDeps.Dependencies!.length).toBe(2);
+
+      const objDeps = expectToBeDefined(vars['objDeps']);
+      expect(objDeps.Dependencies!.length).toBe(2);
+
+      const arrDeps = expectToBeDefined(vars['arrDeps']);
+      expect(arrDeps.Dependencies!.length).toBe(2);
+
+      const funcDep = expectToBeDefined(vars['funcDep']);
+      expect(funcDep.Dependencies!.length).toBe(1);
       
       cleanup();
     });
@@ -205,17 +249,21 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
       
       const aVar = expectToBeDefined(vars['a']);
       const bVar = expectToBeDefined(vars['b']);
       const xVar = expectToBeDefined(vars['x']);
       const yVar = expectToBeDefined(vars['y']);
       
-      expect(aVar.Dependencies).toBeDefined();
-      expect(bVar.Dependencies).toBeDefined();
-      expect(xVar.Dependencies).toBeDefined();
-      expect(yVar.Dependencies).toBeDefined();
+      expect(aVar.Dependencies!.length).toBe(1);
+      expect(bVar.Dependencies!.length).toBe(1);
+      expect(xVar.Dependencies!.length).toBe(1);
+      expect(yVar.Dependencies!.length).toBe(1);
       
       cleanup();
     });
@@ -229,7 +277,11 @@ describe('VarParser', () => {
       `);
       
       const parser = new VarParser(project, process.cwd());
-      const vars = parser.parseVars(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const vars = parser.parseVars(sourceFile, 'parser-tests', pkgPath);
       
       expect(vars).toBeDefined();
       

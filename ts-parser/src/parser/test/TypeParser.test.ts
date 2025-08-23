@@ -1,3 +1,4 @@
+import path from 'path';
 import { TypeParser } from '../TypeParser';
 import { createTestProject, expectToBeDefined } from './test-utils';
 
@@ -25,7 +26,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['SimpleClass']).toBeDefined();
       expect(types['ExportedClass']).toBeDefined();
@@ -60,7 +65,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['SimpleInterface']).toBeDefined();
       expect(types['ExportedInterface']).toBeDefined();
@@ -93,7 +102,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['StringAlias']).toBeDefined();
       expect(types['ObjectAlias']).toBeDefined();
@@ -129,7 +142,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['Color']).toBeDefined();
       expect(types['Status']).toBeDefined();
@@ -159,7 +176,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
 
       
       const derived = expectToBeDefined(types['DerivedClass']);
@@ -189,7 +210,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const extended = expectToBeDefined(types['ExtendedInterface']);
       const multi = expectToBeDefined(types['MultiLevel']);
@@ -222,7 +247,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const implementing = expectToBeDefined(types['ImplementingClass']);
       expect(expectToBeDefined(implementing.Implements).length).toBeGreaterThan(0);
@@ -251,7 +280,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const complex = expectToBeDefined(types['ComplexClass']);
       expect(expectToBeDefined(complex.Implements).length).toBeGreaterThan(0);
@@ -277,7 +310,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const propertyTypes = expectToBeDefined(types['PropertyTypes']);
       expect(expectToBeDefined(propertyTypes.Implements).length).toBeGreaterThan(0);
@@ -305,7 +342,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const propertyTypes = expectToBeDefined(types['PropertyTypes']);
       expect(expectToBeDefined(propertyTypes.Implements).length).toBeGreaterThan(0);
@@ -337,7 +378,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const simpleAlias = expectToBeDefined(types['SimpleAlias']);
       const complexAlias = expectToBeDefined(types['ComplexAlias']);
@@ -381,7 +426,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       const primitiveTypes = expectToBeDefined(types['PrimitiveTypes']);
       const primitiveNames = expectToBeDefined(primitiveTypes.Implements).map(dep => dep.Name);
@@ -415,7 +464,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(Object.keys(types).length).toBeGreaterThan(0);
       
@@ -445,7 +498,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['GenericClass']).toBeDefined();
       expect(types['GenericInterface']).toBeDefined();
@@ -484,7 +541,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['Level1']).toBeDefined();
       expect(types['NestedType']).toBeDefined();
@@ -509,7 +570,11 @@ describe('TypeParser', () => {
       `);
       
       const parser = new TypeParser(process.cwd());
-      const types = parser.parseTypes(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
       
       expect(types['FunctionType']).toBeDefined();
       expect(types['MethodType']).toBeDefined();

@@ -1,3 +1,4 @@
+import path from 'path';
 import { FunctionParser } from '../FunctionParser';
 import { createTestProject, expectToBeDefined } from './test-utils';
 
@@ -21,7 +22,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
 
       
       expect(functions['simpleFunction']).toBeDefined();
@@ -51,7 +57,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
 
       
       expect(functions['simpleFunction']).toBeDefined();
@@ -93,7 +104,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
 
       
       expect(functions['TestClass.method1']).toBeDefined();
@@ -120,7 +136,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
 
       
       expect(functions['arrowFunc']).toBeDefined();
@@ -146,7 +167,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       expect(functions['TestInterface.method1']).toBeDefined();
       expect(functions['TestInterface.method2']).toBeDefined();
@@ -174,7 +200,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       expect(functions['withParams']?.Signature).toContain('function withParams');
       expect(functions['arrowWithTypes']?.Signature).toContain('=>');
@@ -199,7 +230,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const caller = expectToBeDefined(functions['caller']);
       expect(caller.FunctionCalls).toBeDefined();
@@ -223,7 +259,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const usesExternal = expectToBeDefined(functions['usesExternal']);
       expect(usesExternal.FunctionCalls).toBeDefined();
@@ -248,7 +289,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const user = expectToBeDefined(functions['user']);
       expect(user.MethodCalls).toBeDefined();
@@ -270,7 +316,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const chainUser = expectToBeDefined(functions['chainUser']);
       expect(chainUser.MethodCalls).toBeDefined();
@@ -291,7 +342,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const usesTypes = expectToBeDefined(functions['usesTypes']);
       expect(usesTypes.Types).toBeDefined();
@@ -323,7 +379,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const usesGlobals = expectToBeDefined(functions['usesGlobals']);
       expect(usesGlobals.GlobalVars).toBeDefined();
@@ -348,7 +409,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       const usesBuiltins = expectToBeDefined(functions['usesBuiltins']);
       const globalNames = expectToBeDefined(usesBuiltins.GlobalVars).map(gv => gv.Name);
@@ -376,7 +442,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       expect(Object.keys(functions)).toHaveLength(1);
       
@@ -395,7 +466,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       expect(functions['destructuredParams']).toBeDefined();
       expect(functions['arrayParams']).toBeDefined();
@@ -417,7 +493,12 @@ describe('FunctionParser', () => {
       `);
       
       const parser = new FunctionParser(project, process.cwd());
-      const functions = parser.parseFunctions(sourceFile, 'test-module', 'test-package');
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+      
+      
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
       
       expect(functions['genericFunction']).toBeDefined();
       expect(functions['GenericClass.method']).toBeDefined();

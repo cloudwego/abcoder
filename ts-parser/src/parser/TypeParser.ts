@@ -323,30 +323,41 @@ export class TypeParser {
       const typeName = identifier.getText();
       if (this.isPrimitiveType(typeName)) continue;
 
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, identifier);
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, identifier);
       // if symbol is not external, add it to dependencies
-      if (resolvedSymbol && !resolvedSymbol.isExternal) {
-        const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
-        if (!visited.has(key)) {
-          visited.add(key);
-          let dep : Dependency = {
-            ModPath: resolvedSymbol.moduleName || moduleName,
-            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-            Name: resolvedSymbol.name,
-            File: resolvedSymbol.filePath,
-            Line: resolvedSymbol.line,
-            StartOffset: resolvedSymbol.startOffset,
-            EndOffset: resolvedSymbol.endOffset
-          };
-          if (
-            dep.ModPath === moduleName &&
-            dep.PkgPath === packagePath &&
-            typeNode.getStart() <= resolvedSymbol.startOffset &&
-            resolvedSymbol.endOffset <= typeNode.getEnd()
-          ) continue;
-          dependencies.push(dep);
-        }
+      if (!resolvedSymbol || resolvedSymbol.isExternal) {
+        continue;
       }
+      const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+      if (visited.has(key)) {
+        continue;
+      }
+
+      const decls = resolvedRealSymbol.getDeclarations();
+      if (decls.length === 0) {
+        continue;
+      }
+
+      const defStartOffset = decls[0].getStart();
+      const defEndOffset = decls[0].getEnd();
+
+      visited.add(key);
+      let dep : Dependency = {
+        ModPath: resolvedSymbol.moduleName || moduleName,
+        PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+        Name: resolvedSymbol.name,
+        File: resolvedSymbol.filePath,
+        Line: resolvedSymbol.line,
+        StartOffset: resolvedSymbol.startOffset,
+        EndOffset: resolvedSymbol.endOffset
+      };
+      if (
+        dep.ModPath === moduleName &&
+        dep.PkgPath === packagePath &&
+        defStartOffset <= resolvedSymbol.startOffset &&
+        resolvedSymbol.endOffset <= defEndOffset
+      ) continue;
+      dependencies.push(dep);
     }
 
     return dependencies;

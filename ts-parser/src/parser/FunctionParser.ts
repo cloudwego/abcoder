@@ -12,7 +12,9 @@ import {
   ParameterDeclaration,
   PropertyAccessExpression,
   VariableDeclaration,
-  Symbol
+  Symbol,
+  NewExpression,
+  Identifier
 } from 'ts-morph';
 import { Function as UniFunction, Dependency, Receiver } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -162,7 +164,6 @@ export class FunctionParser {
 
   private parseMethod(method: MethodDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile, className: string): UniFunction {
     let symbol = method.getSymbol();
-    
     let methodName = ""
     if (symbol) {
       methodName = assignSymbolName(symbol)
@@ -383,34 +384,56 @@ export class FunctionParser {
 
     for (const callExpr of callExpressions) {
       const expression = callExpr.getExpression();
-      if (Node.isIdentifier(expression)) {
-        const symbol = expression.getSymbol();
-        if (symbol) {
-          const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, expression);
-          if (resolvedSymbol) {
-            const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
-            if (!visited.has(key)) {
-              visited.add(key);
-              let dep: Dependency = {
-                ModPath: resolvedSymbol.moduleName || moduleName,
-                PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-                Name: resolvedSymbol.name,
-                File: resolvedSymbol.filePath,
-                Line: resolvedSymbol.line,
-                StartOffset: resolvedSymbol.startOffset,
-                EndOffset: resolvedSymbol.endOffset
-              }
-              if (
-                dep.ModPath === moduleName &&
-                dep.PkgPath === packagePath &&
-                resolvedSymbol.endOffset <= node.getEnd() &&
-                resolvedSymbol.startOffset >= node.getStart()
-              ) continue
-              calls.push(dep);
-            }
-          }
-        }
+      if (!Node.isIdentifier(expression)) {
+        continue;
       }
+      const symbol = expression.getSymbol();
+      if (!symbol) {
+        continue
+      }
+
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, expression);
+      if (!resolvedSymbol || !resolvedRealSymbol) {
+        continue;
+      }
+
+      const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+      if (visited.has(key)) {
+        continue
+      }
+
+      visited.add(key);
+      let dep: Dependency = {
+        ModPath: resolvedSymbol.moduleName || moduleName,
+        PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+        Name: resolvedSymbol.name,
+        File: resolvedSymbol.filePath,
+        Line: resolvedSymbol.line,
+        StartOffset: resolvedSymbol.startOffset,
+        EndOffset: resolvedSymbol.endOffset
+      }
+
+      // External function could not find decls.
+      if(resolvedSymbol.isExternal) {
+        calls.push(dep);
+        continue;
+      }
+
+      const decls = resolvedRealSymbol.getDeclarations()
+      if (decls.length === 0) {
+        continue;
+      }
+      const defStartOffset = decls[0].getStart()
+      const defEndOffset = decls[0].getEnd()
+      if (
+        dep.ModPath === moduleName &&
+        dep.PkgPath === packagePath &&
+        defEndOffset <= node.getEnd() &&
+        defStartOffset >= node.getStart()
+      ) {
+        continue
+      }
+      calls.push(dep);
     }
     return calls;
   }
@@ -426,6 +449,7 @@ export class FunctionParser {
 
     // Extract property access expressions
     const propertyAccesses = node.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression);
+    const newCalls = node.getDescendantsOfKind(SyntaxKind.NewExpression);
 
     for (const propAccess of propertyAccesses) {
       // Check if this property access is part of a method call
@@ -435,7 +459,80 @@ export class FunctionParser {
       }
     }
 
+    // Deal new call expression
+    for (const newCall of newCalls) {
+      const expr = newCall.getExpression();
+      let lastIdentifier: Identifier | undefined;
+
+      if (Node.isIdentifier(expr)) {
+        lastIdentifier = expr;
+      } else if (Node.isPropertyAccessExpression(expr)) {
+        lastIdentifier = expr.getNameNode(); 
+      }
+
+      if(lastIdentifier) {
+        this.processNewCall(node, lastIdentifier, moduleName, packagePath, sourceFile, calls, visited);
+      }
+    }
+
     return calls;
+  }
+
+  private processNewCall(
+    callerNode: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    newExpr: Identifier,
+    moduleName: string,
+    packagePath: string,
+    sourceFile: SourceFile,
+    calls: Dependency[],
+    visited: Set<string>
+  ): void {
+    const methodSymbol = newExpr.getSymbol();
+
+    if (!methodSymbol) return;
+
+    const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(methodSymbol, newExpr);
+    if (!resolvedSymbol) return;
+
+    // Handle method names like 'getX' -> 'getX'
+    let nameFormat = resolvedSymbol.name;
+
+    const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${nameFormat}`;
+
+    if (visited.has(key)) {
+      return
+    }
+    visited.add(key);
+
+    let dep: Dependency = {
+      ModPath: resolvedSymbol.moduleName || moduleName,
+      PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+      Name: nameFormat,
+      File: resolvedSymbol.filePath,
+      Line: resolvedSymbol.line,
+      StartOffset: resolvedSymbol.startOffset,
+      EndOffset: resolvedSymbol.endOffset
+    }
+
+    if(resolvedSymbol.isExternal) {
+      calls.push(dep);
+      return;
+    }
+
+    const decls = resolvedRealSymbol.getDeclarations()
+    if (decls.length === 0) {
+      return;
+    }
+    const defStartOffset = decls[0].getStart()
+    const defEndOffset = decls[0].getEnd()
+    if (
+      dep.ModPath === moduleName &&
+      dep.PkgPath === packagePath &&
+      defEndOffset <= callerNode.getEnd() &&
+      defStartOffset >= callerNode.getStart()
+    ) return
+
+    calls.push(dep);
   }
 
   private processMethodCall(
@@ -451,7 +548,7 @@ export class FunctionParser {
 
     if (!methodSymbol) return;
 
-    const resolvedSymbol = this.symbolResolver.resolveSymbol(methodSymbol, propAccess);
+    const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(methodSymbol, propAccess);
     if (!resolvedSymbol) return;
 
     // Handle method names like 'getX' -> 'getX'
@@ -459,27 +556,40 @@ export class FunctionParser {
 
     const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${nameFormat}`;
 
-    if (!visited.has(key)) {
-      visited.add(key);
-
-      let dep: Dependency = {
-        ModPath: resolvedSymbol.moduleName || moduleName,
-        PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-        Name: nameFormat,
-        File: resolvedSymbol.filePath,
-        Line: resolvedSymbol.line,
-        StartOffset: resolvedSymbol.startOffset,
-        EndOffset: resolvedSymbol.endOffset
-      }
-      if (
-        dep.ModPath === moduleName &&
-        dep.PkgPath === packagePath &&
-        resolvedSymbol.endOffset <= callerNode.getEnd() &&
-        resolvedSymbol.startOffset >= callerNode.getStart()
-      ) return
-
-      calls.push(dep);
+    if (visited.has(key)) {
+      return
     }
+    visited.add(key);
+
+    let dep: Dependency = {
+      ModPath: resolvedSymbol.moduleName || moduleName,
+      PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+      Name: nameFormat,
+      File: resolvedSymbol.filePath,
+      Line: resolvedSymbol.line,
+      StartOffset: resolvedSymbol.startOffset,
+      EndOffset: resolvedSymbol.endOffset
+    }
+
+    if(resolvedSymbol.isExternal) {
+      calls.push(dep);
+      return;
+    }
+
+    const decls = resolvedRealSymbol.getDeclarations()
+    if (decls.length === 0) {
+      return;
+    }
+    const defStartOffset = decls[0].getStart()
+    const defEndOffset = decls[0].getEnd()
+    if (
+      dep.ModPath === moduleName &&
+      dep.PkgPath === packagePath &&
+      defEndOffset <= callerNode.getEnd() &&
+      defStartOffset >= callerNode.getStart()
+    ) return
+
+    calls.push(dep);
   }
 
 
@@ -501,36 +611,54 @@ export class FunctionParser {
 
       for (const typeRef of typeReferences) {
         let typeName = typeRef.getText();
-        if (this.isPrimitiveType(typeName)) continue;
+        if (this.isPrimitiveType(typeName)) {
+          continue;
+        }
 
         const symbol = typeRef.getSymbol();
-
-        if (symbol) {
-          const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, typeNode);
-          if (resolvedSymbol && !resolvedSymbol.isExternal) {
-            typeName = resolvedSymbol.name
-            const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${typeName}`;
-            if (!visited.has(key)) {
-              visited.add(key);
-              let dep: Dependency = {
-                ModPath: resolvedSymbol.moduleName || moduleName,
-                PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-                Name: resolvedSymbol.name,
-                File: resolvedSymbol.filePath,
-                Line: resolvedSymbol.line,
-                StartOffset: resolvedSymbol.startOffset,
-                EndOffset: resolvedSymbol.endOffset
-              };
-              if (
-                dep.ModPath === moduleName &&
-                dep.PkgPath === packagePath &&
-                resolvedSymbol.endOffset <= node.getEnd() &&
-                resolvedSymbol.startOffset >= node.getStart()
-              ) continue
-              types.push(dep);
-            }
-          }
+        if (!symbol) {
+          continue;
         }
+
+        const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
+        if (!resolvedSymbol || resolvedSymbol.isExternal) {
+          continue
+        }
+
+        const decls = resolvedRealSymbol.getDeclarations()
+        if (decls.length === 0) {
+          continue;
+        }
+
+        const defStartOffset = decls[0].getStart()
+        const defEndOffset = decls[0].getEnd()
+
+        typeName = resolvedSymbol.name
+        const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${typeName}`;
+        if (visited.has(key)) {
+          continue
+        }
+
+        visited.add(key);
+        let dep: Dependency = {
+          ModPath: resolvedSymbol.moduleName || moduleName,
+          PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+          Name: resolvedSymbol.name,
+          File: resolvedSymbol.filePath,
+          Line: resolvedSymbol.line,
+          StartOffset: resolvedSymbol.startOffset,
+          EndOffset: resolvedSymbol.endOffset
+        };
+
+        if (
+          dep.ModPath === moduleName &&
+          dep.PkgPath === packagePath &&
+          defEndOffset <= node.getEnd() &&
+          defStartOffset >= node.getStart()
+        ) {
+          continue;
+        }
+        types.push(dep);
       }
     }
 
@@ -553,7 +681,7 @@ export class FunctionParser {
 
     for (const identifier of identifiers) {
 
-      // Skip function calls / constructor calls / property names
+      // Skip function calls / constructor calls / property names / Namespace import
       const parent = identifier.getParent();
       if (
         // Function calls / constructor calls / property names
@@ -580,13 +708,14 @@ export class FunctionParser {
       if (declarations.length === 0) continue;
 
       // if all declarations are in the current function scope, then it's a local variable (including closure capture), skip
-      const isLocal = declarations.every(d => {
+      const isLocalOrModule = declarations.every(d => {
         return (
           d.getFirstAncestor(a => a === node) !== undefined ||
-          Node.isCatchClause(d.getParent())
+          Node.isCatchClause(d.getParent()) ||
+          Node.isNamespaceImport(d)
         );
       });
-      if (isLocal) continue;
+      if (isLocalOrModule) continue;
 
       // Skip built-in symbols
       const isBuiltIn = declarations.some(d => {
@@ -599,30 +728,47 @@ export class FunctionParser {
       if (this.isPrimitiveType(varName)) continue;
 
       // Use symbol resolver
-      const resolvedSymbol = this.symbolResolver.resolveSymbol(symbol, identifier);
-      if (resolvedSymbol && !resolvedSymbol.isExternal) {
-        varName = resolvedSymbol.name
-        const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${varName}`;
-        if (!visited.has(key)) {
-          visited.add(key);
-          let dep: Dependency = {
-            ModPath: resolvedSymbol.moduleName || moduleName,
-            PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-            Name: resolvedSymbol.name,
-            File: resolvedSymbol.filePath,
-            Line: resolvedSymbol.line,
-            StartOffset: resolvedSymbol.startOffset,
-            EndOffset: resolvedSymbol.endOffset,
-          };
-          if (
-            dep.ModPath === moduleName &&
-            dep.PkgPath === packagePath &&
-            resolvedSymbol.endOffset <= node.getEnd() &&
-            resolvedSymbol.startOffset >= node.getStart()
-          ) continue
-          globalVars.push(dep);
-        }
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, identifier);
+      if (!resolvedSymbol || resolvedSymbol.isExternal) {
+        continue;
       }
+
+
+      const decls = resolvedRealSymbol.getDeclarations()
+      if (decls.length === 0) {
+        continue;
+      }
+
+      const defStartOffset = decls[0].getStart()
+      const defEndOffset = decls[0].getEnd()
+
+
+      varName = resolvedSymbol.name
+      const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${varName}`;
+      if (visited.has(key)) {
+        continue;
+      }
+
+      visited.add(key);
+
+      let dep: Dependency = {
+        ModPath: resolvedSymbol.moduleName || moduleName,
+        PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+        Name: resolvedSymbol.name,
+        File: resolvedSymbol.filePath,
+        Line: resolvedSymbol.line,
+        StartOffset: resolvedSymbol.startOffset,
+        EndOffset: resolvedSymbol.endOffset,
+      };
+      if (
+        dep.ModPath === moduleName &&
+        dep.PkgPath === packagePath &&
+        defEndOffset <= node.getEnd() &&
+        defStartOffset >= node.getStart()
+      ) {
+        continue;
+      }
+      globalVars.push(dep);
     }
     return globalVars;
   }
@@ -657,5 +803,4 @@ export class FunctionParser {
     const length = body.getStart() - node.getStart();
     return node.getText().substring(0, length).trim();
   }
-
 }

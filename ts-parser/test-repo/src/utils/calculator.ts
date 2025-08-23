@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as JSON5 from 'json5';
 
+const MagicNumber = 1e9 + 7;
 
 export class Calculator {
   private history: Array<{ operation: string; result: number; timestamp: Date }> = [];
@@ -10,6 +11,12 @@ export class Calculator {
   add(a: number, b: number): number {
     const result = a + b;
     this.logOperation('add', result, [a, b]);
+    return result;
+  }
+
+  addMagicNumber(a: number): number {
+    const result = a + MagicNumber;
+    this.logOperation('addMagicNumber', result, [a]);
     return result;
   }
 

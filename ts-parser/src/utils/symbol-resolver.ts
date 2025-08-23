@@ -20,6 +20,7 @@ export class SymbolResolver {
   private project: Project;
   private projectRoot: string;
   private resolutionCache = new Map<string, ResolvedSymbol | null>();
+  private resolutionSymbolCache = new Map<string, Symbol | null>();
   private packageJsonCache = new Map<string, any>();
   private mainPackageName: string;
   private cannotResolveSymbolNames: Set<string> = new Set();
@@ -48,14 +49,14 @@ export class SymbolResolver {
   /**
    * Resolve a symbol to its actual definition point, following imports and exports.
    */
-  resolveSymbol<T extends Node>(symbol: Symbol, expression: T): ResolvedSymbol | null {
+  resolveSymbol<T extends Node>(symbol: Symbol, expression: T): [ResolvedSymbol, Symbol] | [null, null] {
     const declarations = symbol.getDeclarations();
     if (!declarations || declarations.length === 0) {
-      return null;
+      return [null, null];
     }
-    const cacheKey = `${declarations[0].getSourceFile().getFilePath()}#${symbol.getEscapedName()}`;
-    if (this.resolutionCache.has(cacheKey)) {
-      return this.resolutionCache.get(cacheKey)!;
+    const cacheKey = `${declarations[0].getSourceFile().getFilePath()}#${symbol.getEscapedName()}_${symbol.getDeclarations()?.[0].getStart()}`;
+    if (this.resolutionCache.has(cacheKey) && this.resolutionSymbolCache.has(cacheKey)) {
+      return [this.resolutionCache.get(cacheKey)!, this.resolutionSymbolCache.get(cacheKey)!];
     }
 
     const definitionNode = this.findActualDefinition(symbol);
@@ -67,8 +68,9 @@ export class SymbolResolver {
         this.cannotResolveSymbolNames.add(symbol.getName());
         console.warn(`Symbol not found: ${symbol.getName()}.`)
       }
+      this.resolutionSymbolCache.set(cacheKey, null);
       this.resolutionCache.set(cacheKey, null);
-      return null;
+      return [null, null];
     }
 
     const sourceFile = definitionNode.getSourceFile();
@@ -92,21 +94,9 @@ export class SymbolResolver {
       packagePath: packageInfo.path,
     };
 
+    this.resolutionSymbolCache.set(cacheKey, definitionSymbol);
     this.resolutionCache.set(cacheKey, resolved);
-    return resolved;
-  }
-
-  resolveSymbolWithSource<T extends Node>(symbol: Symbol, expression: T): [ResolvedSymbol, string] | [null, null] {
-    this.resolveSymbol(symbol, expression)
-    const declarations = symbol.getDeclarations();
-    if (!declarations || declarations.length === 0) {
-      return [null, null];
-    }
-    const cacheKey = `${declarations[0].getSourceFile().getFilePath()}#${symbol.getEscapedName()}`;
-    if (this.resolutionCache.has(cacheKey)) {
-      return [this.resolutionCache.get(cacheKey)!, declarations[0].getSourceFile().getFilePath()];
-    }
-    return [null, null];
+    return [resolved, definitionSymbol];
   }
 
   /**
@@ -118,10 +108,10 @@ export class SymbolResolver {
 
     let lastCurrent: Symbol | null = null;
   
-    for (let i = 0; i < 50; i++) { // 加个安全上限
+    for (let i = 0; i < 50; i++) { // Utmost 50 iterations
       if (!current) return null;
       if (visited.has(current)) {
-        console.warn("循环别名:", current.getName());
+        console.warn("SymbolResolver: Circular alias detected:", current.getName());
         break;
       }
       visited.add(current);
@@ -168,7 +158,7 @@ export class SymbolResolver {
       if (lastCurrent && !this.cannotResolveSymbolNames.has(lastCurrent.getName())) {
         // Log unresolved symbols only once
         this.cannotResolveSymbolNames.add(lastCurrent.getName());
-        console.log("Can't parse: " + lastCurrent.getName(), ". Possibly this library has no .d.ts")
+        console.warn("Can't parse: " + lastCurrent.getName(), ". Possibly this library has no .d.ts")
       }
       return null;
     } 
@@ -291,12 +281,12 @@ const symbolNameCache = new Map<string, Symbol>();
 export function assignSymbolName(symbol: Symbol): string {
   let decls = symbol.getDeclarations()
   if(decls.length === 0) {
-    return symbol.getEscapedName()
+    return symbol.getName()
   }
 
   const declFile = decls[0].getSourceFile().getFilePath()
 
-  let rawName = symbol.getEscapedName()
+  let rawName = symbol.getName()
 
   // Handle methods, properties, constructors, and functions with proper naming
   const firstDecl = decls[0];
