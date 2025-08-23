@@ -13,8 +13,8 @@ import {
   PropertyAccessExpression,
   VariableDeclaration,
   Symbol,
-  NewExpression,
-  Identifier
+  Identifier,
+  TypeNode
 } from 'ts-morph';
 import { Function as UniFunction, Dependency, Receiver } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -46,8 +46,13 @@ export class FunctionParser {
     // Parse function declarations
     const functionDeclarations = sourceFile.getFunctions();
     for (const func of functionDeclarations) {
-      const funcObj = this.parseFunction(func, moduleName, packagePath, sourceFile);
-      functions[funcObj.Name] = funcObj;
+      try {
+        const funcObj = this.parseFunction(func, moduleName, packagePath, sourceFile);
+        functions[funcObj.Name] = funcObj;
+      } catch (error) {
+        console.error('Error processing function:', func, error);
+      }
+
     }
 
     // Parse method declarations in classes
@@ -63,22 +68,34 @@ export class FunctionParser {
       const methods = cls.getMethods();
 
       for (const method of methods) {
-        const methodObj = this.parseMethod(method, moduleName, packagePath, sourceFile, className);
-        functions[methodObj.Name] = methodObj;
+        try {
+          const methodObj = this.parseMethod(method, moduleName, packagePath, sourceFile, className);
+          functions[methodObj.Name] = methodObj;
+        } catch (error) {
+          console.error('Error processing method:', method, error);
+        }
       }
 
       // Parse constructors
       const constructors = cls.getConstructors();
       for (const ctor of constructors) {
-        const ctorObj = this.parseConstructor(ctor, moduleName, packagePath, sourceFile, className);
-        functions[ctorObj.Name] = ctorObj;
+        try {
+          const ctorObj = this.parseConstructor(ctor, moduleName, packagePath, sourceFile, className);
+          functions[ctorObj.Name] = ctorObj;
+        } catch (error) {
+          console.error('Error processing constructor:', ctor, error);
+        }
       }
 
       // Parse static methods
       const staticMethods = cls.getStaticMethods();
       for (const staticMethod of staticMethods) {
-        const methodObj = this.parseMethod(staticMethod, moduleName, packagePath, sourceFile, className);
-        functions[methodObj.Name] = methodObj;
+        try {
+          const methodObj = this.parseMethod(staticMethod, moduleName, packagePath, sourceFile, className);
+          functions[methodObj.Name] = methodObj;
+        } catch (error) {
+          console.error('Error processing static method:', staticMethod, error);
+        }
       }
     }
 
@@ -94,8 +111,13 @@ export class FunctionParser {
         } else {
           funcName = "anonymous_" + varDecl.getStart()
         }
-        const funcObj = this.parseArrowFunction(initializer, funcName, moduleName, packagePath, sourceFile, varDecl);
-        functions[funcObj.Name] = funcObj;
+        try {
+          const funcObj = this.parseArrowFunction(initializer, funcName, moduleName, packagePath, sourceFile, varDecl);
+          functions[funcObj.Name] = funcObj;
+        } catch (error) {
+          console.error('Error processing arrow function:', initializer, error);
+        }
+
       }
     }
 
@@ -105,8 +127,12 @@ export class FunctionParser {
       const methods = iface.getMethods();
 
       for (const method of methods) {
-        const methodObj = this.parseInterfaceMethod(method, moduleName, packagePath, sourceFile);
-        functions[methodObj.Name] = methodObj;
+        try {
+          const methodObj = this.parseInterfaceMethod(method, moduleName, packagePath, sourceFile);
+          functions[methodObj.Name] = methodObj;
+        } catch (error) {
+          console.error('Error processing interface method:', method, error);
+        }
       }
     }
 
@@ -414,7 +440,7 @@ export class FunctionParser {
       }
 
       // External function could not find decls.
-      if(resolvedSymbol.isExternal) {
+      if (resolvedSymbol.isExternal) {
         calls.push(dep);
         continue;
       }
@@ -467,10 +493,10 @@ export class FunctionParser {
       if (Node.isIdentifier(expr)) {
         lastIdentifier = expr;
       } else if (Node.isPropertyAccessExpression(expr)) {
-        lastIdentifier = expr.getNameNode(); 
+        lastIdentifier = expr.getNameNode();
       }
 
-      if(lastIdentifier) {
+      if (lastIdentifier) {
         this.processNewCall(node, lastIdentifier, moduleName, packagePath, sourceFile, calls, visited);
       }
     }
@@ -514,7 +540,7 @@ export class FunctionParser {
       EndOffset: resolvedSymbol.endOffset
     }
 
-    if(resolvedSymbol.isExternal) {
+    if (resolvedSymbol.isExternal) {
       calls.push(dep);
       return;
     }
@@ -571,7 +597,7 @@ export class FunctionParser {
       EndOffset: resolvedSymbol.endOffset
     }
 
-    if(resolvedSymbol.isExternal) {
+    if (resolvedSymbol.isExternal) {
       calls.push(dep);
       return;
     }
@@ -603,7 +629,24 @@ export class FunctionParser {
     const visited = new Set<string>();
 
     // Extract from type references and find their definitions
-    const typeNodes = node.getDescendantsOfKind(SyntaxKind.Identifier);
+    const typeNodes: TypeNode[] = node.getDescendantsOfKind(SyntaxKind.TypeReference)
+
+    for (const param of node.getParameters()) {
+      const t = param.getTypeNode()
+      if (t) {
+        typeNodes.push(t)
+      }
+    }
+
+    const returnTypeNode = node.getReturnTypeNode();
+    if (returnTypeNode) typeNodes.push(returnTypeNode);
+
+    for (const typeParam of node.getTypeParameters()) {
+      const constraint = typeParam.getConstraint();
+      if (constraint) typeNodes.push(constraint);
+      const def = typeParam.getDefault();
+      if (def) typeNodes.push(def);
+    }
 
     for (const typeNode of typeNodes) {
       // Handle union and intersection types by extracting individual type references
@@ -696,7 +739,8 @@ export class FunctionParser {
 
         // Global variable assignments
         (Node.isPropertyAssignment(parent) && parent.getNameNode() === identifier) ||
-        (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === identifier)
+        (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === identifier) ||
+        Node.isTypeReference(parent)
       ) {
         continue;
       }

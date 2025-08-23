@@ -1,9 +1,9 @@
-import { 
-  SourceFile, 
-  VariableDeclaration, 
-  PropertyDeclaration, 
-  EnumMember, 
-  Node, 
+import {
+  SourceFile,
+  VariableDeclaration,
+  PropertyDeclaration,
+  EnumMember,
+  Node,
   SyntaxKind,
   Project,
   Identifier,
@@ -34,19 +34,22 @@ export class VarParser {
       if (!this.isAtFileLevel(varDecl)) {
         continue;
       }
-      
+
       // Skip if this variable declares a function (arrow function or function expression)
       const initializer = varDecl.getInitializer();
       if (initializer) {
-        if (initializer.getKind() === SyntaxKind.ArrowFunction || 
-            initializer.getKind() === SyntaxKind.FunctionExpression) {
+        if (initializer.getKind() === SyntaxKind.ArrowFunction ||
+          initializer.getKind() === SyntaxKind.FunctionExpression) {
           continue;
         }
       }
-      
-      const varObjs = this.parseVariableDestructuring(varDecl, moduleName, packagePath, sourceFile);
-      for (const varObj of varObjs) {
-        vars[varObj.Name] = varObj;
+      try {
+        const varObjs = this.parseVariableDestructuring(varDecl, moduleName, packagePath, sourceFile);
+        for (const varObj of varObjs) {
+          vars[varObj.Name] = varObj;
+        }
+      } catch (error) {
+        console.error('Error processing variable:', varDecl, error);
       }
     }
 
@@ -57,27 +60,31 @@ export class VarParser {
       if (!this.isAtFileLevel(cls)) {
         continue;
       }
-      
+
       const properties = cls.getProperties();
       for (const prop of properties) {
         // Skip if this property is not at file level
         if (!this.isAtFileLevel(prop)) {
           continue;
         }
-        
+
         // Skip if this property declares a function (arrow function or function expression)
         const initializer = prop.getInitializer();
         if (initializer) {
-          if (initializer.getKind() === SyntaxKind.ArrowFunction || 
-              initializer.getKind() === SyntaxKind.FunctionExpression) {
+          if (initializer.getKind() === SyntaxKind.ArrowFunction ||
+            initializer.getKind() === SyntaxKind.FunctionExpression) {
             continue;
           }
         }
-        
-        const varObjs = this.parsePropertyDestructuring(prop, moduleName, packagePath, sourceFile);
-        for (const varObj of varObjs) {
-          vars[varObj.Name] = varObj;
+        try {
+          const varObjs = this.parsePropertyDestructuring(prop, moduleName, packagePath, sourceFile);
+          for (const varObj of varObjs) {
+            vars[varObj.Name] = varObj;
+          }
+        } catch (error) {
+          console.error('Error processing property:', prop, error);
         }
+
       }
     }
 
@@ -88,11 +95,15 @@ export class VarParser {
       if (!this.isAtFileLevel(enumDecl)) {
         continue;
       }
-      
+
       const members = enumDecl.getMembers();
       for (const member of members) {
-        const memberObj = this.parseEnumMember(member, moduleName, packagePath, sourceFile);
-        vars[memberObj.Name] = memberObj;
+        try {
+          const memberObj = this.parseEnumMember(member, moduleName, packagePath, sourceFile);
+          vars[memberObj.Name] = memberObj;
+        } catch (error) {
+          console.error('Error processing enum member:', member, error);
+        }
       }
     }
 
@@ -101,25 +112,25 @@ export class VarParser {
 
   private parseVariableDestructuring(varDecl: VariableDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar[] {
     const results: UniVar[] = [];
-    
+
     // Handle destructuring patterns
-    if (varDecl.getNameNode().getKind() === SyntaxKind.ObjectBindingPattern || 
-        varDecl.getNameNode().getKind() === SyntaxKind.ArrayBindingPattern) {
+    if (varDecl.getNameNode().getKind() === SyntaxKind.ObjectBindingPattern ||
+      varDecl.getNameNode().getKind() === SyntaxKind.ArrayBindingPattern) {
       return this.extractDestructuredVariables(varDecl, moduleName, packagePath, sourceFile);
     }
-    
+
     // Handle regular variable declarations
     let name = varDecl.getName();
     const sym = varDecl.getSymbol();
     if (sym) {
       name = assignSymbolName(sym);
     }
-    
+
     const startLine = varDecl.getStartLineNumber();
     const startOffset = varDecl.getStart();
     const endOffset = varDecl.getEnd();
     const content = varDecl.getFullText();
-    
+
     const parent = varDecl.getVariableStatement();
     const isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (sym === this.defaultExportedSym && sym !== undefined)) : false;
     const isConst = parent ? parent.getDeclarationKind() === 'const' : false;
@@ -171,31 +182,31 @@ export class VarParser {
 
   private parsePropertyDestructuring(prop: PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar[] {
     const results: UniVar[] = [];
-    
+
     // Handle destructuring patterns in property declarations
-    if (prop.getNameNode().getKind() === SyntaxKind.ObjectBindingPattern || 
-        prop.getNameNode().getKind() === SyntaxKind.ArrayBindingPattern) {
+    if (prop.getNameNode().getKind() === SyntaxKind.ObjectBindingPattern ||
+      prop.getNameNode().getKind() === SyntaxKind.ArrayBindingPattern) {
       return this.extractDestructuredVariables(prop, moduleName, packagePath, sourceFile);
     }
-    
+
     // Handle regular property declarations
     let name = prop.getName();
     const sym = prop.getSymbol();
     if (sym) {
       name = assignSymbolName(sym);
     }
-    
+
     const startLine = prop.getStartLineNumber();
     const startOffset = prop.getStart();
     const endOffset = prop.getEnd();
     const content = prop.getFullText();
-    
+
     const parent = prop.getParent();
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
       isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
     }
-    
+
     const isConst = false;
     const isPointer = this.isPointerType(prop);
 
@@ -249,18 +260,18 @@ export class VarParser {
     if (sym) {
       name = assignSymbolName(sym);
     }
-    
+
     const startLine = member.getStartLineNumber();
     const startOffset = member.getStart();
     const endOffset = member.getEnd();
     const content = member.getFullText();
-    
+
     const parent = member.getParent();
     let isExported = false;
     if (Node.isEnumDeclaration(parent)) {
       isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
     }
-    
+
     const isConst = true;
     const isPointer = false;
 
@@ -285,13 +296,13 @@ export class VarParser {
   private extractDestructuredVariables(node: VariableDeclaration | PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniVar[] {
     const results: UniVar[] = [];
     const nameNode = node.getNameNode();
-    
+
     // Get the initializer for dependency extraction
     const dependencies = this.extractInitializerDependencies(node, moduleName, packagePath, sourceFile);
-    
+
     // Recursively extract all identifiers from destructuring patterns
     this.extractIdentifiersFromPattern(nameNode, node, moduleName, packagePath, sourceFile, dependencies, results, node);
-    
+
     return results;
   }
 
@@ -346,14 +357,14 @@ export class VarParser {
     const startLine = element.getStartLineNumber();
     const startOffset = element.getStart();
     const endOffset = element.getEnd();
-    
+
     let isExported = false;
     let isConst = false;
     const symbol = element.getSymbol()
     if (!symbol) {
       return null
     }
-    
+
     if (Node.isVariableDeclaration(parentNode)) {
       const parent = parentNode.getVariableStatement();
       isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined)) : false;
@@ -386,11 +397,11 @@ export class VarParser {
   private extractInitializerDependencies(node: VariableDeclaration | PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): Dependency[] {
     const dependencies: Dependency[] = [];
     const visited = new Set<string>();
-    
+
     const initializer = node.getInitializer();
     if (!initializer) return dependencies;
-    
-    
+
+
     // Extract single symbol
     const sourceSymbol = initializer.getSymbol();
     if (sourceSymbol) {
@@ -398,7 +409,7 @@ export class VarParser {
       if (resolvedSymbol && !resolvedSymbol.isExternal && resolvedRealSymbol) {
         // Check if the dependency is defined outside this variable declaration
         const decls = resolvedRealSymbol.getDeclarations()
-        if(decls.length > 0) {
+        if (decls.length > 0) {
           const defStart = decls[0].getStart();
           const defEnd = decls[0].getEnd();
           if (
@@ -424,7 +435,7 @@ export class VarParser {
         }
       }
     }
-    
+
     // Extract identifiers if it's a expression
     const identifiers = initializer.getDescendantsOfKind(SyntaxKind.Identifier);
     for (const identifier of identifiers) {
@@ -433,21 +444,21 @@ export class VarParser {
       if (parent && Node.isPropertyAccessExpression(parent) && parent.getNameNode() === identifier) {
         continue;
       }
-      
+
       const symbol = identifier.getSymbol();
       if (!symbol) {
         continue;
       }
 
       const decls = symbol.getDeclarations()
-      if(decls.length === 0) {
+      if (decls.length === 0) {
         continue;
       }
-      const isLocal = decls.some(decl => 
+      const isLocal = decls.some(decl =>
         decl.getAncestors().includes(initializer)
       );
 
-      if(isLocal) {
+      if (isLocal) {
         continue
       }
 
@@ -470,7 +481,7 @@ export class VarParser {
         dependencies.push(dep);
       }
     }
-    
+
     return dependencies;
   }
 
@@ -489,7 +500,7 @@ export class VarParser {
 
   private isAtFileLevel(node: any): boolean {
     let parent = node.getParent();
-    
+
     while (parent) {
       const kind = parent.getKind();
       // Check if this is a file-level declaration (direct child of SourceFile)
@@ -512,10 +523,10 @@ export class VarParser {
       ) {
         return false;
       }
-      
+
       parent = parent.getParent();
     }
-    
+
     return false;
   }
 }
