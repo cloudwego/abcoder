@@ -5,6 +5,8 @@ import * as JSON5 from 'json5';
 
 const MagicNumber = 1e9 + 7;
 
+type ABC<T> = ABC<T>[]
+
 export class Calculator {
   private history: Array<{ operation: string; result: number; timestamp: Date }> = [];
 

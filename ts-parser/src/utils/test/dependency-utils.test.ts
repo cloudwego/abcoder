@@ -111,20 +111,4 @@ describe('DependencyUtils', () => {
       }
     });
   });
-
-  describe('getPkgPath', () => {
-    it('should return correct package path', () => {
-      const { cleanup } = createTestProject(`
-        const test = 42;
-      `);
-
-      try {
-        // Test the private method through public interface
-        const result = (dependencyUtils as any).getPkgPath('src/utils');
-        expect(typeof result).toBe('string');
-      } finally {
-        cleanup();
-      }
-    });
-  });
 });

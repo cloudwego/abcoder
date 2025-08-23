@@ -1,9 +1,9 @@
-import { 
-  SourceFile, 
-  ClassDeclaration, 
-  InterfaceDeclaration, 
-  TypeAliasDeclaration, 
-  EnumDeclaration, 
+import {
+  SourceFile,
+  ClassDeclaration,
+  InterfaceDeclaration,
+  TypeAliasDeclaration,
+  EnumDeclaration,
   SyntaxKind,
   TypeNode,
   SymbolFlags,
@@ -32,37 +32,57 @@ export class TypeParser {
     // Parse class declarations
     const classes = sourceFile.getClasses();
     for (const cls of classes) {
-      const typeObj = this.parseClass(cls, moduleName, packagePath, sourceFile);
-      types[typeObj.Name] = typeObj;
+      try {
+        const typeObj = this.parseClass(cls, moduleName, packagePath, sourceFile);
+        types[typeObj.Name] = typeObj;
+      } catch (error) {
+        console.error('Error processing class:', cls, error);
+      }
     }
 
     // Parse class expressions (anonymous classes)
     const classExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.ClassExpression);
     for (let i = 0; i < classExpressions.length; i++) {
       const classExpr = classExpressions[i];
-      const typeObj = this.parseClassExpression(classExpr, moduleName, packagePath, sourceFile, i);
-      types[typeObj.Name] = typeObj;
+      try {
+        const typeObj = this.parseClassExpression(classExpr, moduleName, packagePath, sourceFile, i);
+        types[typeObj.Name] = typeObj;
+      } catch (error) {
+        console.error('Error processing class expression:', classExpr, error);
+      }
     }
 
     // Parse interface declarations
     const interfaces = sourceFile.getInterfaces();
     for (const iface of interfaces) {
-      const typeObj = this.parseInterface(iface, moduleName, packagePath, sourceFile);
-      types[typeObj.Name] = typeObj;
+      try {
+        const typeObj = this.parseInterface(iface, moduleName, packagePath, sourceFile);
+        types[typeObj.Name] = typeObj;
+      } catch (error) {
+        console.error('Error processing interface:', iface, error);
+      }
     }
 
     // Parse type alias declarations
     const typeAliases = sourceFile.getTypeAliases();
     for (const typeAlias of typeAliases) {
-      const typeObj = this.parseTypeAlias(typeAlias, moduleName, packagePath, sourceFile);
-      types[typeObj.Name] = typeObj;
+      try {
+        const typeObj = this.parseTypeAlias(typeAlias, moduleName, packagePath, sourceFile);
+        types[typeObj.Name] = typeObj;
+      } catch (error) {
+        console.error('Error processing type alias:', typeAlias, error);
+      }
     }
 
     // Parse enum declarations
     const enums = sourceFile.getEnums();
     for (const enumDecl of enums) {
-      const typeObj = this.parseEnum(enumDecl, moduleName, packagePath, sourceFile);
-      types[typeObj.Name] = typeObj;
+      try {
+        const typeObj = this.parseEnum(enumDecl, moduleName, packagePath, sourceFile);
+        types[typeObj.Name] = typeObj;
+      } catch (error) {
+        console.error('Error processing enum:', enumDecl, error);
+      }
     }
 
     return types;
@@ -96,12 +116,12 @@ export class TypeParser {
     // Parse implemented interfaces and extended classes
     const implementsInterfaces: Dependency[] = [];
     const extendsClasses: Dependency[] = [];
-    
+
     const heritageClauses = cls.getHeritageClauses();
     for (const clause of heritageClauses) {
       const clauseType = clause.getToken();
       const typeNodes = clause.getTypeNodes();
-      
+
       for (const typeNode of typeNodes) {
         const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
         if (clauseType === SyntaxKind.ImplementsKeyword) {
@@ -125,7 +145,7 @@ export class TypeParser {
 
     // Combine implements and extends into Implements, but filter out external symbols
     const allImplements = [...implementsInterfaces, ...extendsClasses, ...propertyTypes];
-    
+
     return {
       ModPath: moduleName,
       PkgPath: this.getPkgPath(packagePath),
@@ -214,7 +234,7 @@ export class TypeParser {
 
     // Combine extends interfaces and other dependencies into Implements, but filter out external symbols
     const allImplements = [...extendsInterfaces, ...propertyTypes, ...methodTypes];
-    
+
     return {
       ModPath: moduleName,
       PkgPath: this.getPkgPath(packagePath),
@@ -313,7 +333,7 @@ export class TypeParser {
 
     // Extract from identifiers and find their definitions
     const identifiers = typeNode.getDescendantsOfKind(SyntaxKind.Identifier);
-    
+
     for (const identifier of identifiers) {
       const symbol = identifier.getSymbol();
       if (!symbol || (symbol.getFlags() & (SymbolFlags.Type | SymbolFlags.TypeAlias | SymbolFlags.TypeLiteral)) === 0) {
@@ -342,7 +362,7 @@ export class TypeParser {
       const defEndOffset = decls[0].getEnd();
 
       visited.add(key);
-      let dep : Dependency = {
+      let dep: Dependency = {
         ModPath: resolvedSymbol.moduleName || moduleName,
         PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
         Name: resolvedSymbol.name,
@@ -385,12 +405,12 @@ export class TypeParser {
         name = symbolName;
       }
     }
-    
+
     const startLine = classExpr.getStartLineNumber();
     const startOffset = classExpr.getStart();
     const endOffset = classExpr.getEnd();
     const content = classExpr.getFullText();
-    
+
     // Parse methods
     const methods: Record<string, any> = {};
     const classMethods = classExpr.getMethods();
@@ -406,15 +426,15 @@ export class TypeParser {
     // Parse implemented interfaces and extended classes
     const implementsInterfaces: Dependency[] = [];
     const extendsClasses: Dependency[] = [];
-    
+
     const heritageClauses = classExpr.getHeritageClauses();
     for (const clause of heritageClauses) {
       const clauseType = clause.getToken();
       const typeNodes = clause.getTypeNodes();
-      
+
       for (const typeNode of typeNodes) {
         const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
-        
+
         if (clauseType === SyntaxKind.ImplementsKeyword) {
           implementsInterfaces.push(...dependencies);
         } else if (clauseType === SyntaxKind.ExtendsKeyword) {
