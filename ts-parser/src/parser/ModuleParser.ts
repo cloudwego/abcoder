@@ -24,6 +24,7 @@ export class ModuleParser {
 
   async parseModule(modulePath: string, relativeDir: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Module> {
     const packageJsonPath = path.join(modulePath, 'package.json');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let packageJson: any = {};
     
     if (fs.existsSync(packageJsonPath)) {
@@ -75,6 +76,7 @@ export class ModuleParser {
     const pathUitl = new PathUtils(this.projectRoot)
 
     // Build files map with detailed import analysis
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const files: Record<string, any> = {};
     for (const [filePath, fileInfo] of structure.files) {
       const sourceFile = this.project.addSourceFileAtPath(filePath);

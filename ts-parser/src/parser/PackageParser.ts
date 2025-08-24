@@ -22,8 +22,11 @@ export class PackageParser {
     isMain: boolean,
     isTest: boolean
   ): Promise<Package> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const functions: Record<string, any> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const types: Record<string, any> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const vars: Record<string, any> = {};
 
     for (const sourceFile of sourceFiles) {
