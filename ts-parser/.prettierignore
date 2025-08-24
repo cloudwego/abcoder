@@ -3,10 +3,15 @@ node_modules/
 
 # Build outputs
 dist/
-build/
 
-# Test coverage
-coverage/
+# Test files and directories
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/test/
+**/tests/
+test-repo/
 
 # Logs
 *.log
