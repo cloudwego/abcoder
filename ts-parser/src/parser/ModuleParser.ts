@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { Project, SourceFile, SyntaxKind } from 'ts-morph';
-import { Module, Package, Import } from '../types/uniast';
+import { Project, SourceFile } from 'ts-morph';
+import { Module, Package } from '../types/uniast';
 import { PackageParser } from './PackageParser';
 import { TypeScriptStructureAnalyzer } from '../utils/typescript-structure';
 import { TsConfigCache } from '../utils/tsconfig-cache';
@@ -72,7 +72,7 @@ export class ModuleParser {
       Object.assign(dependencies, packageJson.peerDependencies);
     }
 
-    let pathUitl = new PathUtils(this.projectRoot)
+    const pathUitl = new PathUtils(this.projectRoot)
 
     // Build files map with detailed import analysis
     const files: Record<string, any> = {};
@@ -99,12 +99,8 @@ export class ModuleParser {
     };
   }
 
-  private extractImports(sourceFile: SourceFile, modulePath: string): Array<{ Path: string }> {
+  private extractImports(sourceFile: SourceFile, _modulePath: string): Array<{ Path: string }> {
     const imports: Array<{ Path: string }> = [];
-    const sourceFilePath = sourceFile.getFilePath();
-    
-    // Cache path aliases for this module
-    const pathAliases = this.tsConfigCache.getPathAliases(modulePath);
     
     // Track unique import paths to avoid duplicates
     const uniquePaths = new Set<string>();
@@ -115,7 +111,12 @@ export class ModuleParser {
       const originalPath = importDecl.getModuleSpecifierValue();
       const resolvedPath = importDecl.getModuleSpecifierSourceFile()?.getFilePath();
       if (resolvedPath) {
-        let relativePath = path.relative(this.projectRoot, resolvedPath);
+        const relativePath = path.relative(this.projectRoot, resolvedPath);
+
+        if(uniquePaths.has(relativePath)) {
+          continue;
+        }
+        uniquePaths.add(relativePath);
         imports.push({ Path: relativePath });
       } else {
         imports.push({ Path: "external:" + originalPath });
@@ -129,7 +130,7 @@ export class ModuleParser {
       if (originalPath) {
         const resolvedPath = exportDecl.getModuleSpecifierSourceFile()?.getFilePath();
         if (resolvedPath) {
-          let relativePath = path.relative(this.projectRoot, resolvedPath);
+          const relativePath = path.relative(this.projectRoot, resolvedPath);
           imports.push({ Path: relativePath });
         } else {
           imports.push({ Path: "external:" + originalPath });

@@ -1,7 +1,7 @@
 import { Project, ts } from 'ts-morph';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Repository, Node, Relation, Identity, Function, Type, Var } from '../types/uniast';
+import { Repository, Node, Relation, Identity, Function } from '../types/uniast';
 import { ModuleParser } from './ModuleParser';
 import { TsConfigCache } from '../utils/tsconfig-cache';
 
@@ -137,10 +137,10 @@ export class RepositoryParser {
 
   private buildGlobalGraph(repository: Repository): void {
     // First pass: Create all nodes from functions, types, and variables
-    for (const [moduleKey, module] of Object.entries(repository.Modules)) {
-      for (const [packageKey, pkg] of Object.entries(module.Packages)) {
+    for (const [, module] of Object.entries(repository.Modules)) {
+      for (const [, pkg] of Object.entries(module.Packages)) {
         // Add functions to graph
-        for (const [funcName, func] of Object.entries(pkg.Functions)) {
+        for (const [, func] of Object.entries(pkg.Functions)) {
           const nodeKey = this.createNodeKey(func.ModPath, func.PkgPath, func.Name);
           const node: Node = {
             ModPath: func.ModPath,
@@ -157,7 +157,7 @@ export class RepositoryParser {
         }
 
         // Add types to graph
-        for (const [typeName, type] of Object.entries(pkg.Types)) {
+        for (const [, type] of Object.entries(pkg.Types)) {
           const nodeKey = this.createNodeKey(type.ModPath, type.PkgPath, type.Name);
           const node: Node = {
             ModPath: type.ModPath,
@@ -175,7 +175,7 @@ export class RepositoryParser {
         }
 
         // Add variables to graph
-        for (const [varName, variable] of Object.entries(pkg.Vars)) {
+        for (const [, variable] of Object.entries(pkg.Vars)) {
           const nodeKey = this.createNodeKey(variable.ModPath, variable.PkgPath, variable.Name);
           const node: Node = {
             ModPath: variable.ModPath,
@@ -216,7 +216,7 @@ export class RepositoryParser {
     };
   }
 
-  private extractDependenciesFromFunction(func: Function, repository: Repository): Relation[] {
+  private extractDependenciesFromFunction(func: Function, _repository: Repository): Relation[] {
     const dependencies: Relation[] = [];
     
     // Extract from function calls
@@ -250,7 +250,7 @@ export class RepositoryParser {
     return dependencies;
   }
 
-  private extractReferencesFromFunction(func: Function, repository: Repository): Relation[] {
+  private extractReferencesFromFunction(func: Function, _repository: Repository): Relation[] {
     const references: Relation[] = [];
     
     // Extract from parameters
@@ -332,17 +332,15 @@ export class RepositoryParser {
         
         // Add references to the missing node
         const references: Relation[] = [];
-        for (const [sourceKey, relations] of referringNodes) {
-          for (const relation of relations) {
-            const sourceNode = repository.Graph[sourceKey];
-            if (sourceNode) {
-              references.push({
-                ModPath: sourceNode.ModPath,
-                PkgPath: sourceNode.PkgPath,
-                Name: sourceNode.Name,
-                Kind: 'Dependency'
-              });
-            }
+        for (const [sourceKey, ] of referringNodes) {
+          const sourceNode = repository.Graph[sourceKey];
+          if (sourceNode) {
+            references.push({
+              ModPath: sourceNode.ModPath,
+              PkgPath: sourceNode.PkgPath,
+              Name: sourceNode.Name,
+              Kind: 'Dependency'
+            });
           }
         }
         missingNode.References = references;

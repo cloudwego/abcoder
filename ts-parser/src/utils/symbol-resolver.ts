@@ -1,4 +1,4 @@
-import { Project, Symbol, Node, SyntaxKind, SymbolFlags, Identifier, PropertyAccessExpression, VariableDeclaration, PropertyDeclaration } from 'ts-morph';
+import { Project, Symbol, Node, SyntaxKind, SymbolFlags } from 'ts-morph';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as JSON5 from 'json5';
@@ -21,6 +21,7 @@ export class SymbolResolver {
   private projectRoot: string;
   private resolutionCache = new Map<string, ResolvedSymbol | null>();
   private resolutionSymbolCache = new Map<string, Symbol | null>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private packageJsonCache = new Map<string, any>();
   private mainPackageName: string;
   private cannotResolveSymbolNames: Set<string> = new Set();
@@ -279,7 +280,7 @@ export class SymbolResolver {
 const symbolNameCache = new Map<string, Symbol>();
 
 export function assignSymbolName(symbol: Symbol): string {
-  let decls = symbol.getDeclarations()
+  const decls = symbol.getDeclarations()
   if(decls.length === 0) {
     return symbol.getName()
   }
@@ -324,9 +325,9 @@ export function assignSymbolName(symbol: Symbol): string {
 
   // Handle default export functions/classes
   if((Node.isFunctionDeclaration(firstDecl) || Node.isClassDeclaration(firstDecl)) && 
-     (firstDecl as any).isDefaultExport && rawName === 'default') {
+     firstDecl.isDefaultExport() && rawName === 'default') {
     // For default exports, use the actual name if available
-    const actualName = (firstDecl as any).getName?.() || (firstDecl as any).name?.getText?.();
+    const actualName = firstDecl.getName();
     if (actualName) {
       rawName = actualName;
     }
@@ -345,12 +346,12 @@ export function assignSymbolName(symbol: Symbol): string {
   }
 
   const getDeclsPos = (symbol: Symbol) => {
-    let decls_pos = []
-    for (let decl of symbol.getDeclarations()) {
-      decls_pos.push(decl.getStart())
+    const declsPos = []
+    for (const decl of symbol.getDeclarations()) {
+      declsPos.push(decl.getStart())
     }
-    decls_pos.sort((a, b) => a - b)
-    return decls_pos
+    declsPos.sort((a, b) => a - b)
+    return declsPos
   }
   
   const arr1 = getDeclsPos(symbol)
