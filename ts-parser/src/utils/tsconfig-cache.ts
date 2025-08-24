@@ -5,11 +5,13 @@ import { ts } from 'ts-morph';
 
 
 export interface TsConfigData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   compilerOptions?: any;
   paths?: Record<string, string[]>;
   rootDir?: string;
   outDir?: string;
   fileNames?: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 

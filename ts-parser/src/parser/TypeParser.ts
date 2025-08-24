@@ -6,7 +6,6 @@ import {
   EnumDeclaration,
   SyntaxKind,
   TypeNode,
-  SymbolFlags,
   ClassExpression,
   Symbol
 } from 'ts-morph';
@@ -23,6 +22,7 @@ export class TypeParser {
   private dependencyUtils: DependencyUtils;
 
   constructor(projectRoot: string) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.symbolResolver = new SymbolResolver(null as any, projectRoot);
     this.pathUtils = new PathUtils(projectRoot);
     this.dependencyUtils = new DependencyUtils(this.symbolResolver, projectRoot);
@@ -105,6 +105,7 @@ export class TypeParser {
     const isExported = cls.isExported() || cls.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
     // Parse methods
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
     const classMethods = cls.getMethods();
     for (const method of classMethods) {
@@ -169,6 +170,7 @@ export class TypeParser {
     const isExported = iface.isExported() || iface.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
     // Parse methods
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
     const interfaceMethods = iface.getMethods();
     for (const method of interfaceMethods) {
@@ -318,7 +320,7 @@ export class TypeParser {
       const defEndOffset = decls[0].getEnd();
 
       visited.add(key);
-      let dep: Dependency = {
+      const dep: Dependency = {
         ModPath: resolvedSymbol.moduleName || moduleName,
         PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
         Name: resolvedSymbol.name,
@@ -368,6 +370,7 @@ export class TypeParser {
     const content = classExpr.getFullText();
 
     // Parse methods
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
     const classMethods = classExpr.getMethods();
     for (const method of classMethods) {

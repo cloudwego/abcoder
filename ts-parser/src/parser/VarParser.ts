@@ -10,7 +10,7 @@ import {
   Symbol,
 } from 'ts-morph';
 import { Var as UniVar, Dependency } from '../types/uniast';
-import { assignSymbolName, ResolvedSymbol, SymbolResolver } from '../utils/symbol-resolver';
+import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
 import { PathUtils } from '../utils/path-utils';
 
 export class VarParser {
@@ -142,7 +142,7 @@ export class VarParser {
     if (typeNode) {
       const typeSymbol = typeNode.getSymbol();
       if (typeSymbol) {
-        const [resolvedSymbol, _] = this.symbolResolver.resolveSymbol(typeSymbol, varDecl);
+        const [resolvedSymbol, ] = this.symbolResolver.resolveSymbol(typeSymbol, varDecl);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           type = {
             ModPath: resolvedSymbol.moduleName || moduleName,
@@ -216,7 +216,7 @@ export class VarParser {
     if (typeNode) {
       const typeSymbol = typeNode.getSymbol();
       if (typeSymbol) {
-        const [resolvedSymbol, _] = this.symbolResolver.resolveSymbol(typeSymbol, prop);
+        const [resolvedSymbol, ] = this.symbolResolver.resolveSymbol(typeSymbol, prop);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           type = {
             ModPath: resolvedSymbol.moduleName || moduleName,
@@ -394,7 +394,7 @@ export class VarParser {
     };
   }
 
-  private extractInitializerDependencies(node: VariableDeclaration | PropertyDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): Dependency[] {
+  private extractInitializerDependencies(node: VariableDeclaration | PropertyDeclaration, moduleName: string, packagePath: string, _sourceFile: SourceFile): Dependency[] {
     const dependencies: Dependency[] = [];
     const visited = new Set<string>();
 
@@ -462,7 +462,7 @@ export class VarParser {
         continue
       }
 
-      const [resolvedSymbol, _] = this.symbolResolver.resolveSymbol(symbol, node);
+      const [resolvedSymbol, ] = this.symbolResolver.resolveSymbol(symbol, node);
       if (resolvedSymbol && !resolvedSymbol.isExternal) {
         const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
         if (visited.has(key)) {
@@ -485,7 +485,7 @@ export class VarParser {
     return dependencies;
   }
 
-  private isPointerType(_: any): boolean {
+  private isPointerType<T extends Node>(_: T): boolean {
     return false;
   }
 
@@ -498,7 +498,7 @@ export class VarParser {
   }
 
 
-  private isAtFileLevel(node: any): boolean {
+  private isAtFileLevel<T extends Node>(node: T): boolean {
     let parent = node.getParent();
 
     while (parent) {

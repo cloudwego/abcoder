@@ -58,7 +58,7 @@ export class FunctionParser {
     // Parse method declarations in classes
     const classes = sourceFile.getClasses();
     for (const cls of classes) {
-      let sym = cls.getSymbol();
+      const sym = cls.getSymbol();
       let className = ""
       if (sym) {
         className = assignSymbolName(sym)
@@ -104,7 +104,7 @@ export class FunctionParser {
     for (const varDecl of variableDeclarations) {
       const initializer = varDecl.getInitializer();
       if (initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))) {
-        let sym = varDecl.getSymbol()
+        const sym = varDecl.getSymbol()
         let funcName = ""
         if (sym) {
           funcName = assignSymbolName(sym)
@@ -140,7 +140,7 @@ export class FunctionParser {
   }
 
   private parseFunction(func: FunctionDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile): UniFunction {
-    let symbol = func.getSymbol();
+    const symbol = func.getSymbol();
     let name = 'anonymous_' + func.getStart();
     if (symbol) {
       name = assignSymbolName(symbol)
@@ -189,7 +189,7 @@ export class FunctionParser {
   }
 
   private parseMethod(method: MethodDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile, className: string): UniFunction {
-    let symbol = method.getSymbol();
+    const symbol = method.getSymbol();
     let methodName = ""
     if (symbol) {
       methodName = assignSymbolName(symbol)
@@ -254,7 +254,7 @@ export class FunctionParser {
   }
 
   private parseInterfaceMethod(method: MethodSignature, moduleName: string, packagePath: string, sourceFile: SourceFile): UniFunction {
-    let symbol = method.getSymbol();
+    const symbol = method.getSymbol();
     let methodName = ""
     if (symbol) {
       methodName = assignSymbolName(symbol)
@@ -290,7 +290,7 @@ export class FunctionParser {
   }
 
   private parseConstructor(ctor: ConstructorDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile, className: string): UniFunction {
-    let symbol = ctor.getSymbol();
+    const symbol = ctor.getSymbol();
     let name = ""
     if (symbol) {
       name = assignSymbolName(symbol)
@@ -386,14 +386,14 @@ export class FunctionParser {
   }
 
   // TODO: parse parameters
-  private parseParameters(parameters: ParameterDeclaration[], moduleName: string, packagePath: string, sourceFile: SourceFile): Dependency[] {
+  private parseParameters(_parameters: ParameterDeclaration[], _moduleName: string, _packagePath: string, _sourceFile: SourceFile): Dependency[] {
     const dependencies: Dependency[] = [];
 
     return dependencies;
   }
 
   // TODO: parse return types
-  private parseReturnTypes(func: FunctionDeclaration | MethodSignature, moduleName: string, packagePath: string, sourceFile: SourceFile): Dependency[] {
+  private parseReturnTypes(_func: FunctionDeclaration | MethodSignature, _moduleName: string, _packagePath: string, _sourceFile: SourceFile): Dependency[] {
     const results: Dependency[] = [];
     return results;
   }
@@ -402,7 +402,7 @@ export class FunctionParser {
     node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
     moduleName: string,
     packagePath: string,
-    sourceFile: SourceFile
+    _sourceFile: SourceFile
   ): Dependency[] {
     const calls: Dependency[] = [];
     const visited = new Set<string>();
@@ -429,7 +429,7 @@ export class FunctionParser {
       }
 
       visited.add(key);
-      let dep: Dependency = {
+      const dep: Dependency = {
         ModPath: resolvedSymbol.moduleName || moduleName,
         PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
         Name: resolvedSymbol.name,
@@ -509,7 +509,7 @@ export class FunctionParser {
     newExpr: Identifier,
     moduleName: string,
     packagePath: string,
-    sourceFile: SourceFile,
+    _sourceFile: SourceFile,
     calls: Dependency[],
     visited: Set<string>
   ): void {
@@ -521,7 +521,7 @@ export class FunctionParser {
     if (!resolvedSymbol) return;
 
     // Handle method names like 'getX' -> 'getX'
-    let nameFormat = resolvedSymbol.name;
+    const nameFormat = resolvedSymbol.name;
 
     const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${nameFormat}`;
 
@@ -530,7 +530,7 @@ export class FunctionParser {
     }
     visited.add(key);
 
-    let dep: Dependency = {
+    const dep: Dependency = {
       ModPath: resolvedSymbol.moduleName || moduleName,
       PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
       Name: nameFormat,
@@ -566,7 +566,7 @@ export class FunctionParser {
     propAccess: PropertyAccessExpression,
     moduleName: string,
     packagePath: string,
-    sourceFile: SourceFile,
+    _sourceFile: SourceFile,
     calls: Dependency[],
     visited: Set<string>
   ): void {
@@ -578,7 +578,7 @@ export class FunctionParser {
     if (!resolvedSymbol) return;
 
     // Handle method names like 'getX' -> 'getX'
-    let nameFormat = resolvedSymbol.name;
+    const nameFormat = resolvedSymbol.name;
 
     const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${nameFormat}`;
 
@@ -587,7 +587,7 @@ export class FunctionParser {
     }
     visited.add(key);
 
-    let dep: Dependency = {
+    const dep: Dependency = {
       ModPath: resolvedSymbol.moduleName || moduleName,
       PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
       Name: nameFormat,
@@ -623,7 +623,7 @@ export class FunctionParser {
     node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
     moduleName: string,
     packagePath: string,
-    sourceFile: SourceFile
+    _sourceFile: SourceFile
   ): Dependency[] {
     const types: Dependency[] = [];
     const visited = new Set<string>();
@@ -683,7 +683,7 @@ export class FunctionParser {
         }
 
         visited.add(key);
-        let dep: Dependency = {
+        const dep: Dependency = {
           ModPath: resolvedSymbol.moduleName || moduleName,
           PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
           Name: resolvedSymbol.name,
@@ -712,7 +712,7 @@ export class FunctionParser {
     node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
     moduleName: string,
     packagePath: string,
-    sourceFile: SourceFile
+    _sourceFile: SourceFile
   ): Dependency[] {
     const body = node.getBody();
     if (!body) return [];
@@ -795,7 +795,7 @@ export class FunctionParser {
 
       visited.add(key);
 
-      let dep: Dependency = {
+      const dep: Dependency = {
         ModPath: resolvedSymbol.moduleName || moduleName,
         PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
         Name: resolvedSymbol.name,

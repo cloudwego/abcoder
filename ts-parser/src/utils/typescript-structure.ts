@@ -14,6 +14,7 @@ export interface ModuleInfo {
   name: string;
   version: string;
   path: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packageJson: any;
   isExternal: boolean;
 }
@@ -121,7 +122,6 @@ export class TypeScriptStructureAnalyzer {
 
     // Original behavior when no srcPatterns provided
     const dirs: string[] = [];
-    const packageJson = module.packageJson;
 
     // Get tsconfig.json configuration
     const config = this.tsConfigCache.getTsConfig(module.path);

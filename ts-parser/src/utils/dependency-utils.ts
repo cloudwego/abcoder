@@ -1,7 +1,5 @@
-import { Identifier, Node, SymbolFlags, SyntaxKind, Type, TypeNode, TypeReferenceNode, VariableDeclaration } from 'ts-morph';
-import { Dependency } from '../types/uniast';
+import { SymbolFlags, Type, TypeNode } from 'ts-morph';
 import { SymbolResolver } from './symbol-resolver';
-import { PathUtils } from './path-utils';
 
 export class DependencyUtils {
   private symbolResolver: SymbolResolver;
