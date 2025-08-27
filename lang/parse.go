@@ -44,6 +44,17 @@ type ParseOptions struct {
 	collect.CollectOption
 	// specify the repo id
 	RepoID string
+
+	// TS options
+	// tsconfig string
+	TSParseOptions
+}
+
+type TSParseOptions struct {
+	// tsconfig path
+	TSConfig string
+	// srcDir path
+	TSSrcDir []string
 }
 
 func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
