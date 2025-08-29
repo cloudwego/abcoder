@@ -160,10 +160,10 @@ Output`
 	// references
 	refRange := Range{
 		Start: Position{
-			Line:      13,
-			Character: 13,
+			Line:      48,
+			Character: 6,
 		},
-	}
+	} // trait $0MyTrait {
 	t.Run("references", func(t *testing.T) {
 		id := Location{
 			URI:   entity_mod_uri,
@@ -172,6 +172,9 @@ Output`
 		references, err := rustLSP.References(context.Background(), id)
 		if err != nil {
 			t.Fatalf("Find Reference failed: %v", err)
+		}
+		if len(references) != 4 {
+			t.Fatalf("Expected 4 references, got %d\n%+v\n", len(references), references)
 		}
 		if _, err := json.Marshal(references); err != nil {
 			t.Fatalf("Marshal Reference failed: %v", err)
@@ -197,6 +200,12 @@ Output`
 		tokens, err := rustLSP.SemanticTokens(context.Background(), id)
 		if err != nil {
 			t.Fatalf("Semantic Tokens failed: %v", err)
+		}
+		if len(tokens) != 149 {
+			t.Fatalf("Expected 149 semantic tokens, got %d\n%+v", len(tokens), tokens)
+		}
+		if len(tokens) == 0 {
+			t.Fatalf("Semantic Tokens should not be empty")
 		}
 		if _, err := json.Marshal(tokens); err != nil {
 			t.Fatalf("Marshal Semantic Tokens failed: %v", err)
@@ -230,7 +239,6 @@ Output`
 			if len(definition) != 1 {
 				t.Fatalf("Find Definition should have found entry, but got none at %#v", pos)
 			}
-			// t.Logf("Find Definition %#v ->\n%#v", pos, definition)
 		}
 	})
 
