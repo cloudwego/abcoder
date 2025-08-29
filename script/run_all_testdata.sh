@@ -17,8 +17,7 @@ REPO_ROOT=$(realpath --relative-to=$(pwd) "$SCRIPT_DIR/..")
 ABCEXE=${ABCEXE:-"$REPO_ROOT/abcoder"}
 OUTDIR=${OUTDIR:?Error: OUTDIR is a mandatory environment variable}
 PARALLEL_FLAGS=${PARALLEL_FLAGS:---tag}
-
-LANGS=(go rust python cxx)
+LANGS=${LANGS:-"go rust python cxx"}
 
 detect_jobs() {
 	local ABCEXE=${1:-$ABCEXE}

@@ -2,16 +2,43 @@ name: Regression Test
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   run_all_tests:
     runs-on: ubuntu-latest
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     steps:
+      - name: Setup Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rust-analyzer
+
+      - name: Setup Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Checkout pull request code
         uses: actions/checkout@v4
         with:
           path: 'pr_repo'
+          submodules: true
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r ./pr_repo/script/requirements.txt
+          pip install ./pr_repo/pylsp
 
       - name: Checkout main branch code
         uses: actions/checkout@v4
@@ -19,21 +46,16 @@ jobs:
           ref: 'main'
           path: 'main_repo'
 
-      - name: Setup Go environment
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
       - name: Compile both binaries
         run: |
           (cd main_repo && go build -o ../abcoder_old)
           (cd pr_repo && go build -o ../abcoder_new)
-      
+
       - name: Run test scripts and generate outputs
         run: |
-          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_all_testdata.sh
-          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_all_testdata.sh
-      
+          LANGS="go rust python" OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_all_testdata.sh
+          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_all_testdata.sh
+
       - name: Compare outputs and check for regression
         id: diff_check
         run: ./pr_repo/script/diffjson.py out_old out_new
