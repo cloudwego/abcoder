@@ -1,0 +1,50 @@
+name: Regression Test
+
+on:
+  push:
+
+jobs:
+  run_all_tests:
+    runs-on: ubuntu-latest
+    #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
+    steps:
+      - name: Checkout pull request code
+        uses: actions/checkout@v4
+        with:
+          path: 'pr_repo'
+
+      - name: Checkout main branch code
+        uses: actions/checkout@v4
+        with:
+          ref: 'main'
+          path: 'main_repo'
+
+      - name: Setup Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Compile both binaries
+        run: |
+          (cd main_repo && go build -o ../abcoder_old)
+          (cd pr_repo && go build -o ../abcoder_new)
+      
+      - name: Run test scripts and generate outputs
+        run: |
+          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_all_testdata.sh
+          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_all_testdata.sh
+      
+      - name: Compare outputs and check for regression
+        id: diff_check
+        run: ./pr_repo/script/diffjson.py out_old out_new
+        continue-on-error: true
+
+      - name: Upload output directories
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-outputs
+          path: |
+            out_old
+            out_new
+          retention-days: 3
