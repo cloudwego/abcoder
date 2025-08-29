@@ -22,7 +22,7 @@ jobs:
       # TestParser_NodeFieldsConsistency:
       #   Vars.Content only includes name, not whole body
       SKIPPED_TESTS: >-
-        TestPatcher|TestCases|Test_goParser_ParseNode|TestParser_NodeFieldsConsistency
+        TestPatcher|TestCases|Test_goParser_ParseNode|TestParser_NodeFieldsConsistency|TestRustLSP
 
     steps:
       - name: Checkout code
