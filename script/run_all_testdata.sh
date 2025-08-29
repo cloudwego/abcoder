@@ -27,6 +27,10 @@ detect_jobs() {
 	done
 }
 
+if [[ ! -x "$ABCEXE" ]]; then
+    echo "Error: The specified abcoder executable '$ABCEXE' does not exist or is not executable." >&2
+    exit 1
+fi
 mkdir -pv "$OUTDIR"
 detect_jobs | parallel $PARALLEL_FLAGS echo {}
 echo
