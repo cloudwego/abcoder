@@ -19,23 +19,25 @@ pub trait Addable {
 
 pub struct AnyInt(i64);
 
-//impl AnyInt {
-//    pub fn id() -> i64 {
-//        0
-//    }
-//    pub fn add(&self, b: i64) -> i64 {
-//        self.0 + b
-//    }
-//}
+impl AnyInt {
+    //pub fn id() -> i64 {
+    pub fn idx() -> i64 {
+        0
+    }
+    //pub fn add(&self, b: i64) -> i64 {
+    pub fn addx(&self, b: i64) -> i64 {
+        self.0 + b
+    }
+}
 
 impl Addable for AnyInt {
     fn add(&self, b: i64) -> i64 {
         // use the method defined in the struct
-        self.add(b)
+        self.addx(b)
     }
     fn id() -> i64 {
         // use the method defined in the struct
-        AnyInt::id()
+        AnyInt::idx()
     }
 }
 
