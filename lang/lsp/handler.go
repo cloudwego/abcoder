@@ -17,6 +17,7 @@ package lsp
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -126,6 +127,10 @@ func (h *lspHandler) sendNotify(req *jsonrpc2.Request) {
 
 func (h *lspHandler) handleNotification(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	switch req.Method {
+	case "textDocument/publishDiagnostics":
+		// This notification is sent from the server to the client to signal results of validation runs.
+		fmt.Printf("Received publishDiagnostics notification:\n%s\n", string(*req.Params))
+		return
 	// exit
 	case "exit":
 		log.Info("Received exit notification\n")

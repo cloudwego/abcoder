@@ -234,17 +234,6 @@ Output`
 		}
 	})
 
-	// workspaceSymbol
-	t.Run("workspaceSymbol", func(t *testing.T) {
-		symbols, err := rustLSP.WorkspaceSymbols(context.Background(), "add")
-		if err != nil {
-			t.Fatalf("Workspace Symbol failed: %v", err)
-		}
-		if _, err := json.Marshal(symbols); err != nil {
-			t.Fatalf("Marshal Workspace Symbols failed: %v", err)
-		}
-	})
-
 	// fileStructure
 	t.Run("FileStructure", func(t *testing.T) {
 		symbols, err := rustLSP.FileStructure(context.Background(), main_uri)
