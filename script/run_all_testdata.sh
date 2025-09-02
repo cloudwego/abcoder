@@ -3,13 +3,13 @@
 #
 # USAGE:
 # 1. Save the uniast to out/
-# $ OUTDIR=out/ ./script/run_testdata.sh
+# $ OUTDIR=out/ ./script/run_all_testdata.sh
 #
 # 2. Save the uniast to out/ , colorize output for human readable terminal
-# OUTDIR=out/ PARALLEL_FLAGS=--ctag ./script/run_testdata.sh
+# OUTDIR=out/ PARALLEL_FLAGS=--ctag ./script/run_all_testdata.sh
 #
 # 3. Use a custom abcoder executable
-# OUTDIR=out/ ABCEXE="./other_abcoder" ./script/run_testdata.sh
+# OUTDIR=out/ ABCEXE="./other_abcoder" ./script/run_all_testdata.sh
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 REPO_ROOT=$(realpath --relative-to=$(pwd) "$SCRIPT_DIR/..")
