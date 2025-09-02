@@ -53,12 +53,10 @@ export class MonorepoUtils {
   static isMonorepo(rootPath: string): boolean {
     const edenConfigPath = path.join(rootPath, 'eden.monorepo.json');
     const pnpmWorkspacePath = path.join(rootPath, 'pnpm-workspace.yaml');
-    const yarnWorkspacePath = path.join(rootPath, 'yarn.lock');
     const lernaConfigPath = path.join(rootPath, 'lerna.json');
     
     return fs.existsSync(edenConfigPath) || 
            fs.existsSync(pnpmWorkspacePath) || 
-           fs.existsSync(yarnWorkspacePath) || 
            fs.existsSync(lernaConfigPath);
   }
 
