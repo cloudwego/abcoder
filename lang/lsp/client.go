@@ -36,6 +36,7 @@ type LSPClient struct {
 	tokenTypes             []string
 	tokenModifiers         []string
 	hasSemanticTokensRange bool
+	lspRequestCache        map[string]map[string]json.RawMessage // method -> params -> result
 	files                  map[DocumentURI]*TextDocumentItem
 	ClientOptions
 }
@@ -80,7 +81,24 @@ func (c *LSPClient) Close() error {
 
 // Extra wrapper around json rpc to
 // 1. implement a transparent, generic cache
-func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}, opts ...jsonrpc2.CallOption) error {
+func (cli *LSPClient) Call(ctx context.Context, method string, params, result any, opts ...jsonrpc2.CallOption) error {
+	paramsMarshal, err := json.Marshal(params)
+	if err != nil {
+		log.Error("LSPClient.Call: marshal params error: %v", err)
+		return err
+	}
+	methodCache, ok := cli.lspRequestCache[method]
+	if !ok {
+		methodCache = make(map[string]json.RawMessage)
+		cli.lspRequestCache[method] = methodCache
+	}
+	paramsStr := string(paramsMarshal)
+	if raw, ok := methodCache[paramsStr]; ok {
+		if err := json.Unmarshal(raw, result); err != nil {
+			return err
+		}
+		return nil
+	}
 	var raw json.RawMessage
 	if err := cli.Conn.Call(ctx, method, params, &raw); err != nil {
 		return err
@@ -88,6 +106,7 @@ func (cli *LSPClient) Call(ctx context.Context, method string, params, result in
 	if err := json.Unmarshal(raw, result); err != nil {
 		return err
 	}
+	methodCache[paramsStr] = raw
 	return nil
 }
 
@@ -114,7 +133,7 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 	h := newLSPHandler()
 	stream := jsonrpc2.NewBufferedStream(svr, jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, h)
-	cli := &LSPClient{Conn: conn, lspHandler: h}
+	cli := &LSPClient{Conn: conn, lspHandler: h, lspRequestCache: make(map[string]map[string]json.RawMessage)}
 
 	// Initialize the LSP server
 	trace := "off"
