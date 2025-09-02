@@ -37,6 +37,7 @@ type LSPClient struct {
 	tokenModifiers         []string
 	hasSemanticTokensRange bool
 	files                  map[DocumentURI]*TextDocumentItem
+	cache                  *LSPRequestCache
 	ClientOptions
 }
 
@@ -44,6 +45,9 @@ type ClientOptions struct {
 	Server string
 	uniast.Language
 	Verbose bool
+	// for lsp cache
+	LSPCachePath     string
+	LSPCacheInterval int
 }
 
 func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientOptions) (*LSPClient, error) {
@@ -60,6 +64,7 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 
 	cli.ClientOptions = opts
 	cli.files = make(map[DocumentURI]*TextDocumentItem)
+	cli.cache = NewLSPRequestCache(opts.LSPCachePath, opts.LSPCacheInterval)
 
 	if openfile != "" {
 		_, err := cli.DidOpen(context.Background(), NewURI(openfile))
@@ -74,16 +79,27 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 }
 
 func (c *LSPClient) Close() error {
+	c.cache.Close()
 	c.lspHandler.Close()
 	return c.Conn.Close()
 }
 
-// Extra wrapper around json rpc to
-// 1. implement a transparent, generic cache
+// By default all client requests are cached.
+// To use non-cached version, use `cli.Conn.Call` directly.
 func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}, opts ...jsonrpc2.CallOption) error {
-	var raw json.RawMessage
-	if err := cli.Conn.Call(ctx, method, params, &raw); err != nil {
+	paramsMarshal, err := json.Marshal(params)
+	if err != nil {
+		log.Error("LSPClient.Call: marshal params error: %v", err)
 		return err
+	}
+	paramsStr := string(paramsMarshal)
+	var raw json.RawMessage
+	var ok bool
+	if raw, ok = cli.cache.Get(method, paramsStr); !ok {
+		if err = cli.Conn.Call(ctx, method, params, &raw); err != nil {
+			return err
+		}
+		cli.cache.Set(method, paramsStr, raw)
 	}
 	if err := json.Unmarshal(raw, result); err != nil {
 		return err
