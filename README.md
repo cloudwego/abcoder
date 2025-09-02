@@ -123,6 +123,7 @@ ABCoder currently supports the following languages:
 | Rust     | ✅          | Coming Soon |
 | C        | ✅          | Coming Soon |
 | Python   | ✅          | Coming Soon |
+| TypeScript | ✅        | Coming Soon |
 
 
 # Getting Involved
