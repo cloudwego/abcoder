@@ -39,6 +39,7 @@ type CollectOption struct {
 	NoNeedComment      bool
 	NotNeedTest        bool
 	Excludes           []string
+	Includes           []string
 	LoadByPackages     bool
 }
 
@@ -134,7 +135,16 @@ func (c *Collector) configureLSP(ctx context.Context) {
 
 func (c *Collector) collectFiles() {
 	log.Info("collecting paths...")
-	// 1. compute exclude list
+	// 1. compute include list
+	includes := make([]string, len(c.Includes))
+	for i, e := range c.Includes {
+		if !filepath.IsAbs(e) {
+			includes[i] = filepath.Join(c.repo, e)
+		} else {
+			includes[i] = e
+		}
+	}
+	// 2. compute exclude list
 	excludes := make([]string, len(c.Excludes))
 	for i, e := range c.Excludes {
 		if !filepath.IsAbs(e) {
@@ -143,7 +153,7 @@ func (c *Collector) collectFiles() {
 			excludes[i] = e
 		}
 	}
-	// 2. compute path list
+	// 3. compute path list
 	paths_to_collect := []string{}
 	scan_files := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -152,6 +162,20 @@ func (c *Collector) collectFiles() {
 		if info.IsDir() || c.spec.ShouldSkip(path) {
 			return nil
 		}
+		// check includes
+		if len(includes) > 0 {
+			included := false
+			for _, i := range includes {
+				if strings.HasPrefix(path, i) {
+					included = true
+					break
+				}
+			}
+			if !included {
+				return nil
+			}
+		}
+		// check excludes
 		for _, e := range excludes {
 			if strings.HasPrefix(path, e) {
 				return nil
@@ -163,7 +187,7 @@ func (c *Collector) collectFiles() {
 	if err := filepath.Walk(c.repo, scan_files); err != nil {
 		log.Error("scan files failed: %v", err)
 	}
-	// 3. update c.Files
+	// 4. update c.Files
 	for _, path := range paths_to_collect {
 		rel, err := filepath.Rel(c.repo, path)
 		if err != nil {

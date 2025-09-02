@@ -44,7 +44,8 @@ type GoParser struct {
 	interfaces  map[*types.Interface]Identity
 	types       map[types.Type]Identity
 	files       map[string][]byte
-	exclues     []*regexp.Regexp
+	excludes    []*regexp.Regexp
+	includes    []*regexp.Regexp
 }
 
 type moduleInfo struct {
@@ -82,7 +83,10 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 	}
 
 	if opts.Excludes != nil {
-		p.exclues = compileExcludes(opts.Excludes)
+		p.excludes = compileExcludes(opts.Excludes)
+	}
+	if opts.Includes != nil {
+		p.includes = compileExcludes(opts.Includes)
 	}
 
 	if err := p.collectGoMods(p.homePageDir); err != nil {
@@ -180,7 +184,19 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 			if e != nil || !info.IsDir() || shouldIgnoreDir(path) {
 				return nil
 			}
-			for _, exclude := range p.exclues {
+			if len(p.includes) > 0 {
+				included := false
+				for _, include := range p.includes {
+					if include.MatchString(path) {
+						included = true
+						break
+					}
+				}
+				if !included {
+					return nil
+				}
+			}
+			for _, exclude := range p.excludes {
 				if exclude.MatchString(path) {
 					return nil
 				}
