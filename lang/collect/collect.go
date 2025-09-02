@@ -48,18 +48,11 @@ type Collector struct {
 
 	repo string
 
-	syms map[Location]*DocumentSymbol
-
-	//  symbol => (receiver,impl,func)
-	funcs map[*DocumentSymbol]functionInfo
-
-	// 	symbol => [deps]
-	deps map[*DocumentSymbol][]dependency
-
-	// variable (or const) => type
-	vars map[*DocumentSymbol]dependency
-
 	files map[string]*uniast.File
+	syms  map[Location]*DocumentSymbol
+	deps  map[*DocumentSymbol][]dependency
+	funcs map[*DocumentSymbol]functionInfo
+	vars  map[*DocumentSymbol]varInfo
 
 	// modPatcher ModulePatcher
 
@@ -82,6 +75,10 @@ type functionInfo struct {
 	OutputsSorted    []dependency       `json:"-"`
 	Signature        string             `json:"signature,omitempty"`
 }
+
+// For now, var only depends on its type.
+// TODO: nonconstant initializers `glob_var = fn()`
+type varInfo = dependency
 
 func switchSpec(l uniast.Language) LanguageSpec {
 	switch l {
@@ -135,8 +132,9 @@ func (c *Collector) configureLSP(ctx context.Context) {
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context) error {
-	c.configureLSP(ctx)
+func (c *Collector) collectFiles() {
+	log.Info("collecting paths...")
+	// 1. compute exclude list
 	excludes := make([]string, len(c.Excludes))
 	for i, e := range c.Excludes {
 		if !filepath.IsAbs(e) {
@@ -145,14 +143,13 @@ func (c *Collector) Collect(ctx context.Context) error {
 			excludes[i] = e
 		}
 	}
-
-	// scan all files
-	root_syms := make([]*DocumentSymbol, 0, 1024)
-	scanner := func(path string, info os.FileInfo, err error) error {
+	// 2. compute path list
+	paths_to_collect := []string{}
+	scan_files := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
+		if info.IsDir() || c.spec.ShouldSkip(path) {
 			return nil
 		}
 		for _, e := range excludes {
@@ -160,185 +157,201 @@ func (c *Collector) Collect(ctx context.Context) error {
 				return nil
 			}
 		}
-
-		if c.spec.ShouldSkip(path) {
-			return nil
+		paths_to_collect = append(paths_to_collect, path)
+		return nil
+	}
+	if err := filepath.Walk(c.repo, scan_files); err != nil {
+		log.Error("scan files failed: %v", err)
+	}
+	// 3. update c.Files
+	for _, path := range paths_to_collect {
+		rel, err := filepath.Rel(c.repo, path)
+		if err != nil {
+			log.Error("collect_files: not relative path to repo %s %s\n", path, c.repo)
+			continue
 		}
+		c.files[path] = uniast.NewFile(rel)
+	}
+	log.Info("collecting paths(tot=%d)...", len(c.files))
+}
 
-		file := c.files[path]
-		if file == nil {
-			rel, err := filepath.Rel(c.repo, path)
-			if err != nil {
-				return err
-			}
-			file = uniast.NewFile(rel)
-			c.files[path] = file
+func (c *Collector) collectRootSymbols(ctx context.Context, reportProgress bool) []*DocumentSymbol {
+	log.Info("collecting root symbols...")
+	file_index := 0
+	root_syms := make([]*DocumentSymbol, 0, 1024)
+	for path, file := range c.files {
+		file_index += 1
+		if reportProgress {
+			log.Info("  collecting root symbols file %d/%d: %s", file_index, len(c.files), path)
 		}
-
-		// 解析use语句
 		content, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			log.Error("collect_root_symbols: cannot read path %s: %w", path, err)
+			continue
 		}
+		// parse imports
 		uses, err := c.spec.FileImports(content)
 		if err != nil {
 			log.Error("parse file %s use statements failed: %v", path, err)
 		} else {
 			file.Imports = uses
 		}
-
 		// collect symbols
 		uri := NewURI(path)
 		symbols, err := c.cli.DocumentSymbols(ctx, uri)
 		if err != nil {
-			return err
+			log.Error("collect_root_symbols: documentSymbol failed for %s: %w", path, err)
+			continue
 		}
-		// file := filepath.Base(path)
+		// prepare symbols
+		sym_index := 0
 		for _, sym := range symbols {
-			// collect content
-			content, err := c.cli.Locate(sym.Location)
-			if err != nil {
-				return err
+			sym_index += 1
+			if reportProgress {
+				log.Debug("    collecting %d/%d symbols", sym_index, len(symbols))
 			}
-			// collect tokens
-			tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+			content, err := c.cli.Locate(sym.Location)
+			// content
 			if err != nil {
-				return err
+				log.Error("collect_root_symbols: Locate failed for %s:%w", sym.Location, err)
+				continue
 			}
 			sym.Text = content
+			// tokens
+			tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+			if err != nil {
+				log.Error("collect_root_symbols: SemanticTokens failed for %s:%w", sym.Location, err)
+				continue
+			}
 			sym.Tokens = tokens
+			// c.syms
 			c.syms[sym.Location] = sym
 			root_syms = append(root_syms, sym)
 		}
-
-		return nil
 	}
-	if err := filepath.Walk(c.repo, scanner); err != nil {
-		log.Error("scan files failed: %v", err)
-	}
+	log.Info("walked repo to make root symbols...")
+	return root_syms
+}
 
-	// collect some extra metadata
+func (c *Collector) skipTokenForDependency(sym *DocumentSymbol, i int, token Token) bool {
+	// only entity token need to be collect (std token is only collected when NeedStdSymbol is true)
+	if !c.spec.IsEntityToken(token) {
+		return true
+	}
+	// skip function's params
+	if isFuncLike(sym.Kind) {
+		if finfo, ok := c.funcs[sym]; ok {
+			if finfo.Method != nil {
+				if finfo.Method.Receiver.Location.Include(token.Location) {
+					return true
+				}
+			}
+			if finfo.Inputs != nil {
+				if _, ok := finfo.Inputs[i]; ok {
+					return true
+				}
+			}
+			if finfo.Outputs != nil {
+				if _, ok := finfo.Outputs[i]; ok {
+					return true
+				}
+			}
+			if finfo.TypeParams != nil {
+				if _, ok := finfo.TypeParams[i]; ok {
+					return true
+				}
+			}
+		}
+	}
+	// skip variable's type
+	if isVarLike(sym.Kind) {
+		if dep, ok := c.vars[sym]; ok {
+			if dep.Location.Include(token.Location) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (c *Collector) collectDependency(ctx context.Context, sym *DocumentSymbol) {
+	for i, token := range sym.Tokens {
+		if c.skipTokenForDependency(sym, i, token) {
+			continue
+		}
+
+		dep, err := c.getSymbolByToken(ctx, token)
+		if err != nil || dep == nil {
+			log.Error("collect_dependency: dep token %v not found: %v\n", token, err)
+			continue
+		}
+
+		// NOTICE: some internal symbols may not been get by DocumentSymbols, thus we let Unknown symbol pass
+		if dep.Kind == SKUnknown && c.isLocationInRepo(dep.Location) {
+			// try get symbol kind by token
+			sk := c.spec.TokenKind(token)
+			if sk != SKUnknown {
+				dep.Kind = sk
+				dep.Name = token.Text
+			}
+		}
+
+		// remove local symbols
+		if sym.Location.Include(dep.Location) {
+			continue
+		} else {
+			c.syms[dep.Location] = dep
+		}
+
+		c.deps[sym] = append(c.deps[sym], dependency{
+			Location: token.Location,
+			Symbol:   dep,
+		})
+
+	}
+}
+
+func (c *Collector) Collect(ctx context.Context) error {
+	log.Info("Collector.Collect() started")
+	c.configureLSP(ctx)
+
+	c.collectFiles()
+	// results:
+	//  	c.files
+	root_syms := c.collectRootSymbols(ctx, true)
+	// results:
+	// 		initial c.syms, sym.{Text,Tokens}
+
+	log.Info("processing root symbols (tot=%d)...", len(root_syms))
 	entity_syms := make([]*DocumentSymbol, 0, len(root_syms))
 	for _, sym := range root_syms {
-		// only language entity symbols need to be collect on next
+		c.processSymbol(ctx, sym, 1)
 		if c.spec.IsEntitySymbol(*sym) {
 			entity_syms = append(entity_syms, sym)
 		}
-		c.processSymbol(ctx, sym, 1)
 	}
+	log.Info("processed root symbols (tot=%d)...", len(root_syms))
+	// results:
+	//		c.funcs
+	// 		c.vars
+	// 		c.syms for loading external symbols
 
-	// collect internal references
-	// for _, sym := range syms {
-	// 	i := c.spec.DeclareTokenOfSymbol(*sym)
-	// 	if i < 0 {
-	// 		log.Error("declare token of symbol %s failed\n", sym)
-	// 		continue
-	// 	}
-	// 	refs, err := c.cli.References(ctx, sym.Tokens[i].Location)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	for _, rloc := range refs {
-	// 		// remove child symbol
-	// 		if sym.Location.Include(rloc) {
-	// 			continue
-	// 		}
-	// 		rsym, err := c.getSymbolByLocation(ctx, rloc)
-	// 		if err != nil || rsym == nil {
-	// 			log.Error("symbol not found for location %v\n", rloc)
-	// 			continue
-	// 		}
-	// 		// remove external or parent symbol
-	// 		if !c.internal(rsym.Location) || rsym.Location.Include(sym.Location) {
-	// 			continue
-	// 		}
-	// 		c.deps[rsym] = append(c.deps[rsym], Dependency{
-	// 			Location: rloc,
-	// 			Symbol:   sym,
-	// 		})
-	// 	}
-	// }
-
-	// collect dependencies
+	log.Info("collecting dependencies for entity symbols (tot=%d)", len(entity_syms))
+	iter_idx := 0
 	for _, sym := range entity_syms {
-	next_token:
-
-		for i, token := range sym.Tokens {
-			// only entity token need to be collect (std token is only collected when NeedStdSymbol is true)
-			if !c.spec.IsEntityToken(token) {
-				continue
-			}
-
-			// skip function's params
-			if sym.Kind == SKFunction || sym.Kind == SKMethod {
-				if finfo, ok := c.funcs[sym]; ok {
-					if finfo.Method != nil {
-						if finfo.Method.Receiver.Location.Include(token.Location) {
-							continue next_token
-						}
-					}
-					if finfo.Inputs != nil {
-						if _, ok := finfo.Inputs[i]; ok {
-							continue next_token
-						}
-					}
-					if finfo.Outputs != nil {
-						if _, ok := finfo.Outputs[i]; ok {
-							continue next_token
-						}
-					}
-					if finfo.TypeParams != nil {
-						if _, ok := finfo.TypeParams[i]; ok {
-							continue next_token
-						}
-					}
-				}
-			}
-			// skip variable's type
-			if sym.Kind == SKVariable || sym.Kind == SKConstant {
-				if dep, ok := c.vars[sym]; ok {
-					if dep.Location.Include(token.Location) {
-						continue next_token
-					}
-				}
-			}
-
-			// go to definition
-			dep, err := c.getSymbolByToken(ctx, token)
-			if err != nil || dep == nil {
-				log.Error("dep token %v not found: %v\n", token, err)
-				continue
-			}
-
-			// NOTICE: some internal symbols may not been get by DocumentSymbols, thus we let Unknown symbol pass
-			if dep.Kind == SKUnknown && c.internal(dep.Location) {
-				// try get symbol kind by token
-				sk := c.spec.TokenKind(token)
-				if sk != SKUnknown {
-					dep.Kind = sk
-					dep.Name = token.Text
-				}
-			}
-
-			// remove local symbols
-			if sym.Location.Include(dep.Location) {
-				continue
-			} else {
-				c.syms[dep.Location] = dep
-			}
-
-			c.deps[sym] = append(c.deps[sym], dependency{
-				Location: token.Location,
-				Symbol:   dep,
-			})
-
-		}
+		iter_idx++
+		log.Info("  collecting dependencies for entity symbol %d/%d: %s", iter_idx, len(entity_syms), sym.Name)
+		c.collectDependency(ctx, sym)
 	}
-
+	log.Info("collected dependencies for entity symbols (tot=%d)", len(entity_syms))
+	// results:
+	// 		c.deps[sym]
+	// 		c.syms[dep.Location] for dep syms
+	log.Info("Collector.Collect() done")
 	return nil
 }
 
-func (c *Collector) internal(loc Location) bool {
+func (c *Collector) isLocationInRepo(loc Location) bool {
 	return strings.HasPrefix(loc.URI.File(), c.repo)
 }
 
@@ -406,17 +419,12 @@ func (c *Collector) findMatchingSymbolIn(loc Location, syms []*DocumentSymbol) *
 //   - not loaded but set option LoadExternalSymbol: load external symbol and return
 //   - otherwise: return a Unknown symbol
 func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth int, from Token) (*DocumentSymbol, error) {
-	// already loaded
-	// if sym, ok := c.syms[loc]; ok {
-	// 	return sym, nil
-	// }
-
 	// 1. already loaded
 	if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
 		return sym, nil
 	}
 
-	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
+	if c.LoadExternalSymbol && !c.isLocationInRepo(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
 		// 2. load external symbol from its file
 		syms, err := c.cli.DocumentSymbols(ctx, loc.URI)
 		if err != nil {
@@ -455,7 +463,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	} else {
 		// external symbol, just locate the content
 		var text string
-		if c.internal(loc) {
+		if c.isLocationInRepo(loc) {
 			// maybe internal symbol not loaded, like `lazy_static!` in Rust
 			// use the before and after symbol as text
 			var left, right *DocumentSymbol
@@ -480,37 +488,13 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 			}
 			if left == nil {
 				left = &DocumentSymbol{
-					Location: Location{
-						URI: loc.URI,
-						Range: Range{
-							Start: Position{
-								Line:      0,
-								Character: 0,
-							},
-							End: Position{
-								Line:      0,
-								Character: 0,
-							},
-						},
-					},
+					Location: MakeLocation(loc.URI, 0, 0, 0, 0),
 				}
 			}
 			if right == nil {
 				lines := c.cli.LineCounts(loc.URI)
 				right = &DocumentSymbol{
-					Location: Location{
-						URI: loc.URI,
-						Range: Range{
-							Start: Position{
-								Line:      len(lines),
-								Character: 1,
-							},
-							End: Position{
-								Line:      len(lines),
-								Character: 1,
-							},
-						},
-					},
+					Location: MakeLocation(loc.URI, len(lines), 1, len(lines), 1),
 				}
 			}
 			var end int
@@ -521,19 +505,8 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 					break
 				}
 			}
-			txt, err := c.cli.Locate(Location{
-				URI: loc.URI,
-				Range: Range{
-					Start: Position{
-						Line:      left.Location.Range.End.Line + 1,
-						Character: 0,
-					},
-					End: Position{
-						Line:      right.Location.Range.Start.Line - 1,
-						Character: end,
-					},
-				},
-			})
+			txt, err := c.cli.Locate(MakeLocation(
+				loc.URI, left.Location.Range.End.Line+1, 0, right.Location.Range.Start.Line-1, end))
 			if err != nil {
 				if c.cli.ClientOptions.Verbose {
 					log.Error("locate %v failed: %v\n", loc, err)
@@ -641,7 +614,7 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 	}
 
 	// function info: type params, inputs, outputs, receiver (if !needImpl)
-	if sym.Kind == SKFunction || sym.Kind == SKMethod {
+	if isFuncLike(sym.Kind) {
 		var rsym *dependency
 		rec, tps, ips, ops := c.spec.FunctionSymbol(*sym)
 
@@ -677,7 +650,7 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 	}
 
 	// variable info: type
-	if sym.Kind == SKVariable || sym.Kind == SKConstant {
+	if isVarLike(sym.Kind) {
 		i := c.spec.DeclareTokenOfSymbol(*sym)
 		// find first entity token
 		for i = i + 1; i < len(sym.Tokens); i++ {
@@ -719,7 +692,7 @@ func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsym
 		f.Method.Receiver = *rsym
 	}
 
-	// ctruncate the function signature text
+	// truncate the function signature text
 	if lastToken >= 0 && lastToken < len(sym.Tokens)-1 {
 		lastPos := sym.Tokens[lastToken+1].Location.Range.Start
 		f.Signature = ChunkHead(sym.Text, sym.Location.Range.Start, lastPos)
