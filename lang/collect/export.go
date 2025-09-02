@@ -33,7 +33,7 @@ type dependency struct {
 
 func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	var rel string
-	if c.internal(loc) {
+	if c.isLocationInRepo(loc) {
 		rel, _ = filepath.Rel(c.repo, loc.URI.File())
 	} else {
 		rel = filepath.Base(loc.URI.File())
@@ -54,6 +54,7 @@ func newModule(name string, dir string, lang uniast.Language) *uniast.Module {
 }
 
 func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
+	log.Info("Collector.Export() started")
 	// recursively read all go files in repo
 	repo := uniast.NewRepository(c.repo)
 	modules, err := c.spec.WorkSpace(c.repo)
@@ -73,6 +74,7 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	// not allow local symbols inside another symbol
 	c.filterLocalSymbols()
 
+	log.Info("exporting symbols (tot=%d)...", len(c.syms))
 	// export symbols
 	visited := make(map[*DocumentSymbol]*uniast.Identity)
 	for _, symbol := range c.syms {
@@ -108,7 +110,7 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		}
 		f.Package = pkgpath
 	}
-
+	log.Info("Collector.Export() done")
 	return &repo, nil
 }
 
@@ -162,7 +164,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	}
 
 	// Load external symbol on demands
-	if !c.LoadExternalSymbol && (!c.internal(symbol.Location) || symbol.Kind == SKUnknown) {
+	if !c.LoadExternalSymbol && (!c.isLocationInRepo(symbol.Location) || symbol.Kind == SKUnknown) {
 		e = ErrExternalSymbol
 		return
 	}
@@ -181,6 +183,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	id = &tmp
 	// Save to visited ONLY WHEN no errors occur
 	visited[symbol] = id
+	log.Info("  exporting symbols %d/%d...", len(visited), len(c.syms))
 
 	// Walk down from repo struct
 	if repo.Modules[mod] == nil {
@@ -222,7 +225,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		}
 		info := c.funcs[symbol]
 		obj.Signature = info.Signature
-		// NOTICE: type parames collect into types
+		// NOTICE: type params collect into types
 		if info.TypeParams != nil {
 			for _, input := range info.TypeParamsSorted {
 				tok, _ := c.cli.Locate(input.Location)

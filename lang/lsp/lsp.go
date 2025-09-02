@@ -114,6 +114,16 @@ type Location struct {
 	Range Range       `json:"range"`
 }
 
+func MakeLocation(uri DocumentURI, startLine, startChar, endLine, endChar int) Location {
+	return Location{
+		URI: uri,
+		Range: Range{
+			Start: Position{Line: startLine, Character: startChar},
+			End:   Position{Line: endLine, Character: endChar},
+		},
+	}
+}
+
 func (l Location) String() string {
 	return fmt.Sprintf("%s:%d:%d-%d:%d", l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
 }
