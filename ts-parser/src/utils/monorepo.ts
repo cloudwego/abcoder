@@ -68,7 +68,7 @@ export class MonorepoUtils {
   static detectMonorepoType(rootPath: string): { type: string; configPath: string } | null {
     const edenConfigPath = path.join(rootPath, 'eden.monorepo.json');
     const pnpmWorkspacePath = path.join(rootPath, 'pnpm-workspace.yaml');
-    const yarnWorkspacePath = path.join(rootPath, 'yarn.lock');
+    // const yarnWorkspacePath = path.join(rootPath, 'yarn.lock');
     const lernaConfigPath = path.join(rootPath, 'lerna.json');
     
     if (fs.existsSync(edenConfigPath)) {
@@ -77,9 +77,9 @@ export class MonorepoUtils {
     if (fs.existsSync(pnpmWorkspacePath)) {
       return { type: 'pnpm', configPath: pnpmWorkspacePath };
     }
-    if (fs.existsSync(yarnWorkspacePath)) {
-      return { type: 'yarn', configPath: yarnWorkspacePath };
-    }
+    // if (fs.existsSync(yarnWorkspacePath)) {
+    //   return { type: 'yarn', configPath: yarnWorkspacePath };
+    // }
     if (fs.existsSync(lernaConfigPath)) {
       return { type: 'lerna', configPath: lernaConfigPath };
     }
