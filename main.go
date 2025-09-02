@@ -77,6 +77,7 @@ func main() {
 	flags.BoolVar(&opts.NotNeedTest, "no-need-test", false, "not need parse test files (only works for Go now)")
 	flags.BoolVar(&opts.LoadByPackages, "load-by-packages", false, "load by packages (only works for Go now)")
 	flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
+	flags.Var((*StringArray)(&opts.Includes), "include", "include files or directories, support multiple values")
 	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
 	flags.StringVar(&opts.TSConfig, "tsconfig", "", "tsconfig path (only works for TS now)")
 	flags.Var((*StringArray)(&opts.TSSrcDir), "ts-src-dir", "src-dir path (only works for TS now)")
