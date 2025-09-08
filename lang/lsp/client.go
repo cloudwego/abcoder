@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
@@ -36,13 +37,15 @@ type LSPClient struct {
 	tokenTypes             []string
 	tokenModifiers         []string
 	hasSemanticTokensRange bool
+	lspCacheLock           sync.Mutex
 	lspRequestCache        map[string]map[string]json.RawMessage // method -> params -> result
 	files                  map[DocumentURI]*TextDocumentItem
 	ClientOptions
 }
 
 type ClientOptions struct {
-	Server string
+	Server       string
+	LSPCachePath string
 	uniast.Language
 	Verbose bool
 }
@@ -61,6 +64,15 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 
 	cli.ClientOptions = opts
 	cli.files = make(map[DocumentURI]*TextDocumentItem)
+
+	// if cache path is provided, try to load cache from disk
+	if cli.LSPCachePath != "" {
+		if err := cli.loadCacheFromDisk(); err != nil {
+			log.Error("failed to load LSP cache from disk: %v", err)
+		} else {
+			log.Info("LSP cache loaded from disk")
+		}
+	}
 
 	if openfile != "" {
 		_, err := cli.DidOpen(context.Background(), NewURI(openfile))
@@ -82,6 +94,9 @@ func (c *LSPClient) Close() error {
 // Extra wrapper around json rpc to
 // 1. implement a transparent, generic cache
 func (cli *LSPClient) Call(ctx context.Context, method string, params, result any, opts ...jsonrpc2.CallOption) error {
+	cli.lspCacheLock.Lock()
+	defer cli.lspCacheLock.Unlock()
+
 	paramsMarshal, err := json.Marshal(params)
 	if err != nil {
 		log.Error("LSPClient.Call: marshal params error: %v", err)
@@ -110,6 +125,27 @@ func (cli *LSPClient) Call(ctx context.Context, method string, params, result an
 	return nil
 }
 
+func (c *LSPClient) saveCacheToDisk() error {
+	c.lspCacheLock.Lock()
+	defer c.lspCacheLock.Unlock()
+	data, err := json.Marshal(c.lspRequestCache)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(c.LSPCachePath, data, 0644)
+}
+
+func (c *LSPClient) loadCacheFromDisk() error {
+	data, err := os.ReadFile(c.LSPCachePath)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &c.lspRequestCache); err != nil {
+		return err
+	}
+	return nil
+}
+
 type initializeParams struct {
 	ProcessID int `json:"processId,omitempty"`
 
@@ -133,7 +169,12 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 	h := newLSPHandler()
 	stream := jsonrpc2.NewBufferedStream(svr, jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, h)
-	cli := &LSPClient{Conn: conn, lspHandler: h, lspRequestCache: make(map[string]map[string]json.RawMessage)}
+	cli := &LSPClient{
+		Conn:            conn,
+		lspHandler:      h,
+		lspCacheLock:    sync.Mutex{},
+		lspRequestCache: make(map[string]map[string]json.RawMessage),
+	}
 
 	// Initialize the LSP server
 	trace := "off"
@@ -214,6 +255,18 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 	if err := conn.Notify(ctx, "initialized", lsp.InitializeParams{}); err != nil {
 		return nil, err
 	}
+	// startup go routine to periodically save cache to disk
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := cli.saveCacheToDisk(); err != nil {
+				log.Error("failed to save LSP cache to disk: %v", err)
+			} else {
+				log.Info("LSP cache saved to disk")
+			}
+		}
+	}()
 	return cli, nil
 }
 
