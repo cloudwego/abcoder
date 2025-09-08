@@ -122,15 +122,18 @@ var (
 // NOTICE: for rust and golang, each entity has separate location
 // TODO: some language may allow local symbols inside another symbol,
 func (c *Collector) filterLocalSymbols() {
-	// filter symbols
-	for loc1 := range c.syms {
-		for loc2 := range c.syms {
-			if loc1 == loc2 {
-				continue
-			}
-			if loc2.Include(loc1) {
-				delete(c.syms, loc1)
-				break
+	for _, fileSyms := range c.perFileSyms {
+		for _, loc1 := range fileSyms {
+			for _, loc2 := range fileSyms {
+				if loc1 == loc2 {
+					continue
+				}
+				if loc2.Location.Include(loc1.Location) {
+					// This invalidates perFileSyms by making it inconsistent with syms.
+					// It's OK since perFileSyms is no longer used after this function.
+					delete(c.syms, loc1.Location)
+					break
+				}
 			}
 		}
 	}
