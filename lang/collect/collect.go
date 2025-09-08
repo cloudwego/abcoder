@@ -17,10 +17,8 @@ package collect
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"unicode"
 
@@ -54,6 +52,12 @@ type Collector struct {
 	deps  map[*DocumentSymbol][]dependency
 	funcs map[*DocumentSymbol]functionInfo
 	vars  map[*DocumentSymbol]varInfo
+
+	// SAME AS `syms`, but split to slots by URI.
+	//  i.e. perFileSyms[uri] = [ sym for sym in syms if sym.Location.URI == uri ]
+	// Just an optimization trick for getSymbolByLocation() and filterLocalSymbols().
+	// `perFileSyms` is no longer valid after filterLocalSymbols().
+	perFileSyms map[string][]*DocumentSymbol
 
 	// modPatcher ModulePatcher
 
@@ -96,14 +100,15 @@ func switchSpec(l uniast.Language) LanguageSpec {
 
 func NewCollector(repo string, cli *LSPClient) *Collector {
 	ret := &Collector{
-		repo:  repo,
-		cli:   cli,
-		spec:  switchSpec(cli.ClientOptions.Language),
-		syms:  map[Location]*DocumentSymbol{},
-		funcs: map[*DocumentSymbol]functionInfo{},
-		deps:  map[*DocumentSymbol][]dependency{},
-		vars:  map[*DocumentSymbol]dependency{},
-		files: map[string]*uniast.File{},
+		repo:        repo,
+		cli:         cli,
+		spec:        switchSpec(cli.ClientOptions.Language),
+		syms:        map[Location]*DocumentSymbol{},
+		funcs:       map[*DocumentSymbol]functionInfo{},
+		deps:        map[*DocumentSymbol][]dependency{},
+		vars:        map[*DocumentSymbol]dependency{},
+		files:       map[string]*uniast.File{},
+		perFileSyms: map[string][]*DocumentSymbol{},
 	}
 	// if cli.Language == uniast.Rust {
 	// 	ret.modPatcher = &rust.RustModulePatcher{Root: repo}
@@ -131,6 +136,11 @@ func (c *Collector) configureLSP(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (c *Collector) addSym(sym *DocumentSymbol) {
+	c.syms[sym.Location] = sym
+	c.perFileSyms[sym.Location.URI.File()] = append(c.perFileSyms[sym.Location.URI.File()], sym)
 }
 
 func (c *Collector) collectFiles() {
@@ -249,7 +259,7 @@ func (c *Collector) collectRootSymbols(ctx context.Context, reportProgress bool)
 			}
 			sym.Tokens = tokens
 			// c.syms
-			c.syms[sym.Location] = sym
+			c.addSym(sym)
 			root_syms = append(root_syms, sym)
 		}
 	}
@@ -324,7 +334,7 @@ func (c *Collector) collectDependency(ctx context.Context, sym *DocumentSymbol) 
 		if sym.Location.Include(dep.Location) {
 			continue
 		} else {
-			c.syms[dep.Location] = dep
+			c.addSym(dep)
 		}
 
 		c.deps[sym] = append(c.deps[sym], dependency{
@@ -398,21 +408,20 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
 }
 
-// Find the symbol (from the symbol list) that matches the location.
-// It is the smallest (most specific) entity symbol that contains the location.
+// Find the symbol at the location, from the collected symbols (c.syms).
+// When multiple symbols contain the location, use the most specific.
 //
 // Parameters:
 //
-//	@syms: the list of symbols to search in
 //	@loc: the location to find the symbol for
 //
 // Returns:
 //
 //	*DocumentSymbol: the most specific entity symbol that contains the location.
 //	If no such symbol is found, it returns nil.
-func (c *Collector) findMatchingSymbolIn(loc Location, syms []*DocumentSymbol) *DocumentSymbol {
+func (c *Collector) findRepoSymbolAt(loc Location) *DocumentSymbol {
 	var most_specific *DocumentSymbol
-	for _, sym := range syms {
+	for _, sym := range c.perFileSyms[loc.URI.File()] {
 		if !sym.Location.Include(loc) || !c.spec.IsEntitySymbol(*sym) {
 			continue
 		}
@@ -444,7 +453,7 @@ func (c *Collector) findMatchingSymbolIn(loc Location, syms []*DocumentSymbol) *
 //   - otherwise: return a Unknown symbol
 func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth int, from Token) (*DocumentSymbol, error) {
 	// 1. already loaded
-	if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
+	if sym := c.findRepoSymbolAt(loc); sym != nil {
 		return sym, nil
 	}
 
@@ -463,7 +472,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 					return nil, err
 				}
 				sym.Text = content
-				c.syms[sym.Location] = sym
+				c.addSym(sym)
 			}
 		}
 		// load more external symbols if depth permits
@@ -482,7 +491,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 				}
 			}
 		}
-		rsym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(syms)))
+		rsym := c.findRepoSymbolAt(loc)
 		return rsym, nil
 	} else {
 		// external symbol, just locate the content
@@ -556,7 +565,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 			Location: loc,
 			Text:     text,
 		}
-		c.syms[loc] = tmp
+		c.addSym(tmp)
 		return tmp, nil
 	}
 }
