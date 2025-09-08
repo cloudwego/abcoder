@@ -36,8 +36,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
+	"syscall"
 
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
@@ -70,6 +73,7 @@ func main() {
 	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
 	flagOutput := flags.String("o", "", "Output path.")
 	flagLsp := flags.String("lsp", "", "Specify the language server path.")
+	flagProfile := flags.String("profile", "", "Specify the CPU profile data path. Leave empty to disable profiling.")
 
 	var opts lang.ParseOptions
 	flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
@@ -101,6 +105,7 @@ func main() {
 		flags.Usage()
 		os.Exit(1)
 	}
+
 	action := strings.ToLower(os.Args[1])
 
 	switch action {
@@ -109,6 +114,25 @@ func main() {
 
 	case "parse":
 		language, uri := parseArgsAndFlags(flags, true, flagHelp, flagVerbose)
+
+		// Profiling with Ctrl-C support
+		if flagProfile != nil && *flagProfile != "" {
+			f, err := os.Create(*flagProfile)
+			if err != nil {
+				log.Error("could not create CPU profile: %v\n", err)
+				os.Exit(1)
+			}
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+			go func() {
+				<-sigs
+				pprof.StopCPUProfile()
+				f.Close()
+				os.Exit(0)
+			}()
+		}
 
 		if flagVerbose != nil && *flagVerbose {
 			log.SetLogLevel(log.DebugLevel)
