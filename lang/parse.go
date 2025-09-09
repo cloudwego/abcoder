@@ -65,7 +65,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	if !filepath.IsAbs(uri) {
 		uri, _ = filepath.Abs(uri)
 	}
-	l, lspPath, err := checkLSP(args.Language, args.LSP)
+	l, lspPath, err := checkLSP(args.Language, args.LSP, args)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 	return
 }
 
-func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s string, err error) {
+func checkLSP(language uniast.Language, lspPath string, args ParseOptions) (l uniast.Language, s string, err error) {
 	switch language {
 	case uniast.Rust:
 		l, s = rust.GetDefaultLSP()
@@ -146,7 +146,7 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 	case uniast.Python:
 		l, s = python.GetDefaultLSP()
 	case uniast.Java:
-		l, s = java.GetDefaultLSP()
+		l, s = java.GetDefaultLSP(args.LspOptions)
 	case uniast.Golang:
 		l = uniast.Golang
 		s = ""

@@ -32,7 +32,7 @@ const (
 	Cxx        Language = "cxx"
 	Python     Language = "python"
 	TypeScript Language = "typescript"
-	Java    Language = "java"
+	Java       Language = "java"
 	Unknown    Language = ""
 )
 

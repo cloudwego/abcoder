@@ -16,6 +16,8 @@ package java
 
 import (
 	"fmt"
+	"github.com/cloudwego/abcoder/lang/log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -27,19 +29,23 @@ import (
 
 const MaxWaitDuration = 5 * time.Second
 
-func GetDefaultLSP() (lang uniast.Language, name string) {
-
-	return uniast.Java, generateExecuteCmd()
+func GetDefaultLSP(LspOptions map[string]string) (lang uniast.Language, name string) {
+	return uniast.Java, generateExecuteCmd(LspOptions)
 }
 
-func generateExecuteCmd() string {
+func generateExecuteCmd(LspOptions map[string]string) string {
 	// Get the absolute path to the current file
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		panic("Failed to get current file path")
 	}
 	javaDir := filepath.Dir(currentFile)
-	jdtLsPath := filepath.Join(javaDir, "lsp", "jdtls", "jdt-language-server-1.39.0-202408291433", "plugins", "org.eclipse.equinox.launcher_1.6.900.v20240613-2009.jar")
+
+	jdtRootPATH := filepath.Join(javaDir, "lsp", "jdtls", "jdt-language-server-1.39.0-202408291433")
+	if len(os.Getenv("JDTlS_ROOT_PATH")) != 0 {
+		jdtRootPATH = os.Getenv("JDTlS_ROOT_PATH")
+	}
+	jdtLsPath := filepath.Join(jdtRootPATH, "plugins", "org.eclipse.equinox.launcher_1.6.900.v20240613-2009.jar")
 	// Determine the configuration path based on OS and architecture
 	var osName string
 	switch runtime.GOOS {
@@ -54,7 +60,7 @@ func generateExecuteCmd() string {
 	if runtime.GOARCH == "arm64" {
 		configDir += "_arm"
 	}
-	configPath := filepath.Join(javaDir, "lsp", "jdtls", "jdt-language-server-1.39.0-202408291433", configDir)
+	configPath := filepath.Join(jdtRootPATH, configDir)
 	dataPath := filepath.Join(javaDir, "lsp", "jdtls", "runtime")
 	args := []string{
 		"-Declipse.application=org.eclipse.jdt.ls.core.id1",
@@ -70,7 +76,14 @@ func generateExecuteCmd() string {
 		"--add-opens java.base/java.util=ALL-UNNAMED",
 		"--add-opens java.base/java.lang=ALL-UNNAMED",
 	}
-	return "java " + strings.Join(args, " ")
+	javaCmd := "java "
+	if len(LspOptions["java.home"]) != 0 {
+		javaCmd = LspOptions["java.home"] + " "
+	}
+	join := strings.Join(args, " ")
+
+	log.Error(javaCmd + join)
+	return javaCmd + strings.Join(args, " ")
 }
 
 func CheckRepo(repo string) (string, time.Duration) {
