@@ -27,8 +27,6 @@ import (
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
-var localFuncs = make(map[Location]*DocumentSymbol, 0)
-
 type dependency struct {
 	Location Location        `json:"location"`
 	Symbol   *DocumentSymbol `json:"symbol"`
@@ -60,13 +58,13 @@ func newModule(name string, dir string, lang uniast.Language) *uniast.Module {
 }
 
 func (c *Collector) ExportLocalFunction() map[Location]*DocumentSymbol {
-	if len(localFuncs) == 0 {
-		localFuncs = make(map[Location]*DocumentSymbol, 0)
+	if len(c.localFunc) == 0 {
+		c.localFunc = make(map[Location]*DocumentSymbol)
 		for symbol := range c.funcs {
-			localFuncs[symbol.Location] = symbol
+			c.localFunc[symbol.Location] = symbol
 		}
 	}
-	return localFuncs
+	return c.localFunc
 }
 
 func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {

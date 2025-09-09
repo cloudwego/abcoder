@@ -192,6 +192,51 @@ type DocumentSymbol struct {
 	Role     SymbolRole        `json:"-"`
 }
 
+type TextDocumentPositionParams struct {
+	/**
+	 * The text document.
+	 */
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+
+	/**
+	 * The position inside the text document.
+	 */
+	Position Position `json:"position"`
+}
+
+type TextDocumentIdentifier struct {
+	/**
+	 * The text document's URI.
+	 */
+	URI DocumentURI `json:"uri"`
+}
+
+type Hover struct {
+	Contents []MarkedString `json:"contents"`
+	Range    *Range         `json:"range,omitempty"`
+}
+
+type MarkedString markedString
+
+type markedString struct {
+	Language string `json:"language"`
+	Value    string `json:"value"`
+
+	isRawString bool
+}
+
+type WorkspaceSymbolParams struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit"`
+}
+
+type SymbolInformation struct {
+	Name          string     `json:"name"`
+	Kind          SymbolKind `json:"kind"`
+	Location      Location   `json:"location"`
+	ContainerName string     `json:"containerName,omitempty"`
+}
+
 // TypeHierarchyItem represents a node in the type hierarchy tree.
 //
 // @since 3.17.0
@@ -206,7 +251,7 @@ type TypeHierarchyItem struct {
 }
 
 func (cli *LSPClient) WorkspaceSymbols(ctx context.Context, query string) ([]DocumentSymbol, error) {
-	req := lsp.WorkspaceSymbolParams{
+	req := WorkspaceSymbolParams{
 		Query: query,
 	}
 	var resp []DocumentSymbol
@@ -254,7 +299,7 @@ func (t *Token) String() string {
 	return fmt.Sprintf("%s %s %v %s", t.Text, t.Type, t.Modifiers, t.Location)
 }
 
-func (cli *LSPClient) Hover(ctx context.Context, uri DocumentURI, line, character int) (*lsp.Hover, error) {
+func (cli *LSPClient) Hover(ctx context.Context, uri DocumentURI, line, character int) (*Hover, error) {
 	if cli.provider != nil {
 		// The type assertion is safe because the provider is for the specific language.
 		return cli.provider.Hover(ctx, cli, uri, line, character)
@@ -272,7 +317,7 @@ func (cli *LSPClient) Implementation(ctx context.Context, uri DocumentURI, pos P
 	return nil, fmt.Errorf("implementation not supported for this language")
 }
 
-func (cli *LSPClient) WorkspaceSearchSymbols(ctx context.Context, query string) ([]lsp.SymbolInformation, error) {
+func (cli *LSPClient) WorkspaceSearchSymbols(ctx context.Context, query string) ([]SymbolInformation, error) {
 	if cli.provider != nil {
 		return cli.provider.WorkspaceSearchSymbols(ctx, cli, query)
 	}

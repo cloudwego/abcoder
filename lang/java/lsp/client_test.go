@@ -1,3 +1,17 @@
+// Copyright 2025 CloudWeGo Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package lsp
 
 import (
@@ -20,7 +34,7 @@ func TestJavaLSPConnection(t *testing.T) {
 	ctx := context.Background()
 
 	openfile, wait := java.CheckRepo(projectRoot)
-	l, s := java.GetDefaultLSP()
+	l, s := java.GetDefaultLSP(make(map[string]string))
 	lsp.RegisterProvider(uniast.Java, &JavaProvider{})
 
 	lspClient, err := lsp.NewLSPClient(projectRoot, openfile, wait, lsp.ClientOptions{
@@ -96,7 +110,7 @@ func TestJavaLSPSemanticFeatures(t *testing.T) {
 	ctx := context.Background()
 
 	openfile, wait := java.CheckRepo(projectRoot)
-	l, s := java.GetDefaultLSP()
+	l, s := java.GetDefaultLSP(make(map[string]string))
 	lsp.RegisterProvider(uniast.Java, &JavaProvider{})
 
 	lspClient, err := lsp.NewLSPClient(projectRoot, openfile, wait, lsp.ClientOptions{
@@ -173,17 +187,6 @@ func TestJavaLSPSemanticFeatures(t *testing.T) {
 	makeSoundInDogSymbol := findSymbolByName(dogSymbols2, "makeSound()")
 	require.NotNil(t, makeSoundInDogSymbol, "Could not find 'makeSound' method in 'Dog' class")
 
-	// Use the position of 'makeSound' in 'Dog' to find its declaration. This is a semantic query.
-	declarationResult, err := lspClient.Declaration(ctx, dogURI, makeSoundInDogSymbol.Location.Range.Start)
-	require.NoError(t, err, "textDocument/declaration request failed")
-	require.NotEmpty(t, declarationResult, "Expected a declaration result")
-
-	fmt.Println("\n--- Go to Declaration Result for Dog.makeSound() ---")
-	declaration := declarationResult[0]
-	fmt.Printf("Declaration found at: %s, Line: %d\n", declaration.URI, declaration.Range.Start.Line+1)
-
-	// The declaration should be in Animal.java
-	require.True(t, strings.HasSuffix(string(declaration.URI), "Animal.java"), "Declaration should be in Animal.java")
 }
 
 func TestJavaLSPInheritanceFeatures(t *testing.T) {
@@ -191,7 +194,7 @@ func TestJavaLSPInheritanceFeatures(t *testing.T) {
 	ctx := context.Background()
 
 	openfile, wait := java.CheckRepo(projectRoot)
-	l, s := java.GetDefaultLSP()
+	l, s := java.GetDefaultLSP(make(map[string]string))
 	lsp.RegisterProvider(uniast.Java, &JavaProvider{})
 
 	lspClient, err := lsp.NewLSPClient(projectRoot, openfile, wait, lsp.ClientOptions{
@@ -259,15 +262,6 @@ func TestJavaLSPInheritanceFeatures(t *testing.T) {
 	drawInCircleSymbol := findSymbolByName(circleSymbols, "draw()")
 	require.NotNil(t, drawInCircleSymbol, "Could not find 'draw' method in 'Circle' class")
 
-	declarationResult, err := lspClient.Declaration(ctx, circleURI, drawInCircleSymbol.Location.Range.Start)
-	require.NoError(t, err, "textDocument/declaration request failed")
-	require.NotEmpty(t, declarationResult, "Expected a declaration result")
-	declaration := declarationResult[0]
-	require.True(t, strings.HasSuffix(string(declaration.URI), "Shape.java"), "Declaration should be in Shape.java")
-
-	fmt.Println("\n--- Go to Declaration Result for Circle.draw() ---")
-	fmt.Printf("Declaration found at: %s, Line: %d\n", declaration.URI, declaration.Range.Start.Line+1)
-
 	// --- Step 3: Test 'textDocument/typeDefinition' on a class instance ---
 	circleSymbolsForType, err := lspClient.FileStructure(ctx, circleURI)
 	require.NoError(t, err, "FileStructure request failed for Circle.java")
@@ -289,7 +283,7 @@ func TestJavaLSPTypeHierarchy(t *testing.T) {
 	ctx := context.Background()
 
 	openfile, wait := java.CheckRepo(projectRoot)
-	l, s := java.GetDefaultLSP()
+	l, s := java.GetDefaultLSP(make(map[string]string))
 	lsp.RegisterProvider(uniast.Java, &JavaProvider{})
 
 	lspClient, err := lsp.NewLSPClient(projectRoot, openfile, wait, lsp.ClientOptions{

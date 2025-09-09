@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/cloudwego/abcoder/lang/java"
-	javaparser "github.com/cloudwego/abcoder/lang/java/parser"
+	"github.com/cloudwego/abcoder/lang/java/parser"
 	"maps"
 	"os"
 	"path/filepath"
@@ -64,6 +64,10 @@ type Collector struct {
 	vars map[*DocumentSymbol]dependency
 
 	files map[string]*uniast.File
+
+	localLSPSymbol map[DocumentURI]map[Range]*DocumentSymbol
+
+	localFunc map[Location]*DocumentSymbol
 
 	// modPatcher ModulePatcher
 
@@ -140,8 +144,6 @@ func (c *Collector) configureLSP(ctx context.Context) {
 		}
 	}
 }
-
-var localLSPSymbol = make(map[DocumentURI]map[Range]*DocumentSymbol)
 
 func (c *Collector) Collect(ctx context.Context) error {
 	var root_syms []*DocumentSymbol
@@ -371,12 +373,12 @@ func (c *Collector) ScannerByTreeSitter(ctx context.Context) ([]*DocumentSymbol,
 	// Java uses parsing pom method to obtain hierarchical relationships
 	if c.Language == uniast.Java {
 		rootPomPath := filepath.Join(c.repo, "pom.xml")
-		rootModule, err := javaparser.ParseMavenProject(rootPomPath)
+		rootModule, err := parser.ParseMavenProject(rootPomPath)
 		if err != nil {
 			// 尝试直接遍历文件
 			modulePaths = append(modulePaths, c.repo)
 		} else {
-			modulePaths = javaparser.GetModulePaths(rootModule)
+			modulePaths = parser.GetModulePaths(rootModule)
 		}
 		// Collect all module paths from the maven project structure
 	}
@@ -429,7 +431,7 @@ func (c *Collector) ScannerByTreeSitter(ctx context.Context) ([]*DocumentSymbol,
 		if err != nil {
 			return err
 		}
-		tree, err := javaparser.Parse(ctx, content)
+		tree, err := parser.Parse(ctx, content)
 		if err != nil {
 			log.Error("parse file %s failed: %v", path, err)
 			return nil // continue with next file
@@ -442,10 +444,11 @@ func (c *Collector) ScannerByTreeSitter(ctx context.Context) ([]*DocumentSymbol,
 	}
 
 	// Walk each module path to find and parse files in module
-	for _, modulePath := range modulePaths {
+	for i, modulePath := range modulePaths {
 		if err := filepath.Walk(modulePath, scanner); err != nil {
 			log.Error("scan files failed: %v", err)
 		}
+		log.Info("finish collector module %v ，progress rate %d/%d ", modulePath, i, len(modulePaths))
 	}
 
 	root_syms := make([]*DocumentSymbol, 0, 1024)
@@ -461,7 +464,7 @@ func (c *Collector) collectFields(node *sitter.Node, uri DocumentURI, content []
 	if node == nil {
 		return
 	}
-	q, err := sitter.NewQuery([]byte("(field_declaration) @field"), javaparser.GetLanguage(c.CollectOption.Language))
+	q, err := sitter.NewQuery([]byte("(field_declaration) @field"), parser.GetLanguage(c.CollectOption.Language))
 	if err != nil {
 		// Or handle the error more gracefully
 		return
@@ -559,9 +562,6 @@ func (c *Collector) addReferenceDeps(sym *DocumentSymbol, ref *DocumentSymbol) {
 	if ref.Role != REFERENCE {
 		return
 	}
-	if len(c.deps[sym]) == 0 {
-		c.deps[sym] = make([]dependency, 0)
-	}
 	TokenLocation := ref.Location
 	var refDefinitionLocation = c.findDefinitionLocation(ref)
 	if refDefinitionLocation == TokenLocation {
@@ -576,12 +576,13 @@ func (c *Collector) addReferenceDeps(sym *DocumentSymbol, ref *DocumentSymbol) {
 }
 
 func (c *Collector) findLocalLSPSymbol(fileURI DocumentURI) map[Range]*DocumentSymbol {
-	if localLSPSymbol[fileURI] == nil {
+	if c.localLSPSymbol[fileURI] == nil {
+		c.localLSPSymbol = make(map[DocumentURI]map[Range]*DocumentSymbol)
 		symbols, _ := c.cli.DocumentSymbols(context.Background(), fileURI)
-		localLSPSymbol[fileURI] = symbols
+		c.localLSPSymbol[fileURI] = symbols
 		return symbols
 	}
-	return localLSPSymbol[fileURI]
+	return c.localLSPSymbol[fileURI]
 }
 
 func (c *Collector) findDefinitionLocation(ref *DocumentSymbol) Location {
@@ -597,21 +598,21 @@ func (c *Collector) findDefinitionLocation(ref *DocumentSymbol) Location {
 func (c *Collector) walk(node *sitter.Node, uri DocumentURI, content []byte, file *uniast.File, parent *DocumentSymbol) {
 	switch node.Type() {
 	case "package_declaration":
-		pkgNameNode := javaparser.FindChildIdentifier(node)
+		pkgNameNode := parser.FindChildIdentifier(node)
 		if pkgNameNode != nil {
 			file.Package = uniast.PkgPath(pkgNameNode.Content(content))
 		}
 		return // no need to walk children
 
 	case "import_declaration":
-		importPathNode := javaparser.FindChildIdentifier(node)
+		importPathNode := parser.FindChildIdentifier(node)
 		if importPathNode != nil {
 			file.Imports = append(file.Imports, uniast.Import{Path: importPathNode.Content(content)})
 		}
 		return // no need to walk children of import declaration
 
 	case "class_declaration", "interface_declaration", "enum_declaration":
-		nameNode := javaparser.FindChildIdentifier(node)
+		nameNode := parser.FindChildIdentifier(node)
 		if nameNode == nil {
 			return // anonymous class, skip
 		}
@@ -680,9 +681,6 @@ func (c *Collector) walk(node *sitter.Node, uri DocumentURI, content []byte, fil
 		c.syms[sym.Location] = sym
 		if parent != nil {
 			parent.Children = append(parent.Children, sym)
-			if len(c.deps[parent]) == 0 {
-				c.deps[parent] = make([]dependency, 0)
-			}
 			c.deps[parent] = append(c.deps[parent], dependency{
 				Symbol:   sym,
 				Location: sym.Location,
@@ -906,12 +904,12 @@ func (c *Collector) recursiveParseTypes(node *sitter.Node, content []byte, uri D
 
 		// For a generic type like "List<String>", we want to parse "List" and "String" separately.
 		// The main type identifier (e.g., "List")
-		typeNode := javaparser.FindChildByType(node, "type")
+		typeNode := parser.FindChildByType(node, "type")
 		if typeNode != nil {
 			c.recursiveParseTypes(typeNode, content, uri, symbols, false)
 		}
 		// The type arguments (e.g., "<String>")
-		argsNode := javaparser.FindChildByType(node, "type_arguments")
+		argsNode := parser.FindChildByType(node, "type_arguments")
 		if argsNode != nil {
 			for i := 0; i < int(argsNode.ChildCount()); i++ {
 				c.recursiveParseTypes(argsNode.Child(i), content, uri, symbols, false)
@@ -940,7 +938,7 @@ func (c *Collector) recursiveParseTypes(node *sitter.Node, content []byte, uri D
 		}
 		*symbols = append(*symbols, typeSym)
 	case "super_interfaces":
-		typeNode := javaparser.FindChildByType(node, "type_list")
+		typeNode := parser.FindChildByType(node, "type_list")
 		if typeNode != nil {
 			c.recursiveParseTypes(typeNode, content, uri, symbols, true)
 		}
@@ -1398,8 +1396,8 @@ func nodeToLocation(node *sitter.Node, uri DocumentURI, content []byte) Location
 	end := node.EndPoint()
 
 	// 将Tree-sitter的UTF-8字节位置转换为LSP的UTF-16字符位置
-	startLine, startChar := javaparser.Utf8ToUtf16Position(content, start.Row, start.Column)
-	endLine, endChar := javaparser.Utf8ToUtf16Position(content, end.Row, end.Column)
+	startLine, startChar := parser.Utf8ToUtf16Position(content, start.Row, start.Column)
+	endLine, endChar := parser.Utf8ToUtf16Position(content, end.Row, end.Column)
 
 	return Location{
 		URI: uri,
@@ -1411,7 +1409,7 @@ func nodeToLocation(node *sitter.Node, uri DocumentURI, content []byte) Location
 }
 
 func toLSPPosition(content []byte, Row, Column uint32) Position {
-	startLine, startChar := javaparser.Utf8ToUtf16Position(content, Row, Column)
+	startLine, startChar := parser.Utf8ToUtf16Position(content, Row, Column)
 	return Position{Line: startLine, Character: startChar}
 }
 
@@ -1445,7 +1443,7 @@ func (c *Collector) parseMethodInvocations(bodyNode *sitter.Node, content []byte
 	// and extract name and object from there.
 	query, err := sitter.NewQuery([]byte(`
 		(argument_list) @args
-	`), javaparser.GetLanguage(c.CollectOption.Language))
+	`), parser.GetLanguage(c.CollectOption.Language))
 	if err != nil {
 		log.Error("Failed to create method invocation query: %v", err)
 		return
@@ -1545,9 +1543,6 @@ func (c *Collector) parseMethodInvocations(bodyNode *sitter.Node, content []byte
 				continue
 			}
 			dep.Symbol.Location = DefinitionLocation
-			if c.deps[methodSym] == nil {
-				c.deps[methodSym] = make([]dependency, 0)
-			}
 			c.deps[methodSym] = append(c.deps[methodSym], dep)
 		}
 	}
@@ -1588,7 +1583,7 @@ func (c *Collector) parseMethodSignature(node *sitter.Node, content []byte) stri
 	}
 
 	// 获取方法名
-	nameNode := javaparser.FindChildIdentifier(node)
+	nameNode := parser.FindChildIdentifier(node)
 	if nameNode == nil {
 		return ""
 	}

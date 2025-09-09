@@ -1,10 +1,22 @@
+// Copyright 2025 CloudWeGo Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package lsp
 
 import (
 	"context"
-
 	"github.com/cloudwego/abcoder/lang/lsp"
-	golsp "github.com/sourcegraph/go-lsp"
 )
 
 // JavaProvider implements the LanguageServiceProvider for Java.
@@ -17,11 +29,11 @@ type jdtHover struct {
 	Range    *lsp.Range  `json:"range,omitempty"`
 }
 
-func (p *JavaProvider) Hover(ctx context.Context, cli *lsp.LSPClient, uri lsp.DocumentURI, line, character int) (*golsp.Hover, error) {
+func (p *JavaProvider) Hover(ctx context.Context, cli *lsp.LSPClient, uri lsp.DocumentURI, line, character int) (*lsp.Hover, error) {
 	var result jdtHover // Use the custom struct to unmarshal
-	err := cli.Call(ctx, "textDocument/hover", golsp.TextDocumentPositionParams{
-		TextDocument: golsp.TextDocumentIdentifier{URI: golsp.DocumentURI(uri)},
-		Position:     golsp.Position{Line: line, Character: character},
+	err := cli.Call(ctx, "textDocument/hover", lsp.TextDocumentPositionParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri},
+		Position:     lsp.Position{Line: line, Character: character},
 	}, &result)
 	if err != nil {
 		return nil, err
@@ -43,14 +55,14 @@ func (p *JavaProvider) Hover(ctx context.Context, cli *lsp.LSPClient, uri lsp.Do
 	}
 
 	// Convert the JDT-specific hover result to the standard lsp.Hover type.
-	standardHover := &golsp.Hover{
-		Contents: []golsp.MarkedString{
+	standardHover := &lsp.Hover{
+		Contents: []lsp.MarkedString{
 			{
 				Language: "java",
 				Value:    content,
 			},
 		},
-		Range: &golsp.Range{},
+		Range: &lsp.Range{},
 	}
 
 	return standardHover, nil
@@ -58,9 +70,9 @@ func (p *JavaProvider) Hover(ctx context.Context, cli *lsp.LSPClient, uri lsp.Do
 
 func (p *JavaProvider) Implementation(ctx context.Context, cli *lsp.LSPClient, uri lsp.DocumentURI, pos lsp.Position) ([]lsp.Location, error) {
 	var result []lsp.Location
-	err := cli.Call(ctx, "textDocument/implementation", golsp.TextDocumentPositionParams{
-		TextDocument: golsp.TextDocumentIdentifier{URI: golsp.DocumentURI(uri)},
-		Position:     golsp.Position(pos),
+	err := cli.Call(ctx, "textDocument/implementation", lsp.TextDocumentPositionParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri},
+		Position:     pos,
 	}, &result)
 	if err != nil {
 		return nil, err
@@ -68,11 +80,11 @@ func (p *JavaProvider) Implementation(ctx context.Context, cli *lsp.LSPClient, u
 	return result, nil
 }
 
-func (p *JavaProvider) WorkspaceSearchSymbols(ctx context.Context, cli *lsp.LSPClient, query string) ([]golsp.SymbolInformation, error) {
-	req := golsp.WorkspaceSymbolParams{
+func (p *JavaProvider) WorkspaceSearchSymbols(ctx context.Context, cli *lsp.LSPClient, query string) ([]lsp.SymbolInformation, error) {
+	req := lsp.WorkspaceSymbolParams{
 		Query: query,
 	}
-	var resp []golsp.SymbolInformation
+	var resp []lsp.SymbolInformation
 	if err := cli.Call(ctx, "workspace/symbol", req, &resp); err != nil {
 		return nil, err
 	}
@@ -81,9 +93,9 @@ func (p *JavaProvider) WorkspaceSearchSymbols(ctx context.Context, cli *lsp.LSPC
 
 // PrepareTypeHierarchy performs a textDocument/prepareTypeHierarchy request.
 func (p *JavaProvider) PrepareTypeHierarchy(ctx context.Context, cli *lsp.LSPClient, uri lsp.DocumentURI, pos lsp.Position) ([]lsp.TypeHierarchyItem, error) {
-	params := golsp.TextDocumentPositionParams{
-		TextDocument: golsp.TextDocumentIdentifier{URI: golsp.DocumentURI(uri)},
-		Position:     golsp.Position(pos),
+	params := lsp.TextDocumentPositionParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri},
+		Position:     pos,
 	}
 
 	var result []lsp.TypeHierarchyItem

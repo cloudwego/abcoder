@@ -39,7 +39,7 @@ func TestCollector_CollectByTreeSitter_Java(t *testing.T) {
 		lsp.RegisterProvider(uniast.Java, &javaLsp.JavaProvider{})
 
 		openfile, wait := java.CheckRepo(javaTestCase)
-		l, s := java.GetDefaultLSP()
+		l, s := java.GetDefaultLSP(make(map[string]string))
 		client, err := lsp.NewLSPClient(javaTestCase, openfile, wait, lsp.ClientOptions{
 			Server:   s,
 			Language: l,
