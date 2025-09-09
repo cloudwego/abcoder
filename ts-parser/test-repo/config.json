@@ -1,0 +1,15 @@
+{
+  "port": 3000,
+  "database": {
+    "host": "localhost",
+    "port": 27017,
+    "name": "testapp",
+    "user": "admin",
+    "password": "password123"
+  },
+  "jwtSecret": "your-super-secret-jwt-key-change-in-production",
+  "bcryptRounds": 10,
+  "corsOrigins": ["http://localhost:3000", "http://localhost:3001"],
+  "rateLimitWindow": 900000,
+  "rateLimitMax": 100
+}

@@ -19,8 +19,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"go/types"
 	"io"
 	"os"
@@ -51,35 +49,12 @@ func (c cache) Visited(val interface{}) bool {
 	return ok
 }
 
-func hasMain(file []byte) bool {
-	if !bytes.Contains(file, []byte("package main")) || !bytes.Contains(file, []byte("func main()")) {
-		return false
-	}
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "any.go", file, parser.SkipObjectResolution)
-	if err != nil {
-		return false
-	}
-	if f.Name.Name != "main" {
-		return false
-	}
-	for _, decl := range f.Decls {
-		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-			if funcDecl.Name.Name == "main" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func isSysPkg(importPath string) bool {
 	return !strings.Contains(strings.Split(importPath, "/")[0], ".")
 }
 
 var (
 	verReg = regexp.MustCompile(`/v\d+$`)
-	litReg = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
 
 func getPackageAlias(importPath string) string {
@@ -96,14 +71,6 @@ func getPackageAlias(importPath string) string {
 	}
 
 	return alias
-}
-
-func splitVersion(module string) (string, string) {
-	if strings.Contains(module, "@") {
-		parts := strings.Split(module, "@")
-		return parts[0], parts[1]
-	}
-	return module, ""
 }
 
 func getModuleName(modFilePath string) (string, []byte, error) {
@@ -218,6 +185,18 @@ func getNamedTypes(typ types.Type, visited map[types.Type]bool) (tys []types.Obj
 	case *types.Named:
 		tys = append(tys, t.Obj())
 		isNamed = true
+		if targs := t.TypeArgs(); targs != nil {
+			for i := 0; i < targs.Len(); i++ {
+				typs, _, _ := getNamedTypes(targs.At(i), visited)
+				tys = append(tys, typs...)
+			}
+		}
+		if tparams := t.TypeParams(); tparams != nil {
+			for i := 0; i < tparams.Len(); i++ {
+				typs, _, _ := getNamedTypes(tparams.At(i), visited)
+				tys = append(tys, typs...)
+			}
+		}
 	case *types.Struct:
 		for i := 0; i < t.NumFields(); i++ {
 			typs, _, _ := getNamedTypes(t.Field(i).Type(), visited)
@@ -250,13 +229,6 @@ func getNamedTypes(typ types.Type, visited map[types.Type]bool) (tys []types.Obj
 		}
 	}
 	return
-}
-
-func extractName(typ string) string {
-	if strings.Contains(typ, ".") {
-		return strings.Split(typ, ".")[1]
-	}
-	return typ
 }
 
 func parseExpr(expr string) (interface{}, error) {

@@ -17,6 +17,7 @@ package lsp
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -71,22 +72,6 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 		if err != nil {
 			return nil, err
 		}
-
-		// wait for "textDocument/publishDiagnostics" notification
-		// 	resp := cli.WaitFirstNotify("textDocument/publishDiagnostics")
-		// again:
-		// 	var diagnostics lsp.PublishDiagnosticsParams
-		// 	if err := json.Unmarshal(*resp.Params, &diagnostics); err != nil {
-		// 		logger.Fatalf("Failed to unmarshal diagnostics: %v", err)
-		// 	}
-		// 	if len(diagnostics.Diagnostics) > 0 {
-		// 		// wait again
-		// 		resp = cli.WaitFirstNotify("textDocument/publishDiagnostics")
-		// 		if retry > 0 {
-		// 			retry--
-		// 			goto again
-		// 		}
-		// 	}
 	}
 
 	time.Sleep(wait)
@@ -97,6 +82,19 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 func (c *LSPClient) Close() error {
 	c.lspHandler.Close()
 	return c.Conn.Close()
+}
+
+// Extra wrapper around json rpc to
+// 1. implement a transparent, generic cache
+func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}, opts ...jsonrpc2.CallOption) error {
+	var raw json.RawMessage
+	if err := cli.Conn.Call(ctx, method, params, &raw); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, result); err != nil {
+		return err
+	}
+	return nil
 }
 
 type initializeParams struct {

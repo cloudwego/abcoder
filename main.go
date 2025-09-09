@@ -35,6 +35,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -77,6 +78,8 @@ func main() {
 	flags.BoolVar(&opts.LoadByPackages, "load-by-packages", false, "load by packages (only works for Go now)")
 	flags.Var((*StringArray)(&opts.Excludes), "exclude", "exclude files or directories, support multiple values")
 	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
+	flags.StringVar(&opts.TSConfig, "tsconfig", "", "tsconfig path (only works for TS now)")
+	flags.Var((*StringArray)(&opts.TSSrcDir), "ts-src-dir", "src-dir path (only works for TS now)")
 
 	var wopts lang.WriteOptions
 	flags.StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")
@@ -110,6 +113,15 @@ func main() {
 		}
 
 		opts.Language = language
+
+		if language == uniast.TypeScript {
+			if err := parseTSProject(context.Background(), uri, opts, flagOutput); err != nil {
+				log.Error("Failed to parse: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
 		if flagLsp != nil {
 			opts.LSP = *flagLsp
 		}
@@ -258,4 +270,45 @@ func (s *StringArray) Set(value string) error {
 
 func (s *StringArray) String() string {
 	return strings.Join(*s, ",")
+}
+
+func parseTSProject(ctx context.Context, repoPath string, opts lang.ParseOptions, outputFlag *string) error {
+	if outputFlag == nil {
+		return fmt.Errorf("output path is required")
+	}
+
+	parserPath, err := exec.LookPath("abcoder-ts-parser")
+	if err != nil {
+		log.Info("abcoder-ts-parser not found, installing...")
+		cmd := exec.Command("npm", "install", "-g", "abcoder-ts-parser")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to install abcoder-ts-parser: %v", err)
+		}
+		parserPath, err = exec.LookPath("abcoder-ts-parser")
+		if err != nil {
+			return fmt.Errorf("failed to find abcoder-ts-parser after installation: %v", err)
+		}
+	}
+
+	args := []string{"parse", repoPath}
+	if len(opts.TSSrcDir) > 0 {
+		args = append(args, "--src", strings.Join(opts.TSSrcDir, ","))
+	}
+	if opts.TSConfig != "" {
+		args = append(args, "--tsconfig", opts.TSConfig)
+	}
+	if *outputFlag != "" {
+		args = append(args, "--output", *outputFlag)
+	}
+
+	cmd := exec.CommandContext(ctx, parserPath, args...)
+	cmd.Env = append(os.Environ(), "NODE_OPTIONS=--max-old-space-size=65536")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	log.Info("Running abcoder-ts-parser with args: %v", args)
+
+	return cmd.Run()
 }

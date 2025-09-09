@@ -1,0 +1,9 @@
+node_modules/
+
+dist/
+
+.vscode/
+
+temp/
+
+output.json

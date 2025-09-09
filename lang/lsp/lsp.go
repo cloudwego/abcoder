@@ -19,10 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -113,8 +110,6 @@ type Range struct {
 	End   Position `json:"end"`
 }
 
-type _Range Range
-
 func (r Range) String() string {
 	return fmt.Sprintf("%s-%s", r.Start, r.End)
 }
@@ -123,8 +118,31 @@ func (r Range) MarshalText() ([]byte, error) {
 	return []byte(r.String()), nil
 }
 
+type _Range Range
+
 func (r Range) MarshalJSON() ([]byte, error) {
 	return json.Marshal(_Range(r))
+}
+
+func isPositionInRange(pos Position, r Range, close bool) bool {
+	if pos.Line < r.Start.Line || pos.Line > r.End.Line {
+		return false
+	}
+	if pos.Line == r.Start.Line && pos.Character < r.Start.Character {
+		return false
+	}
+	if pos.Line == r.End.Line {
+		if close {
+			return pos.Character <= r.End.Character
+		} else {
+			return pos.Character < r.End.Character
+		}
+	}
+	return true
+}
+
+func (a Range) Include(b Range) bool {
+	return isPositionInRange(b.Start, a, false) && isPositionInRange(b.End, a, true)
 }
 
 type Location struct {
@@ -142,17 +160,27 @@ func SetLocationMarshalJSONInline(inline bool) {
 	locationMarshalJSONInline = inline
 }
 
-type location Location
+type _Location Location
 
 func (l Location) MarshalJSON() ([]byte, error) {
 	if locationMarshalJSONInline {
 		return []byte(fmt.Sprintf("%q", l.String())), nil
 	}
-	return json.Marshal(location(l))
+	return json.Marshal(_Location(l))
 }
 
 func (l Location) MarshalText() ([]byte, error) {
 	return []byte(l.String()), nil
+}
+
+func (a Location) Include(b Location) bool {
+	if a == b {
+		return true
+	}
+	if a.URI != b.URI {
+		return false
+	}
+	return isPositionInRange(b.Range.Start, a.Range, false) && isPositionInRange(b.Range.End, a.Range, true)
 }
 
 type DocumentURI lsp.DocumentURI
@@ -166,11 +194,6 @@ func NewURI(file string) DocumentURI {
 		file, _ = filepath.Abs(file)
 	}
 	return DocumentURI("file://" + file)
-}
-
-type DocumentRange struct {
-	TextDocument lsp.TextDocumentIdentifier `json:"textDocument"`
-	Range        Range                      `json:"range"`
 }
 
 type TextDocumentItem struct {

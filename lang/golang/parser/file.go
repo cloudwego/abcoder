@@ -120,7 +120,7 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		v = p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
 
-		// always collect value's dependencies
+		// collect func value dependencies, in case of var a = func() {...}
 		if val != nil && !isConst {
 			collects := collectInfos{}
 			ast.Inspect(*val, func(n ast.Node) bool {
@@ -159,37 +159,12 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		if isConst && v.Type == nil {
 			v.Type = lastType
 		}
-		var varType string
-		if v.Type != nil {
-			if v.Type.PkgPath == ctx.pkgPath {
-				varType = v.Type.Name
-			} else {
-				varType = v.Type.CallName()
-			}
-			if v.IsPointer {
-				varType = "*" + varType
-			}
-		}
 
 		if !isConst {
-			v.Content = fmt.Sprintf("var %s %s", name.Name, varType)
+			v.Content = "var " + string(ctx.GetRawContent(vspec))
 		} else {
-			if varType != "" {
-				v.Content = fmt.Sprintf("const %s %s", name.Name, varType)
-			} else {
-				v.Content = fmt.Sprintf("const %s", name.Name)
-			}
+			v.Content = "const " + string(ctx.GetRawContent(vspec))
 		}
-
-		var comment string
-		if ctx.collectComment && doc != nil {
-			comment += string(ctx.GetRawContent(doc)) + "\n"
-		}
-		if ctx.collectComment && vspec.Doc != nil {
-			comment += string(ctx.GetRawContent(vspec.Doc)) + "\n"
-			v.FileLine.StartOffset = ctx.fset.Position(vspec.Pos()).Offset
-		}
-		v.Content = comment + v.Content
 
 		var finalVal string
 		if val != nil {
@@ -229,10 +204,19 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			lastValue = &tmp
 			finalVal = strconv.FormatFloat(tmp, 'f', -1, 64)
 		}
-
-		if finalVal != "" {
+		if finalVal != "" && !strings.Contains(v.Content, " = ") {
 			v.Content += " = " + finalVal
 		}
+
+		var comment string
+		if ctx.collectComment && doc != nil {
+			comment += string(ctx.GetRawContent(doc)) + "\n"
+		}
+		if ctx.collectComment && vspec.Doc != nil {
+			comment += string(ctx.GetRawContent(vspec.Doc)) + "\n"
+			v.FileLine.StartOffset = ctx.fset.Position(vspec.Pos()).Offset
+		}
+		v.Content = comment + v.Content
 
 		typ = v.Type
 	}
@@ -441,21 +425,22 @@ func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collec
 func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Function, bool) {
 	// method receiver
 	var receiver *Receiver
-	isMethod := funcDecl.Recv != nil
-	if strings.HasSuffix(ctx.filePath, "cmds/life_stat/main.go") && funcDecl.Name.Name == "init" {
-
-	}
+	var tparams []Dependency
+	isMethod := funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0
 	if isMethod {
-		// TODO: reserve the pointer message?
-		ti := ctx.GetTypeInfo(funcDecl.Recv.List[0].Type)
-		// name := "self"
-		// if len(funcDecl.Recv.List[0].Names) > 0 {
-		// 	name = funcDecl.Recv.List[0].Names[0].Name
-		// }
+		rt := funcDecl.Recv.List[0].Type
+		ti := ctx.GetTypeInfo(rt)
 		receiver = &Receiver{
 			Type:      ti.Id,
 			IsPointer: ti.IsPointer,
 			// Name:      name,
+		}
+		// collect receiver's type params
+		for _, d := range ti.Deps {
+			tparams = append(tparams, Dependency{
+				Identity: d,
+				FileLine: ctx.FileLine(rt), // FIXME: location is not accurate, try parse Index AST to get it.
+			})
 		}
 	}
 
@@ -473,6 +458,10 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	var results []Dependency
 	if funcDecl.Type.Results != nil {
 		ctx.collectFields(funcDecl.Type.Results.List, &results)
+	}
+	// collect type params
+	if funcDecl.Type.TypeParams != nil {
+		ctx.collectFields(funcDecl.Type.TypeParams.List, &tparams)
 	}
 
 	// collect signature
@@ -510,6 +499,9 @@ set_func:
 	f.Results = results
 	f.GlobalVars = collects.globalVars
 	f.Types = collects.tys
+	for _, t := range tparams {
+		f.Types = InsertDependency(f.Types, t)
+	}
 	f.Signature = string(sig)
 	return f, false
 }
@@ -532,6 +524,10 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc *ast.C
 				p.types[t] = st.Identity
 			}
 		}
+	}
+
+	if typDecl.TypeParams != nil {
+		ctx.collectFields(typDecl.TypeParams.List, &st.SubStruct)
 	}
 
 	st.FileLine = ctx.FileLine(typDecl)
