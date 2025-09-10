@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/collect"
@@ -32,6 +33,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
 	"github.com/cloudwego/abcoder/lang/rust"
+	"github.com/cloudwego/abcoder/lang/typescript"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
@@ -44,7 +46,8 @@ type ParseOptions struct {
 	collect.CollectOption
 	// specify the repo id
 	RepoID string
-
+	// 输出路径
+	OutputPath string
 	// TS options
 	// tsconfig string
 	TSParseOptions
@@ -61,6 +64,12 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	if !filepath.IsAbs(uri) {
 		uri, _ = filepath.Abs(uri)
 	}
+
+	// Handle TypeScript separately
+	if args.Language == uniast.TypeScript {
+		return parseTSProject(ctx, uri, args)
+	}
+
 	l, lspPath, err := checkLSP(args.Language, args.LSP)
 	if err != nil {
 		return nil, err
@@ -120,6 +129,8 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		openfile, wait = cxx.CheckRepo(repoPath)
 	case uniast.Python:
 		openfile, wait = python.CheckRepo(repoPath)
+	case uniast.TypeScript:
+		openfile, wait = typescript.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -137,6 +148,8 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 		l, s = cxx.GetDefaultLSP()
 	case uniast.Python:
 		l, s = python.GetDefaultLSP()
+	case uniast.TypeScript:
+		l, s = typescript.GetDefaultLSP()
 	case uniast.Golang:
 		l = uniast.Golang
 		s = ""
@@ -213,4 +226,58 @@ func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOpti
 		return nil, err
 	}
 	return &repo, nil
+}
+
+func parseTSProject(ctx context.Context, repoPath string, opts ParseOptions) ([]byte, error) {
+	parserPath, err := exec.LookPath("abcoder-ts-parser")
+	if err != nil {
+		log.Info("abcoder-ts-parser not found, installing...")
+		cmd := exec.Command("npm", "install", "-g", "abcoder-ts-parser")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return nil, fmt.Errorf("failed to install abcoder-ts-parser: %v", err)
+		}
+		parserPath, err = exec.LookPath("abcoder-ts-parser")
+		if err != nil {
+			return nil, fmt.Errorf("failed to find abcoder-ts-parser after installation: %v", err)
+		}
+	}
+
+	args := []string{"parse", repoPath}
+	if len(opts.TSSrcDir) > 0 {
+		args = append(args, "--src", strings.Join(opts.TSSrcDir, ","))
+	}
+	if opts.TSConfig != "" {
+		args = append(args, "--tsconfig", opts.TSConfig)
+	}
+
+	// Use a temporary file for output since we need to return the content
+	tempFile, err := os.CreateTemp("", "abcoder-ts-*.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+	tempFile.Close()
+
+	args = append(args, "--output", tempFile.Name())
+
+	cmd := exec.CommandContext(ctx, parserPath, args...)
+	cmd.Env = append(os.Environ(), "NODE_OPTIONS=--max-old-space-size=65536")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	log.Info("Running abcoder-ts-parser with args: %v", args)
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("abcoder-ts-parser failed: %v, stderr: %s", err, stderr.String())
+	}
+
+	// Read the output from the temp file
+	output, err := os.ReadFile(tempFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read parser output: %v", err)
+	}
+
+	return output, nil
 }

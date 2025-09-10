@@ -80,6 +80,7 @@ func main() {
 	flags.StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
 	flags.StringVar(&opts.TSConfig, "tsconfig", "", "tsconfig path (only works for TS now)")
 	flags.Var((*StringArray)(&opts.TSSrcDir), "ts-src-dir", "src-dir path (only works for TS now)")
+	opts.OutputPath = *flagOutput
 
 	var wopts lang.WriteOptions
 	flags.StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")
@@ -113,14 +114,6 @@ func main() {
 		}
 
 		opts.Language = language
-
-		if language == uniast.TypeScript {
-			if err := parseTSProject(context.Background(), uri, opts, flagOutput); err != nil {
-				log.Error("Failed to parse: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
 
 		if flagLsp != nil {
 			opts.LSP = *flagLsp
