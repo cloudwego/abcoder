@@ -4,19 +4,126 @@ import * as fs from 'fs';
 import { Repository, Node, Relation, Identity, Function } from '../types/uniast';
 import { ModuleParser } from './ModuleParser';
 import { TsConfigCache } from '../utils/tsconfig-cache';
+import { MonorepoUtils } from '../utils/monorepo';
 
 export class RepositoryParser {
-  private project: Project;
-  private moduleParser: ModuleParser;
+  private project?: Project;
+  private moduleParser?: ModuleParser;
   private tsConfigCache: TsConfigCache;
+  private projectRoot: string;
+  private tsConfigPath?: string;
 
   constructor(projectRoot: string, tsConfigPath?: string) {
     this.tsConfigCache = TsConfigCache.getInstance();
+    this.projectRoot = projectRoot;
+    this.tsConfigPath = tsConfigPath;
+  }
 
+  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[], monorepoMode?: 'combined' | 'separate' } = {}): Promise<Repository> {
+    const absolutePath = path.resolve(repoPath);
     
-    let configPath =  path.join(projectRoot, 'tsconfig.json');
+    const repository: Repository = {
+      ASTVersion: "v0.1.3",
+      id: path.basename(absolutePath),
+      Modules: {},
+      Graph: {}
+    };
 
-    // If a custom tsconfig path is provided, use it
+    const isMonorepo = MonorepoUtils.isMonorepo(absolutePath);
+
+    if (isMonorepo) {
+      const packages = MonorepoUtils.getMonorepoPackages(absolutePath);
+ 
+      const monorepoMode = options.monorepoMode || 'combined';
+      // Using separate output mode - each package will be written to individual JSON files
+      if (monorepoMode === 'separate') {
+
+        for (const pkg of packages) {
+          const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
+          if (fs.existsSync(packageTsConfigPath)) {
+            console.log(`Parsing package ${pkg.name || pkg.path} with tsconfig ${packageTsConfigPath}`);
+            try {
+              const project = new Project({
+                tsConfigFilePath: packageTsConfigPath,
+                compilerOptions: {
+                  allowJs: true,
+                  skipLibCheck: true,
+                  forceConsistentCasingInFileNames: true
+                }
+              });
+              const moduleParser = new ModuleParser(project, this.projectRoot);
+              const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
+              
+              // Add module to main repository for combined output
+              repository.Modules[module.Name] = module;
+              
+              // Create a separate repository for each package
+              const packageRepository: Repository = {
+                ASTVersion: "v0.1.3",
+                id: pkg.name || path.basename(pkg.absolutePath),
+                Modules: { [module.Name]: module },
+                Graph: {}
+              };
+              
+              this.buildGlobalGraph(packageRepository);
+              
+              // Write JSON file for this package
+              const sanitizedPackageName = (pkg.name || path.basename(pkg.absolutePath)).replace(/[\/\\:*?"<>|@]/g, '_');
+              const outputPath = path.join(process.cwd(), `${sanitizedPackageName}.json`);
+              const jsonOutput = JSON.stringify(packageRepository, null, 2);
+              fs.writeFileSync(outputPath, jsonOutput);
+              
+              console.log(`Package ${pkg.name || pkg.path} written to: ${outputPath}`);
+            } catch (error) {
+              console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
+            }
+          } else {
+             console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
+          }
+        }
+        
+        console.log(`All packages have been written to separate files`);
+        console.log(`Total packages processed: ${packages.length}`);
+      } else {
+        // Using combined output mode - all packages will be merged into one JSON file
+        for (const pkg of packages) {
+          const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
+          if (fs.existsSync(packageTsConfigPath)) {
+            try {
+              const project = new Project({
+                tsConfigFilePath: packageTsConfigPath,
+                compilerOptions: {
+                  allowJs: true,
+                  skipLibCheck: true,
+                  forceConsistentCasingInFileNames: true
+                }
+              });
+              const moduleParser = new ModuleParser(project, this.projectRoot);
+              const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
+              repository.Modules[module.Name] = module;
+            } catch (error) {
+              console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
+            }
+          } else {
+             console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
+          }
+        }
+      }
+    } else {
+      console.log('Single project detected.');
+      this.project = this.createProjectForSingleRepo(this.projectRoot, this.tsConfigPath);
+      this.moduleParser = new ModuleParser(this.project, this.projectRoot);
+      const module = await this.moduleParser.parseModule(absolutePath, '.', options);
+      repository.Modules[module.Name] = module;
+    }
+
+    this.buildGlobalGraph(repository);
+    return repository;
+  }
+
+  private createProjectForSingleRepo(projectRoot: string, tsConfigPath?: string): Project {
+    let configPath = path.join(projectRoot, 'tsconfig.json');
+
     if (tsConfigPath) {
       let absoluteTsConfigPath = tsConfigPath;
       if (!path.isAbsolute(absoluteTsConfigPath)) {
@@ -27,8 +134,7 @@ export class RepositoryParser {
     }
         
     if (fs.existsSync(configPath)) {
-      // if tsconfig.json exists, use it to configure the project
-      this.project = new Project({
+      const project = new Project({
         tsConfigFilePath: configPath,
         compilerOptions: {
           allowJs: true,
@@ -62,8 +168,7 @@ export class RepositoryParser {
             console.warn("parse tsconfig warning:", err.messageText)
           });
         }
-        this.project.addSourceFilesAtPaths(parsedConfig.fileNames);
-        // Get references
+        project.addSourceFilesAtPaths(parsedConfig.fileNames);
         const references = parsedConfig.projectReferences;
         if (!references) {
           continue;
@@ -78,9 +183,9 @@ export class RepositoryParser {
           }
         }
       }
+      return project;
     } else {
-      // if tsconfig.json does not exist, use default configuration
-      this.project = new Project({
+      return new Project({
         compilerOptions: {
           target: 99,
           module: 1,
@@ -109,31 +214,7 @@ export class RepositoryParser {
         }
       });
     }
-    
-    this.moduleParser = new ModuleParser(this.project, projectRoot);
   }
-
-
-  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Repository> {
-    const absolutePath = path.resolve(repoPath);
-    
-    const repository: Repository = {
-      ASTVersion: "v0.1.3",
-      id: path.basename(absolutePath),
-      Modules: {},
-      Graph: {}
-    };
-
-    // Parse main module only
-    const mainModule = await this.moduleParser.parseModule(absolutePath, '.', options);
-    repository.Modules[mainModule.Name] = mainModule;
-
-    // Build global symbol graph
-    this.buildGlobalGraph(repository);
-
-    return repository;
-  }
-
 
   private buildGlobalGraph(repository: Repository): void {
     // First pass: Create all nodes from functions, types, and variables

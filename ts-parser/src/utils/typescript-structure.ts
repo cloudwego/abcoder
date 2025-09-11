@@ -198,7 +198,8 @@ export class TypeScriptStructureAnalyzer {
 
     // Create packages from directory groups
     for (const [dir, files] of dirGroups) {
-      const relativeDir = path.relative(this.repoPath, dir);
+      // Calculate path relative to the package root (module path) instead of monorepo root
+      const relativeDir = path.relative(module.path, dir);
       const pkgPath = (relativeDir === '' ? '.' : relativeDir).replace(/\\/g, '/');
       
       // TODO: REWRITE isMain Logic
@@ -207,7 +208,7 @@ export class TypeScriptStructureAnalyzer {
         path.basename(file, path.extname(file)) === 'main'
       );
 
-      const relativePath = path.relative(this.repoPath, dir);
+      const relativePath = path.relative(module.path, dir);
       
       const isTest = relativePath.includes('test') || relativePath.includes('__tests__') ||
                      files.some(file => file.includes('.test.') || file.includes('.spec.'));
