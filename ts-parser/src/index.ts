@@ -21,6 +21,7 @@ program
   .option('--no-dist', 'Ignore dist folder and its contents', false)
   .option('--pretty', 'Pretty print JSON output', false)
   .option('--src <dirs>', 'Directory paths to include (comma-separated)', (value) => value.split(','))
+  .option('--monorepo-mode <mode>', '"combined"(output entrie monorep repository)  "separate"(output each app)', 'combined')
   .action(async (directory, options) => {
     try {
       const repoPath = path.resolve(directory);
@@ -36,7 +37,8 @@ program
       const repository = await parser.parseRepository(repoPath, {
         loadExternalSymbols: false,
         noDist: options.noDist,
-        srcPatterns: options.src
+        srcPatterns: options.src,
+        monorepoMode: options.monorepoMode as 'combined' | 'separate'
       });
 
       const outputPath = path.resolve(options.output);
