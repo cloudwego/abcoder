@@ -241,6 +241,22 @@ export class SymbolResolver {
         return { name: parts[0] };
       }
     } else {
+      // For internal modules, first check if it's part of a monorepo package
+      const packageJsonPath = this.findPackageJsonPath(path.dirname(filePath));
+      if (packageJsonPath) {
+        try {
+          if (!this.packageJsonCache.has(packageJsonPath)) {
+            const content = fs.readFileSync(packageJsonPath, 'utf8');
+            const packageJson = JSON5.parse(content);
+            this.packageJsonCache.set(packageJsonPath, packageJson);
+          }
+          const packageJson = this.packageJsonCache.get(packageJsonPath);
+          return { name: packageJson.name || this.mainPackageName };
+        } catch (e) {
+          // Fall back to main package name if package.json parsing fails
+          return { name: this.mainPackageName };
+        }
+      }
       // For internal modules, use the pre-cached main package name
       return { name: this.mainPackageName };
     }
@@ -254,8 +270,33 @@ export class SymbolResolver {
       return { path: this.extractModuleInfo(filePath, isExternal).name };
     }
     const dir = this.normalizePath(path.dirname(filePath));
-    const relativePath = path.relative(this.projectRoot, dir);
+    const packageJsonPath = this.findPackageJsonPath(dir);
+    let packageRoot = this.projectRoot;
+    if (packageJsonPath) {
+      packageRoot = path.dirname(packageJsonPath);
+    }
+    const relativePath = path.relative(packageRoot, dir);
     return { path: relativePath === '' ? '.' : `${relativePath}` };
+  }
+
+  /**
+   * Find the closest package.json file for a given file path
+   * @param fileDir - The directory to start searching from
+   * @param projectRoot - Project root
+   */
+  private findPackageJsonPath(fileDir: string, projectRoot?: string): string | null {
+    let currentDir = fileDir;
+    const stopAtRoot = this.normalizePath(projectRoot || this.projectRoot);
+    
+    while (this.normalizePath(currentDir) !== stopAtRoot && currentDir !== path.dirname(currentDir)) {
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        return packageJsonPath;
+      }
+      currentDir = path.dirname(currentDir);
+    }
+    
+    return null;
   }
 
   /**

@@ -4,19 +4,78 @@ import * as fs from 'fs';
 import { Repository, Node, Relation, Identity, Function } from '../types/uniast';
 import { ModuleParser } from './ModuleParser';
 import { TsConfigCache } from '../utils/tsconfig-cache';
+import { MonorepoUtils } from '../utils/monorepo';
 
 export class RepositoryParser {
-  private project: Project;
-  private moduleParser: ModuleParser;
+  private project?: Project;
+  private moduleParser?: ModuleParser;
   private tsConfigCache: TsConfigCache;
+  private projectRoot: string;
+  private tsConfigPath?: string;
 
   constructor(projectRoot: string, tsConfigPath?: string) {
     this.tsConfigCache = TsConfigCache.getInstance();
+    this.projectRoot = projectRoot;
+    this.tsConfigPath = tsConfigPath;
+  }
 
+  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Repository> {
+    const absolutePath = path.resolve(repoPath);
     
-    let configPath =  path.join(projectRoot, 'tsconfig.json');
+    const repository: Repository = {
+      ASTVersion: "v0.1.3",
+      id: path.basename(absolutePath),
+      Modules: {},
+      Graph: {}
+    };
 
-    // If a custom tsconfig path is provided, use it
+    const isMonorepo = MonorepoUtils.isMonorepo(absolutePath);
+
+    if (isMonorepo) {
+      const packages = MonorepoUtils.getMonorepoPackages(absolutePath);
+      console.log(`Monorepo detected. Found ${packages.length} packages.`);
+
+      for (const pkg of packages) {
+        const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
+        try {
+          let project: Project;
+          if (fs.existsSync(packageTsConfigPath)) {
+            console.log(`Parsing package ${pkg.name || pkg.path} with tsconfig ${packageTsConfigPath}`);
+            project = new Project({
+              tsConfigFilePath: packageTsConfigPath,
+              compilerOptions: {
+                allowJs: true,
+                skipLibCheck: true,
+                forceConsistentCasingInFileNames: true
+              }
+            });
+          } else {
+            console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, using default configuration.`);
+            project = this.createProjectWithDefaultConfig();
+          }
+          
+          const moduleParser = new ModuleParser(project, this.projectRoot);
+          const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
+          repository.Modules[module.Name] = module;
+        } catch (error) {
+          console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
+        }
+      }
+    } else {
+      console.log('Single project detected.');
+      this.project = this.createProjectForSingleRepo(this.projectRoot, this.tsConfigPath);
+      this.moduleParser = new ModuleParser(this.project, this.projectRoot);
+      const module = await this.moduleParser.parseModule(absolutePath, '.', options);
+      repository.Modules[module.Name] = module;
+    }
+
+    this.buildGlobalGraph(repository);
+    return repository;
+  }
+
+  private createProjectForSingleRepo(projectRoot: string, tsConfigPath?: string): Project {
+    let configPath = path.join(projectRoot, 'tsconfig.json');
+
     if (tsConfigPath) {
       let absoluteTsConfigPath = tsConfigPath;
       if (!path.isAbsolute(absoluteTsConfigPath)) {
@@ -27,8 +86,7 @@ export class RepositoryParser {
     }
         
     if (fs.existsSync(configPath)) {
-      // if tsconfig.json exists, use it to configure the project
-      this.project = new Project({
+      const project = new Project({
         tsConfigFilePath: configPath,
         compilerOptions: {
           allowJs: true,
@@ -62,8 +120,7 @@ export class RepositoryParser {
             console.warn("parse tsconfig warning:", err.messageText)
           });
         }
-        this.project.addSourceFilesAtPaths(parsedConfig.fileNames);
-        // Get references
+        project.addSourceFilesAtPaths(parsedConfig.fileNames);
         const references = parsedConfig.projectReferences;
         if (!references) {
           continue;
@@ -78,62 +135,42 @@ export class RepositoryParser {
           }
         }
       }
+      return project;
     } else {
-      // if tsconfig.json does not exist, use default configuration
-      this.project = new Project({
-        compilerOptions: {
-          target: 99,
-          module: 1,
-          allowJs: true,
-          checkJs: false,
-          skipLibCheck: true,
-          skipDefaultLibCheck: true,
-          strict: false,
-          noImplicitAny: false,
-          strictNullChecks: false,
-          strictFunctionTypes: false,
-          strictBindCallApply: false,
-          strictPropertyInitialization: false,
-          noImplicitReturns: false,
-          noFallthroughCasesInSwitch: false,
-          noUncheckedIndexedAccess: false,
-          noImplicitOverride: false,
-          noPropertyAccessFromIndexSignature: false,
-          allowUnusedLabels: false,
-          allowUnreachableCode: false,
-          exactOptionalPropertyTypes: false,
-          noImplicitThis: false,
-          alwaysStrict: false,
-          noImplicitUseStrict: false,
-          forceConsistentCasingInFileNames: true
-        }
-      });
+      return this.createProjectWithDefaultConfig();
     }
-    
-    this.moduleParser = new ModuleParser(this.project, projectRoot);
   }
 
-
-  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[] } = {}): Promise<Repository> {
-    const absolutePath = path.resolve(repoPath);
-    
-    const repository: Repository = {
-      ASTVersion: "v0.1.3",
-      id: path.basename(absolutePath),
-      Modules: {},
-      Graph: {}
-    };
-
-    // Parse main module only
-    const mainModule = await this.moduleParser.parseModule(absolutePath, '.', options);
-    repository.Modules[mainModule.Name] = mainModule;
-
-    // Build global symbol graph
-    this.buildGlobalGraph(repository);
-
-    return repository;
+  private createProjectWithDefaultConfig(): Project {
+    return new Project({
+      compilerOptions: {
+        target: 99,
+        module: 1,
+        allowJs: true,
+        checkJs: false,
+        skipLibCheck: true,
+        skipDefaultLibCheck: true,
+        strict: false,
+        noImplicitAny: false,
+        strictNullChecks: false,
+        strictFunctionTypes: false,
+        strictBindCallApply: false,
+        strictPropertyInitialization: false,
+        noImplicitReturns: false,
+        noFallthroughCasesInSwitch: false,
+        noUncheckedIndexedAccess: false,
+        noImplicitOverride: false,
+        noPropertyAccessFromIndexSignature: false,
+        allowUnusedLabels: false,
+        allowUnreachableCode: false,
+        exactOptionalPropertyTypes: false,
+        noImplicitThis: false,
+        alwaysStrict: false,
+        noImplicitUseStrict: false,
+        forceConsistentCasingInFileNames: true
+      }
+    });
   }
-
 
   private buildGlobalGraph(repository: Repository): void {
     // First pass: Create all nodes from functions, types, and variables
