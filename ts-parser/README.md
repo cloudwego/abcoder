@@ -37,6 +37,15 @@ See `./index.ts` for more information.
 
 4. If the repository you're analyzing is too large, you may need to adjust Node.js's maximum memory allocation.
 
+## Terminology
+
+**Package vs Module**: In JavaScript/TypeScript terminology, a "Package" typically refers to an npm package (defined by `package.json`). However, in our UniAST output, what JavaScript/TypeScript calls a "Package" corresponds to a "Module" in the UniAST structure. This means:
+
+- **TypeScript/JavaScript Package** (npm package with `package.json`) → **UniAST Module**
+- **TypeScript/JavaScript Module** (individual `.ts`/`.js` files) → **UniAST Package**
+
+This terminology mapping is used consistently throughout the parser to align with the UniAST specification, but it may initially seem counterintuitive to developers familiar with JavaScript/TypeScript conventions.
+
 
 ## Some known issues
 
