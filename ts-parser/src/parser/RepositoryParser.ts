@@ -37,10 +37,11 @@ export class RepositoryParser {
 
       for (const pkg of packages) {
         const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
-        if (fs.existsSync(packageTsConfigPath)) {
-          console.log(`Parsing package ${pkg.name || pkg.path} with tsconfig ${packageTsConfigPath}`);
-          try {
-            const project = new Project({
+        try {
+          let project: Project;
+          if (fs.existsSync(packageTsConfigPath)) {
+            console.log(`Parsing package ${pkg.name || pkg.path} with tsconfig ${packageTsConfigPath}`);
+            project = new Project({
               tsConfigFilePath: packageTsConfigPath,
               compilerOptions: {
                 allowJs: true,
@@ -48,14 +49,16 @@ export class RepositoryParser {
                 forceConsistentCasingInFileNames: true
               }
             });
-            const moduleParser = new ModuleParser(project, this.projectRoot);
-            const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
-            repository.Modules[module.Name] = module;
-          } catch (error) {
-            console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
+          } else {
+            console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, using default configuration.`);
+            project = this.createProjectWithDefaultConfig();
           }
-        } else {
-           console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
+          
+          const moduleParser = new ModuleParser(project, this.projectRoot);
+          const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
+          repository.Modules[module.Name] = module;
+        } catch (error) {
+          console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
         }
       }
     } else {
@@ -134,35 +137,39 @@ export class RepositoryParser {
       }
       return project;
     } else {
-      return new Project({
-        compilerOptions: {
-          target: 99,
-          module: 1,
-          allowJs: true,
-          checkJs: false,
-          skipLibCheck: true,
-          skipDefaultLibCheck: true,
-          strict: false,
-          noImplicitAny: false,
-          strictNullChecks: false,
-          strictFunctionTypes: false,
-          strictBindCallApply: false,
-          strictPropertyInitialization: false,
-          noImplicitReturns: false,
-          noFallthroughCasesInSwitch: false,
-          noUncheckedIndexedAccess: false,
-          noImplicitOverride: false,
-          noPropertyAccessFromIndexSignature: false,
-          allowUnusedLabels: false,
-          allowUnreachableCode: false,
-          exactOptionalPropertyTypes: false,
-          noImplicitThis: false,
-          alwaysStrict: false,
-          noImplicitUseStrict: false,
-          forceConsistentCasingInFileNames: true
-        }
-      });
+      return this.createProjectWithDefaultConfig();
     }
+  }
+
+  private createProjectWithDefaultConfig(): Project {
+    return new Project({
+      compilerOptions: {
+        target: 99,
+        module: 1,
+        allowJs: true,
+        checkJs: false,
+        skipLibCheck: true,
+        skipDefaultLibCheck: true,
+        strict: false,
+        noImplicitAny: false,
+        strictNullChecks: false,
+        strictFunctionTypes: false,
+        strictBindCallApply: false,
+        strictPropertyInitialization: false,
+        noImplicitReturns: false,
+        noFallthroughCasesInSwitch: false,
+        noUncheckedIndexedAccess: false,
+        noImplicitOverride: false,
+        noPropertyAccessFromIndexSignature: false,
+        allowUnusedLabels: false,
+        allowUnreachableCode: false,
+        exactOptionalPropertyTypes: false,
+        noImplicitThis: false,
+        alwaysStrict: false,
+        noImplicitUseStrict: false,
+        forceConsistentCasingInFileNames: true
+      }
+    });
   }
 
   private buildGlobalGraph(repository: Repository): void {
