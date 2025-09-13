@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { Repository, Node, Relation, Identity, Function } from '../types/uniast';
 import { ModuleParser } from './ModuleParser';
 import { TsConfigCache } from '../utils/tsconfig-cache';
-import { MonorepoUtils } from '../utils/monorepo';
+import { MonorepoUtils, MonorepoPackage } from '../utils/monorepo';
 
 export class RepositoryParser {
   private project?: Project;
@@ -19,102 +19,36 @@ export class RepositoryParser {
     this.tsConfigPath = tsConfigPath;
   }
 
-  async parseRepository(repoPath: string, options: { loadExternalSymbols?: boolean, noDist?: boolean, srcPatterns?: string[], monorepoMode?: 'combined' | 'separate' } = {}): Promise<Repository> {
+  async parseRepository(
+    repoPath: string,
+    options: {
+      loadExternalSymbols?: boolean;
+      noDist?: boolean;
+      srcPatterns?: string[];
+      monorepoMode?: 'combined' | 'separate';
+    } = {}
+  ): Promise<Repository> {
     const absolutePath = path.resolve(repoPath);
-    
+
     const repository: Repository = {
-      ASTVersion: "v0.1.3",
+      ASTVersion: 'v0.1.3',
       id: path.basename(absolutePath),
       Modules: {},
-      Graph: {}
+      Graph: {},
     };
 
     const isMonorepo = MonorepoUtils.isMonorepo(absolutePath);
 
     if (isMonorepo) {
       const packages = MonorepoUtils.getMonorepoPackages(absolutePath);
- 
+
       const monorepoMode = options.monorepoMode || 'combined';
       // Using separate output mode - each package will be written to individual JSON files
       if (monorepoMode === 'separate') {
-
-        for (const pkg of packages) {
-          const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
-          if (fs.existsSync(packageTsConfigPath)) {
-            console.log(`Parsing package ${pkg.name || pkg.path} with tsconfig ${packageTsConfigPath}`);
-            try {
-              const project = new Project({
-                tsConfigFilePath: packageTsConfigPath,
-                compilerOptions: {
-                  allowJs: true,
-                  skipLibCheck: true,
-                  forceConsistentCasingInFileNames: true
-                }
-              });
-              const moduleParser = new ModuleParser(project, this.projectRoot);
-              const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
-              
-              // Add module to main repository for combined output
-              repository.Modules[module.Name] = module;
-              
-              // Create a separate repository for each package
-              const packageRepository: Repository = {
-                ASTVersion: "v0.1.3",
-                id: pkg.name || path.basename(pkg.absolutePath),
-                Modules: { [module.Name]: module },
-                Graph: {}
-              };
-              
-              this.buildGlobalGraph(packageRepository);
-              
-              // Write JSON file for this package
-              const sanitizedPackageName = (pkg.name || path.basename(pkg.absolutePath)).replace(/[\/\\:*?"<>|@]/g, '_');
-              
-              // Create output directory if it doesn't exist
-              const outputDir = path.join(process.cwd(), 'output');
-              if (!fs.existsSync(outputDir)) {
-                fs.mkdirSync(outputDir, { recursive: true });
-              }
-              
-              const outputPath = path.join(outputDir, `${sanitizedPackageName}.json`);
-              const jsonOutput = JSON.stringify(packageRepository, null, 2);
-              fs.writeFileSync(outputPath, jsonOutput);
-              
-              console.log(`Package ${pkg.name || pkg.path} written to: ${outputPath}`);
-            } catch (error) {
-              console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
-            }
-          } else {
-             console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
-          }
-        }
-        
-        console.log(`All packages have been written to separate files`);
-        console.log(`Total packages processed: ${packages.length}`);
+        await this.parseMonorepoSeparateMode(packages, repository, options);
       } else {
         // Using combined output mode - all packages will be merged into one JSON file
-        for (const pkg of packages) {
-          const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
-          if (fs.existsSync(packageTsConfigPath)) {
-            try {
-              const project = new Project({
-                tsConfigFilePath: packageTsConfigPath,
-                compilerOptions: {
-                  allowJs: true,
-                  skipLibCheck: true,
-                  forceConsistentCasingInFileNames: true
-                }
-              });
-              const moduleParser = new ModuleParser(project, this.projectRoot);
-              const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
-              repository.Modules[module.Name] = module;
-            } catch (error) {
-              console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
-            }
-          } else {
-             console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
-          }
-        }
+        await this.parseMonorepoCombinedMode(packages, repository, options);
       }
     } else {
       console.log('Single project detected.');
@@ -139,15 +73,15 @@ export class RepositoryParser {
       configPath = absoluteTsConfigPath;
       this.tsConfigCache.setGlobalConfigPath(absoluteTsConfigPath);
     }
-        
+
     if (fs.existsSync(configPath)) {
       const project = new Project({
         tsConfigFilePath: configPath,
         compilerOptions: {
           allowJs: true,
           skipLibCheck: true,
-          forceConsistentCasingInFileNames: true
-        }
+          forceConsistentCasingInFileNames: true,
+        },
       });
       const tsConfigQueue: string[] = [configPath];
       const processedTsConfigs = new Set<string>();
@@ -158,11 +92,9 @@ export class RepositoryParser {
         }
         processedTsConfigs.add(currentTsConfig);
 
-        const tsConfig_ = ts.readConfigFile(
-          currentTsConfig, ts.sys.readFile
-        );
-        if(tsConfig_.error) {
-          console.warn("parse tsconfig error", tsConfig_.error)
+        const tsConfig_ = ts.readConfigFile(currentTsConfig, ts.sys.readFile);
+        if (tsConfig_.error) {
+          console.warn('parse tsconfig error', tsConfig_.error);
           continue;
         }
         const parsedConfig = ts.parseJsonConfigFileContent(
@@ -170,9 +102,9 @@ export class RepositoryParser {
           ts.sys,
           path.dirname(currentTsConfig)
         );
-        if(parsedConfig.errors.length > 0) {
+        if (parsedConfig.errors.length > 0) {
           parsedConfig.errors.forEach(err => {
-            console.warn("parse tsconfig warning:", err.messageText)
+            console.warn('parse tsconfig warning:', err.messageText);
           });
         }
         project.addSourceFilesAtPaths(parsedConfig.fileNames);
@@ -184,7 +116,7 @@ export class RepositoryParser {
           const resolvedRef = ts.resolveProjectReferencePath(ref);
           if (resolvedRef.length > 0) {
             const refPath = path.resolve(path.dirname(currentTsConfig), resolvedRef);
-            if(fs.existsSync(refPath)) {
+            if (fs.existsSync(refPath)) {
               tsConfigQueue.push(refPath);
             }
           }
@@ -192,35 +124,39 @@ export class RepositoryParser {
       }
       return project;
     } else {
-      return new Project({
-        compilerOptions: {
-          target: 99,
-          module: 1,
-          allowJs: true,
-          checkJs: false,
-          skipLibCheck: true,
-          skipDefaultLibCheck: true,
-          strict: false,
-          noImplicitAny: false,
-          strictNullChecks: false,
-          strictFunctionTypes: false,
-          strictBindCallApply: false,
-          strictPropertyInitialization: false,
-          noImplicitReturns: false,
-          noFallthroughCasesInSwitch: false,
-          noUncheckedIndexedAccess: false,
-          noImplicitOverride: false,
-          noPropertyAccessFromIndexSignature: false,
-          allowUnusedLabels: false,
-          allowUnreachableCode: false,
-          exactOptionalPropertyTypes: false,
-          noImplicitThis: false,
-          alwaysStrict: false,
-          noImplicitUseStrict: false,
-          forceConsistentCasingInFileNames: true
-        }
-      });
+      return this.createProjectWithDefaultConfig();
     }
+  }
+
+  private createProjectWithDefaultConfig(): Project {
+    return new Project({
+      compilerOptions: {
+        target: 99,
+        module: 1,
+        allowJs: true,
+        checkJs: false,
+        skipLibCheck: true,
+        skipDefaultLibCheck: true,
+        strict: false,
+        noImplicitAny: false,
+        strictNullChecks: false,
+        strictFunctionTypes: false,
+        strictBindCallApply: false,
+        strictPropertyInitialization: false,
+        noImplicitReturns: false,
+        noFallthroughCasesInSwitch: false,
+        noUncheckedIndexedAccess: false,
+        noImplicitOverride: false,
+        noPropertyAccessFromIndexSignature: false,
+        allowUnusedLabels: false,
+        allowUnreachableCode: false,
+        exactOptionalPropertyTypes: false,
+        noImplicitThis: false,
+        alwaysStrict: false,
+        noImplicitUseStrict: false,
+        forceConsistentCasingInFileNames: true,
+      },
+    });
   }
 
   private buildGlobalGraph(repository: Repository): void {
@@ -234,13 +170,13 @@ export class RepositoryParser {
             ModPath: func.ModPath,
             PkgPath: func.PkgPath,
             Name: func.Name,
-            Type: 'FUNC'
+            Type: 'FUNC',
           };
-          
+
           // Add dependencies from function
           node.Dependencies = this.extractDependenciesFromFunction(func, repository);
           node.References = this.extractReferencesFromFunction(func, repository);
-          
+
           repository.Graph[nodeKey] = node;
         }
 
@@ -251,14 +187,14 @@ export class RepositoryParser {
             ModPath: type.ModPath,
             PkgPath: type.PkgPath,
             Name: type.Name,
-            Type: 'TYPE'
+            Type: 'TYPE',
           };
-          
+
           // Add implements relationships
           if (type.Implements && type.Implements.length > 0) {
             node.Implements = type.Implements.map(impl => this.createRelation(impl, 'Implement'));
           }
-          
+
           repository.Graph[nodeKey] = node;
         }
 
@@ -269,19 +205,21 @@ export class RepositoryParser {
             ModPath: variable.ModPath,
             PkgPath: variable.PkgPath,
             Name: variable.Name,
-            Type: 'VAR'
+            Type: 'VAR',
           };
-          
+
           // Add dependencies from variable
           if (variable.Dependencies && variable.Dependencies.length > 0) {
-            node.Dependencies = variable.Dependencies.map(dep => this.createRelation(dep, 'Dependency'));
+            node.Dependencies = variable.Dependencies.map(dep =>
+              this.createRelation(dep, 'Dependency')
+            );
           }
-          
+
           // Add groups from variable
           if (variable.Groups && variable.Groups.length > 0) {
             node.Groups = variable.Groups.map(group => this.createRelation(group, 'Group'));
           }
-          
+
           repository.Graph[nodeKey] = node;
         }
       }
@@ -300,68 +238,68 @@ export class RepositoryParser {
       ModPath: identity.ModPath,
       PkgPath: identity.PkgPath,
       Name: identity.Name,
-      Kind: kind
+      Kind: kind,
     };
   }
 
   private extractDependenciesFromFunction(func: Function, _repository: Repository): Relation[] {
     const dependencies: Relation[] = [];
-    
+
     // Extract from function calls
     if (func.FunctionCalls) {
       for (const call of func.FunctionCalls) {
         dependencies.push(this.createRelation(call, 'Dependency'));
       }
     }
-    
+
     // Extract from method calls
     if (func.MethodCalls) {
       for (const call of func.MethodCalls) {
         dependencies.push(this.createRelation(call, 'Dependency'));
       }
     }
-    
+
     // Extract from types
     if (func.Types) {
       for (const type of func.Types) {
         dependencies.push(this.createRelation(type, 'Dependency'));
       }
     }
-    
+
     // Extract from global variables
     if (func.GlobalVars) {
       for (const globalVar of func.GlobalVars) {
         dependencies.push(this.createRelation(globalVar, 'Dependency'));
       }
     }
-    
+
     return dependencies;
   }
 
   private extractReferencesFromFunction(func: Function, _repository: Repository): Relation[] {
     const references: Relation[] = [];
-    
+
     // Extract from parameters
     if (func.Params) {
       for (const param of func.Params) {
         references.push(this.createRelation(param, 'Dependency'));
       }
     }
-    
+
     // Extract from results
     if (func.Results) {
       for (const result of func.Results) {
         references.push(this.createRelation(result, 'Dependency'));
       }
     }
-    
+
     return references;
   }
 
   private buildReverseRelationships(repository: Repository): void {
     // Build a map of all relations to create reverse references
     const relationMap = new Map<string, Map<string, Relation[]>>();
-    
+
     // Collect all relations
     for (const [nodeKey, node] of Object.entries(repository.Graph)) {
       if (node.Dependencies) {
@@ -377,7 +315,7 @@ export class RepositoryParser {
         }
       }
     }
-    
+
     // Add reverse references
     for (const [targetKey, referringNodes] of relationMap) {
       if (repository.Graph[targetKey]) {
@@ -390,7 +328,7 @@ export class RepositoryParser {
                 ModPath: sourceNode.ModPath,
                 PkgPath: sourceNode.PkgPath,
                 Name: sourceNode.Name,
-                Kind: 'Dependency'
+                Kind: 'Dependency',
               });
             } else {
               // Handle missing nodes with UNKNOWN type
@@ -398,7 +336,7 @@ export class RepositoryParser {
                 ModPath: relation.ModPath,
                 PkgPath: relation.PkgPath,
                 Name: relation.Name,
-                Kind: 'Dependency'
+                Kind: 'Dependency',
               });
             }
           }
@@ -410,30 +348,136 @@ export class RepositoryParser {
         const modPath = parts[0];
         const pkgPath = parts[1];
         const name = parts[2];
-        
+
         const missingNode: Node = {
           ModPath: modPath,
           PkgPath: pkgPath,
           Name: name,
-          Type: 'UNKNOWN'
+          Type: 'UNKNOWN',
         };
-        
+
         // Add references to the missing node
         const references: Relation[] = [];
-        for (const [sourceKey, ] of referringNodes) {
+        for (const [sourceKey] of referringNodes) {
           const sourceNode = repository.Graph[sourceKey];
           if (sourceNode) {
             references.push({
               ModPath: sourceNode.ModPath,
               PkgPath: sourceNode.PkgPath,
               Name: sourceNode.Name,
-              Kind: 'Dependency'
+              Kind: 'Dependency',
             });
           }
         }
         missingNode.References = references;
         repository.Graph[targetKey] = missingNode;
       }
+    }
+  }
+
+  /**
+   * Parse monorepo packages in separate mode - each package will be written to individual JSON files
+   */
+  private async parseMonorepoSeparateMode(
+    packages: MonorepoPackage[],
+    repository: Repository,
+    options: {
+      loadExternalSymbols?: boolean;
+      noDist?: boolean;
+      srcPatterns?: string[];
+      monorepoMode?: 'combined' | 'separate';
+    }
+  ): Promise<void> {
+    for (const pkg of packages) {
+      let project: Project;
+      const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
+      if (fs.existsSync(packageTsConfigPath)) {
+        console.log(`Parsing package ${pkg.name || pkg.path} with tsconfig ${packageTsConfigPath}`);
+        try {
+          project = new Project({
+            tsConfigFilePath: packageTsConfigPath,
+            compilerOptions: {
+              allowJs: true,
+              skipLibCheck: true,
+              forceConsistentCasingInFileNames: true,
+            },
+          });
+        } catch (error) {
+          console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
+          project = this.createProjectWithDefaultConfig();
+        }
+      } else {
+        console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
+        project = this.createProjectWithDefaultConfig();
+      }
+      const moduleParser = new ModuleParser(project, this.projectRoot);
+      const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
+      // Add module to main repository for combined output
+      repository.Modules[module.Name] = module;
+      // Create a separate repository for each package
+      const packageRepository: Repository = {
+        ASTVersion: 'v0.1.3',
+        id: pkg.name || path.basename(pkg.absolutePath),
+        Modules: { [module.Name]: module },
+        Graph: {},
+      };
+      this.buildGlobalGraph(packageRepository);
+      // Write JSON file for this package
+      const sanitizedPackageName = (pkg.name || path.basename(pkg.absolutePath)).replace(
+        /[\/\\:*?"<>|@]/g,
+        '_'
+      );
+      // Create output directory if it doesn't exist
+      const outputDir = path.join(process.cwd(), 'output');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      const outputPath = path.join(outputDir, `${sanitizedPackageName}.json`);
+      const jsonOutput = JSON.stringify(packageRepository, null, 2);
+      fs.writeFileSync(outputPath, jsonOutput);
+      console.log(`Package ${pkg.name || pkg.path} written to: ${outputPath}`);
+    }
+    console.log(`All packages have been written to separate files`);
+    console.log(`Total packages processed: ${packages.length}`);
+  }
+
+  /**
+   * Parse monorepo packages in combined mode - all packages will be merged into one JSON file
+   */
+  private async parseMonorepoCombinedMode(
+    packages: MonorepoPackage[],
+    repository: Repository,
+    options: {
+      loadExternalSymbols?: boolean;
+      noDist?: boolean;
+      srcPatterns?: string[];
+      monorepoMode?: 'combined' | 'separate';
+    }
+  ): Promise<void> {
+    for (const pkg of packages) {
+      let project: Project;
+      const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');
+      if (fs.existsSync(packageTsConfigPath)) {
+        try {
+          project = new Project({
+            tsConfigFilePath: packageTsConfigPath,
+            compilerOptions: {
+              allowJs: true,
+              skipLibCheck: true,
+              forceConsistentCasingInFileNames: true,
+            },
+          });
+        } catch (error) {
+          project = this.createProjectWithDefaultConfig();
+          console.warn(`Failed to parse package ${pkg.name || pkg.path}:`, error);
+        }
+      } else {
+        project = this.createProjectWithDefaultConfig();
+        console.log(`No tsconfig.json found for package ${pkg.name || pkg.path}, skipping.`);
+      }
+      const moduleParser = new ModuleParser(project, this.projectRoot);
+      const module = await moduleParser.parseModule(pkg.absolutePath, pkg.path, options);
+      repository.Modules[module.Name] = module;
     }
   }
 }
