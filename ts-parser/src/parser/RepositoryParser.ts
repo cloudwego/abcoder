@@ -69,7 +69,14 @@ export class RepositoryParser {
               
               // Write JSON file for this package
               const sanitizedPackageName = (pkg.name || path.basename(pkg.absolutePath)).replace(/[\/\\:*?"<>|@]/g, '_');
-              const outputPath = path.join(process.cwd(), `${sanitizedPackageName}.json`);
+              
+              // Create output directory if it doesn't exist
+              const outputDir = path.join(process.cwd(), 'output');
+              if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir, { recursive: true });
+              }
+              
+              const outputPath = path.join(outputDir, `${sanitizedPackageName}.json`);
               const jsonOutput = JSON.stringify(packageRepository, null, 2);
               fs.writeFileSync(outputPath, jsonOutput);
               
