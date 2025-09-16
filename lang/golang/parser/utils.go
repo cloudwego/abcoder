@@ -17,14 +17,17 @@ package parser
 import (
 	"bufio"
 	"bytes"
+	"container/list"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/types"
 	"io"
 	"os"
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/Knetic/govaluate"
 	. "github.com/cloudwego/abcoder/lang/uniast"
@@ -49,8 +52,84 @@ func (c cache) Visited(val interface{}) bool {
 	return ok
 }
 
+type cacheEntry struct {
+	key   string
+	value bool
+}
+
+// PackageCache 缓存 importPath 是否是 system package
+type PackageCache struct {
+	lock        sync.Mutex
+	cache       map[string]*list.Element
+	lru         *list.List
+	lruCapacity int
+}
+
+func NewPackageCache(lruCapacity int) *PackageCache {
+	return &PackageCache{
+		cache:       make(map[string]*list.Element),
+		lru:         list.New(),
+		lruCapacity: lruCapacity,
+	}
+}
+
+// get retrieves a value from the cache.
+func (pc *PackageCache) get(key string) (bool, bool) {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+	if elem, ok := pc.cache[key]; ok {
+		pc.lru.MoveToFront(elem)
+		return elem.Value.(*cacheEntry).value, true
+	}
+	return false, false
+}
+
+// set adds a value to the cache.
+func (pc *PackageCache) set(key string, value bool) {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+
+	if elem, ok := pc.cache[key]; ok {
+		pc.lru.MoveToFront(elem)
+		elem.Value.(*cacheEntry).value = value
+		return
+	}
+
+	if pc.lru.Len() >= pc.lruCapacity {
+		oldest := pc.lru.Back()
+		if oldest != nil {
+			pc.lru.Remove(oldest)
+			delete(pc.cache, oldest.Value.(*cacheEntry).key)
+		}
+	}
+
+	elem := pc.lru.PushFront(&cacheEntry{key: key, value: value})
+	pc.cache[key] = elem
+}
+
+// IsStandardPackage 检查一个包是否为标准库，并使用内部缓存。
+func (pc *PackageCache) IsStandardPackage(path string) bool {
+	if isStd, found := pc.get(path); found {
+		return isStd
+	}
+
+	pkg, err := build.Import(path, "", build.FindOnly)
+	if err != nil {
+		// Cannot find the package, assume it's not a standard package
+		pc.set(path, false)
+		return false
+	}
+
+	isStd := pkg.Goroot
+	pc.set(path, isStd)
+	return isStd
+}
+
+// stdlibCache 缓存 importPath 是否是 system package, 10000 个缓存
+var stdlibCache = NewPackageCache(10000)
+
 func isSysPkg(importPath string) bool {
-	return !strings.Contains(strings.Split(importPath, "/")[0], ".")
+	return stdlibCache.IsStandardPackage(importPath)
 }
 
 var (

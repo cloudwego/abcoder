@@ -21,7 +21,10 @@ import (
 	"go/token"
 	"go/types"
 	"slices"
+	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
@@ -194,4 +197,91 @@ var f func() (*http.Request, error)`,
 			require.Equal(t, tc.expectedIsNamed, isNamed, "isNamed mismatch")
 		})
 	}
+}
+
+func resetGlobals() {
+	// 重置包缓存
+	stdlibCache = NewPackageCache(10000)
+}
+
+func Test_isSysPkg(t *testing.T) {
+	// 测试在 `go env GOROOT` 可以成功执行时的行为
+	t.Run("Group: Happy Path - GOROOT is found", func(t *testing.T) {
+		resetGlobals()
+
+		testCases := []struct {
+			name       string
+			importPath string
+			want       bool
+		}{
+			{"standard library package", "fmt", true},
+			{"nested standard library package", "net/http", true},
+			{"third-party package", "github.com/google/uuid", false},
+			{"extended library package", "golang.org/x/sync/errgroup", false},
+			{"local-like package name", "myproject/utils", false},
+			{"non-existent package", "non/existent/package", false},
+			{"root-level package with dot", "gopkg.in/yaml.v2", false},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				if got := isSysPkg(tc.importPath); got != tc.want {
+					t.Errorf("isSysPkg(%q) = %v, want %v", tc.importPath, got, tc.want)
+				}
+			})
+		}
+	})
+
+	// 测试并发调用时的行为
+	t.Run("Group: Concurrency Test", func(t *testing.T) {
+		resetGlobals()
+		var wg sync.WaitGroup
+		numGoroutines := 50
+		numOpsPerGoroutine := 100
+
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < numOpsPerGoroutine; j++ {
+					isSysPkg("fmt")
+					isSysPkg("github.com/cloudwego/abcoder")
+					isSysPkg("net/http")
+					isSysPkg("a/b/c")
+				}
+			}()
+		}
+		wg.Wait()
+	})
+
+	// 测试 LRU 缓存的驱逐策略
+	t.Run("Group: LRU Eviction Test", func(t *testing.T) {
+		resetGlobals()
+		stdlibCache.lruCapacity = 2
+
+		// 1. 填满 Cache
+		isSysPkg("fmt")
+		isSysPkg("os")
+		assert.Equal(t, 2, stdlibCache.lru.Len(), "Cache should be full")
+
+		// 2. 访问 "fmt" 使它最近被使用
+		isSysPkg("fmt")
+		assert.Equal(t, "fmt", stdlibCache.lru.Front().Value.(*cacheEntry).key, "fmt should be the most recently used")
+
+		// 3. 访问 "net" 使它最近被使用
+		isSysPkg("net") // "os" should be evicted
+		assert.Equal(t, 2, stdlibCache.lru.Len(), "Cache size should remain at capacity")
+
+		// 4. "fmt" 应该在 Cache 中
+		_, foundFmt := stdlibCache.get("fmt")
+		assert.True(t, foundFmt, "fmt should still be in the cache")
+
+		// 5. "net" 应该在 Cache 中
+		_, foundNet := stdlibCache.get("net")
+		assert.True(t, foundNet, "net should be in the cache")
+
+		// 6. "os" 不应该在 Cache 中
+		_, foundOs := stdlibCache.get("os")
+		assert.False(t, foundOs, "os should have been evicted from the cache")
+	})
 }
