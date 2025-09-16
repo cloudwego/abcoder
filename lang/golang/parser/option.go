@@ -23,6 +23,7 @@ import (
 type Options struct {
 	ReferCodeDepth int
 	Excludes       []string
+	Includes       []string
 	CollectComment bool
 	NeedTest       bool
 	LoadByPackages bool

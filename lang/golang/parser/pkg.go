@@ -199,7 +199,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				continue
 			}
 			filePath := pkg.GoFiles[idx]
-			for _, exclude := range p.exclues {
+			for _, exclude := range p.excludes {
 				if exclude.MatchString(filePath) {
 					fmt.Fprintf(os.Stderr, "skip file %s\n", filePath)
 					continue next_file
