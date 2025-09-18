@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
@@ -37,29 +38,34 @@ type LSPClient struct {
 	tokenModifiers         []string
 	hasSemanticTokensRange bool
 	files                  map[DocumentURI]*TextDocumentItem
+	provider               LanguageServiceProvider
 	ClientOptions
 }
 
 type ClientOptions struct {
 	Server string
 	uniast.Language
-	Verbose bool
+	Verbose               bool
+	InitializationOptions interface{}
 }
 
 func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientOptions) (*LSPClient, error) {
 	// launch golang LSP server
-	svr, err := startLSPSever(opts.Server)
+	svr, err := startLSPSever(opts.Server, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	cli, err := initLSPClient(context.Background(), svr, NewURI(repo), opts.Verbose)
+	cli, err := initLSPClient(context.Background(), svr, NewURI(repo), opts.Verbose, opts.InitializationOptions)
 	if err != nil {
 		return nil, err
 	}
 
 	cli.ClientOptions = opts
 	cli.files = make(map[DocumentURI]*TextDocumentItem)
+
+	cli.provider = GetProvider(opts.Language)
+	cli.Verbose = opts.Verbose
 
 	if openfile != "" {
 		_, err := cli.DidOpen(context.Background(), NewURI(openfile))
@@ -110,7 +116,13 @@ type initializeResult struct {
 	Capabilities interface{} `json:"capabilities,omitempty"`
 }
 
-func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI, verbose bool) (*LSPClient, error) {
+func (c *LSPClient) InitFiles() {
+	if c.files == nil {
+		c.files = make(map[DocumentURI]*TextDocumentItem)
+	}
+}
+
+func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI, verbose bool, InitializationOptions interface{}) (*LSPClient, error) {
 	h := newLSPHandler()
 	stream := jsonrpc2.NewBufferedStream(svr, jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, h)
@@ -124,18 +136,25 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 
 	// NOTICE: some features need to be enabled explicitly
 	cs := map[string]interface{}{
+		"workspace": map[string]interface{}{
+			"symbol": map[string]interface{}{
+				"dynamicRegistration": true,
+			},
+		},
 		"documentSymbol": map[string]interface{}{
 			"hierarchicalDocumentSymbolSupport": true,
 		},
 	}
 
 	initParams := initializeParams{
-		ProcessID:    os.Getpid(),
-		RootURI:      lsp.DocumentURI(dir),
-		Capabilities: cs,
-		Trace:        lsp.Trace(trace),
-		ClientInfo:   lsp.ClientInfo{Name: "vscode"},
+		ProcessID:             os.Getpid(),
+		RootURI:               lsp.DocumentURI(dir),
+		Capabilities:          cs,
+		Trace:                 lsp.Trace(trace),
+		ClientInfo:            lsp.ClientInfo{Name: "vscode"},
+		InitializationOptions: InitializationOptions,
 	}
+
 	var initResult initializeResult
 	if err := conn.Call(ctx, "initialize", initParams, &initResult); err != nil {
 		return nil, err
@@ -215,9 +234,16 @@ func (rwc rwc) Close() error {
 }
 
 // start a LSP process and return its io
-func startLSPSever(path string) (io.ReadWriteCloser, error) {
-	// Launch rust-analyzer
-	cmd := exec.Command(path)
+func startLSPSever(path string, opts ClientOptions) (io.ReadWriteCloser, error) {
+
+	var cmd *exec.Cmd
+	if uniast.Java == opts.Language {
+		parts := strings.Fields(path)
+		cmd = exec.Command(parts[0], parts[1:]...)
+	} else {
+		// Launch rust-analyzer
+		cmd = exec.Command(path)
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

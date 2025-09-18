@@ -28,6 +28,10 @@ type CxxSpec struct {
 	repo string
 }
 
+func (c *CxxSpec) ProtectedSymbolKinds() []lsp.SymbolKind {
+	return []lsp.SymbolKind{}
+}
+
 func NewCxxSpec() *CxxSpec {
 	return &CxxSpec{}
 }
@@ -51,7 +55,7 @@ func (c *CxxSpec) WorkSpace(root string) (map[string]string, error) {
 // returns: modname, pathpath, error
 // Multiple symbols with the same name could occur (for example in the Linux kernel).
 // The identify is mod::pkg::name. So we use the pkg (the file name) to distinguish them.
-func (c *CxxSpec) NameSpace(path string) (string, string, error) {
+func (c *CxxSpec) NameSpace(path string, file *uniast.File) (string, string, error) {
 	// external lib: only standard library (system headers), in /usr/
 	if !strings.HasPrefix(path, c.repo) {
 		if strings.HasPrefix(path, "/usr") {

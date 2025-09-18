@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cloudwego/abcoder/lang/register"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/collect"
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/golang/parser"
+	"github.com/cloudwego/abcoder/lang/java"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
@@ -45,6 +47,8 @@ type ParseOptions struct {
 	// specify the repo id
 	RepoID string
 
+	LspOptions map[string]string
+
 	// TS options
 	// tsconfig string
 	TSParseOptions
@@ -61,7 +65,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	if !filepath.IsAbs(uri) {
 		uri, _ = filepath.Abs(uri)
 	}
-	l, lspPath, err := checkLSP(args.Language, args.LSP)
+	l, lspPath, err := checkLSP(args.Language, args.LSP, args)
 	if err != nil {
 		return nil, err
 	}
@@ -74,11 +78,13 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	if lspPath != "" {
 		// Initialize the LSP client
 		log.Info("start initialize LSP server %s...\n", lspPath)
+		register.RegisterProviders()
 		var err error
 		client, err = lsp.NewLSPClient(uri, openfile, opentime, lsp.ClientOptions{
-			Server:   lspPath,
-			Language: l,
-			Verbose:  args.Verbose,
+			Server:                lspPath,
+			Language:              l,
+			Verbose:               args.Verbose,
+			InitializationOptions: args.LspOptions,
 		})
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)
@@ -120,6 +126,8 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		openfile, wait = cxx.CheckRepo(repoPath)
 	case uniast.Python:
 		openfile, wait = python.CheckRepo(repoPath)
+	case uniast.Java:
+		openfile, wait = java.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -129,7 +137,7 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 	return
 }
 
-func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s string, err error) {
+func checkLSP(language uniast.Language, lspPath string, args ParseOptions) (l uniast.Language, s string, err error) {
 	switch language {
 	case uniast.Rust:
 		l, s = rust.GetDefaultLSP()
@@ -137,6 +145,8 @@ func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s st
 		l, s = cxx.GetDefaultLSP()
 	case uniast.Python:
 		l, s = python.GetDefaultLSP()
+	case uniast.Java:
+		l, s = java.GetDefaultLSP(args.LspOptions)
 	case uniast.Golang:
 		l = uniast.Golang
 		s = ""

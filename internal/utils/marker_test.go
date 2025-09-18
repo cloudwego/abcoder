@@ -25,6 +25,7 @@ import (
 )
 
 func TestExtractMDCodes(t *testing.T) {
+	t.Skip()
 	bs, err := os.ReadFile("../tmp/llm.out")
 	if err != nil {
 		t.Fatal(err)

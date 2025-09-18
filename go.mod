@@ -15,9 +15,11 @@ require (
 	github.com/invopop/jsonschema v0.13.0
 	github.com/mark3labs/mcp-go v0.34.0
 	github.com/pkg/errors v0.9.1
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/stretchr/testify v1.10.0
+	github.com/vifraa/gopom v1.0.0
 	golang.org/x/mod v0.24.0
 	golang.org/x/tools v0.32.0
 )

@@ -24,6 +24,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
+	"github.com/cloudwego/abcoder/lang/utils"
 )
 
 type dependency struct {
@@ -38,6 +39,9 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	} else {
 		rel = filepath.Base(loc.URI.File())
 	}
+	if c.cli.GetFile(loc.URI) == nil {
+		return uniast.FileLine{}
+	}
 	text := c.cli.GetFile(loc.URI).Text
 	file_uri := string(loc.URI)
 	return uniast.FileLine{
@@ -51,6 +55,16 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 func newModule(name string, dir string, lang uniast.Language) *uniast.Module {
 	ret := uniast.NewModule(name, dir, lang)
 	return ret
+}
+
+func (c *Collector) ExportLocalFunction() map[Location]*DocumentSymbol {
+	if len(c.localFunc) == 0 {
+		c.localFunc = make(map[Location]*DocumentSymbol)
+		for symbol := range c.funcs {
+			c.localFunc[symbol.Location] = symbol
+		}
+	}
+	return c.localFunc
 }
 
 func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
@@ -85,7 +99,7 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 			continue
 		}
 
-		modpath, pkgpath, err := c.spec.NameSpace(fp)
+		modpath, pkgpath, err := c.spec.NameSpace(fp, f)
 		if err != nil {
 			continue
 		}
@@ -127,6 +141,9 @@ func (c *Collector) filterLocalSymbols() {
 				continue
 			}
 			if loc2.Include(loc1) {
+				if utils.Contains(c.spec.ProtectedSymbolKinds(), c.syms[loc1].Kind) {
+					break
+				}
 				delete(c.syms, loc1)
 				break
 			}
@@ -145,13 +162,35 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		e = errors.New("symbol is nil")
 		return
 	}
+
+	// 判断是否为本地符号
+	// 只有符号是“定义”，或者符号是“本地方法”时，才需要完整导出
+	// 其他情况（如外部引用、或对本地非顶层符号的引用）都只导出标识符
+	isDefinition := symbol.Role == DEFINITION
+	_, isLocalMethod := c.funcs[symbol]
+	_, isLocalSymbol := c.syms[symbol.Location]
+	if !isDefinition {
+		if isLocalSymbol {
+			//引用类型符号，把引用类型符号替换为local 符号
+			symbol = c.syms[symbol.Location]
+		} else {
+			if symbol.Kind == SKFunction || symbol.Kind == SKMethod {
+				documentSymbol := c.ExportLocalFunction()[symbol.Location]
+				if documentSymbol != nil {
+					symbol = documentSymbol
+				}
+			}
+
+		}
+	}
+
 	if id, ok := visited[symbol]; ok {
 		return id, nil
 	}
 
 	// Check NeedStdSymbol
 	file := symbol.Location.URI.File()
-	mod, path, err := c.spec.NameSpace(file)
+	mod, path, err := c.spec.NameSpace(file, c.files[file])
 	if err != nil {
 		e = err
 		return
@@ -199,6 +238,14 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 
 	content := symbol.Text
 	public := c.spec.IsPublicSymbol(*symbol)
+
+	if !isDefinition && !isLocalMethod && !isLocalSymbol {
+		defs, err := c.cli.Definition(context.Background(), symbol.Location.URI, symbol.Location.Range.Start)
+		if err != nil || len(defs) == 0 {
+			// 意味着引用为外部符号，LSP 无法查询到符号定位
+			return id, err
+		}
+	}
 
 	// map receiver to methods
 	receivers := make(map[*DocumentSymbol][]*DocumentSymbol, len(c.funcs)/4)
@@ -343,6 +390,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				switch dep.Symbol.Kind {
 				case SKStruct, SKTypeParameter, SKInterface, SKEnum, SKClass:
 					obj.SubStruct = uniast.InsertDependency(obj.SubStruct, uniast.NewDependency(*depid, c.fileLine(dep.Location)))
+				case SKConstant, SKVariable:
 				default:
 					log.Error("dep symbol %s not collected for \n", dep.Symbol, id)
 				}
