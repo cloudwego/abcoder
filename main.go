@@ -61,6 +61,7 @@ Language:
    cxx          for c codes (cpp support is on the way)
    go           for golang codes
    python       for python codes
+   java         for java codes
 `
 
 func main() {
@@ -70,6 +71,7 @@ func main() {
 	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
 	flagOutput := flags.String("o", "", "Output path.")
 	flagLsp := flags.String("lsp", "", "Specify the language server path.")
+	javaHome := flags.String("java-home", "", "java home")
 
 	var opts lang.ParseOptions
 	flags.BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
@@ -125,6 +127,12 @@ func main() {
 		if flagLsp != nil {
 			opts.LSP = *flagLsp
 		}
+
+		lspOptions := make(map[string]string)
+		if javaHome != nil {
+			lspOptions["java.home"] = *javaHome
+		}
+		opts.LspOptions = lspOptions
 
 		out, err := lang.Parse(context.Background(), uri, opts)
 		if err != nil {

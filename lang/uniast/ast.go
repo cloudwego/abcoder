@@ -32,6 +32,7 @@ const (
 	Cxx        Language = "cxx"
 	Python     Language = "python"
 	TypeScript Language = "typescript"
+	Java       Language = "java"
 	Unknown    Language = ""
 )
 
@@ -45,6 +46,8 @@ func (l Language) String() string {
 		return "cxx"
 	case Python:
 		return "python"
+	case Java:
+		return "java"
 	default:
 		return string(l)
 	}
@@ -67,6 +70,8 @@ func NewLanguage(lang string) (l Language) {
 		return Python
 	case "ts", "typescript", "javascript", "js":
 		return TypeScript
+	case "java":
+		return Java
 	default:
 		return Unknown
 	}
