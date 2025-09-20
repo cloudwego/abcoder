@@ -124,6 +124,7 @@ ABCoder currently supports the following languages:
 | C        | ✅          | Coming Soon |
 | Python   | ✅          | Coming Soon |
 | TypeScript | ✅        | Coming Soon |
+| Java     | ✅          | Coming Soon |
 
 
 # Getting Involved
