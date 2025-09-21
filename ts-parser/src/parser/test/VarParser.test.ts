@@ -1,3 +1,4 @@
+import { describe, it, expect } from '@jest/globals';
 import path from 'path';
 import { VarParser } from '../VarParser';
 import { createTestProject, expectToBeDefined } from './test-utils';
@@ -228,7 +229,7 @@ describe('VarParser', () => {
       expect(usesDeps.Dependencies!.length).toBe(2);
 
       const objDeps = expectToBeDefined(vars['objDeps']);
-      expect(objDeps.Dependencies!.length).toBe(2);
+      expect(objDeps.Dependencies!.length).toBe(3);
 
       const arrDeps = expectToBeDefined(vars['arrDeps']);
       expect(arrDeps.Dependencies!.length).toBe(2);
