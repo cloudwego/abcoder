@@ -125,6 +125,51 @@ export function createEdenMonorepoProject(packages: Array<{
   return { rootDir, cleanup };
 }
 
+export function createEdenWorkspacesProject(packages: Array<{
+  path: string;
+  packageJson?: any;
+}>, workspaces: string[]): MonorepoTestProject {
+  const uniqueId = Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+  const rootDir = path.join(__dirname, 'temp', uniqueId);
+  
+  fs.mkdirSync(rootDir, { recursive: true });
+  
+  // Create Eden monorepo config with workspaces format
+  const edenConfig = {
+    $schema: 'https://sf-unpkg-src.bytedance.net/@ies/eden-monorepo@3.1.0/lib/monorepo.schema.json',
+    config: {
+      cache: false,
+      infraDir: '',
+      pnpmVersion: '9.14.4',
+      edenMonoVersion: '3.5.0',
+      autoInstallDepsForPlugins: false
+    },
+    workspaces
+  };
+  fs.writeFileSync(path.join(rootDir, 'eden.monorepo.json'), JSON.stringify(edenConfig, null, 2));
+  
+  // Create package directories and package.json files
+  packages.forEach(pkg => {
+    const packageDir = path.join(rootDir, pkg.path);
+    fs.mkdirSync(packageDir, { recursive: true });
+    
+    if (pkg.packageJson) {
+      fs.writeFileSync(
+        path.join(packageDir, 'package.json'),
+        JSON.stringify(pkg.packageJson, null, 2)
+      );
+    }
+  });
+  
+  const cleanup = () => {
+    if (fs.existsSync(rootDir)) {
+      fs.rmSync(rootDir, { recursive: true, force: true });
+    }
+  };
+  
+  return { rootDir, cleanup };
+}
+
 export function createPnpmWorkspaceProject(packages: Array<{
   path: string;
   packageJson?: any;

@@ -6,6 +6,7 @@ import {
   createEdenMonorepoProject, 
   createPnpmWorkspaceProject, 
   createLernaMonorepoProject,
+  createEdenWorkspacesProject,
 } from './test-utils';
 
 describe('MonorepoUtils', () => {
@@ -154,6 +155,360 @@ describe('MonorepoUtils', () => {
       consoleSpy.mockRestore();
       testProject.cleanup();
     });
+
+    it('should get packages from workspaces glob patterns', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'apps/web',
+          packageJson: {
+            name: '@test/web',
+            version: '1.0.0'
+          }
+        },
+        { 
+          path: 'apps/mobile',
+          packageJson: {
+            name: '@test/mobile',
+            version: '1.0.0'
+          }
+        },
+        { 
+          path: 'packages/core',
+          packageJson: {
+            name: '@test/core',
+            version: '1.0.0'
+          }
+        },
+        { 
+          path: 'packages/utils',
+          packageJson: {
+            name: '@test/utils',
+            version: '1.0.0'
+          }
+        }
+      ], [
+        'apps/*',
+        'packages/*'
+      ]);
+
+      const config: EdenMonorepoConfig = {
+        workspaces: [
+          'apps/*',
+          'packages/*'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(4);
+      
+      // Check apps
+      const webApp = result.find(pkg => pkg.name === '@test/web');
+      expect(webApp).toBeDefined();
+      expect(webApp?.path).toBe('apps/web');
+      expect(webApp?.shouldPublish).toBe(false);
+      
+      const mobileApp = result.find(pkg => pkg.name === '@test/mobile');
+      expect(mobileApp).toBeDefined();
+      expect(mobileApp?.path).toBe('apps/mobile');
+      
+      // Check packages
+      const corePackage = result.find(pkg => pkg.name === '@test/core');
+      expect(corePackage).toBeDefined();
+      expect(corePackage?.path).toBe('packages/core');
+      
+      const utilsPackage = result.find(pkg => pkg.name === '@test/utils');
+      expect(utilsPackage).toBeDefined();
+      expect(utilsPackage?.path).toBe('packages/utils');
+
+      testProject.cleanup();
+    });
+
+    it('should handle nested workspace patterns', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'packages/ulink/core',
+          packageJson: {
+            name: '@ulink/core',
+            version: '1.0.0'
+          }
+        },
+        { 
+          path: 'packages/ulink/utils',
+          packageJson: {
+            name: '@ulink/utils',
+            version: '1.0.0'
+          }
+        }
+      ], [
+        'packages/ulink/*'
+      ]);
+
+      const config: EdenMonorepoConfig = {
+        workspaces: [
+          'packages/ulink/*'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(2);
+      expect(result[0].path).toBe('packages/ulink/core');
+      expect(result[1].path).toBe('packages/ulink/utils');
+
+      testProject.cleanup();
+    });
+
+    it('should handle exact workspace paths', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'libs/shared',
+          packageJson: {
+            name: '@test/shared',
+            version: '1.0.0'
+          }
+        }
+      ], [
+        'libs/shared'
+      ]);
+
+      const config: EdenMonorepoConfig = {
+        workspaces: [
+          'libs/shared'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].path).toBe('libs/shared');
+      expect(result[0].name).toBe('@test/shared');
+      expect(result[0].shouldPublish).toBe(false);
+
+      testProject.cleanup();
+    });
+
+    it('should combine packages and workspaces formats', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'legacy/old-package',
+          packageJson: {
+            name: '@test/old-package',
+            version: '1.0.0'
+          }
+        },
+        { 
+          path: 'apps/new-app',
+          packageJson: {
+            name: '@test/new-app',
+            version: '1.0.0'
+          }
+        }
+      ], [
+        'apps/*'
+      ]);
+
+      const config: EdenMonorepoConfig = {
+        packages: [
+          { path: 'legacy/old-package', shouldPublish: true }
+        ],
+        workspaces: [
+          'apps/*'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(2);
+      
+      const oldPackage = result.find(pkg => pkg.name === '@test/old-package');
+      expect(oldPackage).toBeDefined();
+      expect(oldPackage?.shouldPublish).toBe(true);
+      
+      const newApp = result.find(pkg => pkg.name === '@test/new-app');
+      expect(newApp).toBeDefined();
+      expect(newApp?.shouldPublish).toBe(false);
+
+      testProject.cleanup();
+    });
+
+    it('should skip directories without package.json in workspaces', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'packages/with-package-json',
+          packageJson: {
+            name: '@test/with-package-json',
+            version: '1.0.0'
+          }
+        }
+      ], [
+        'packages/*'
+      ]);
+
+      // Create a directory without package.json
+      const withoutPackageJsonDir = path.join(testProject.rootDir, 'packages', 'without-package-json');
+      fs.mkdirSync(withoutPackageJsonDir, { recursive: true });
+
+      const config: EdenMonorepoConfig = {
+        workspaces: [
+          'packages/*'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('@test/with-package-json');
+
+      testProject.cleanup();
+    });
+
+    it('should handle non-existent workspace base directories', () => {
+      const testProject = createEdenWorkspacesProject([], []);
+
+      const config: EdenMonorepoConfig = {
+        workspaces: [
+          'non-existent/*'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(0);
+
+      testProject.cleanup();
+    });
+
+    it('should handle invalid package.json in workspace packages', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'packages/valid',
+          packageJson: {
+            name: '@test/valid',
+            version: '1.0.0'
+          }
+        }
+      ], [
+        'packages/*'
+      ]);
+
+      // Create a package with invalid package.json
+      const invalidDir = path.join(testProject.rootDir, 'packages', 'invalid');
+      fs.mkdirSync(invalidDir, { recursive: true });
+      fs.writeFileSync(path.join(invalidDir, 'package.json'), 'invalid json');
+
+      const config: EdenMonorepoConfig = {
+        workspaces: [
+          'packages/*'
+        ]
+      };
+
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(2);
+      expect(result.find(pkg => pkg.name === '@test/valid')).toBeDefined();
+      expect(result.find(pkg => pkg.path === 'packages/invalid')).toBeDefined();
+      expect(result.find(pkg => pkg.path === 'packages/invalid')?.name).toBeUndefined();
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to parse package.json'),
+        expect.any(Error)
+      );
+      
+      consoleSpy.mockRestore();
+      testProject.cleanup();
+    });
+
+    it('should handle complex workspace patterns like in real Eden config', () => {
+      const testProject = createEdenWorkspacesProject([
+        { 
+          path: 'apps/web',
+          packageJson: { name: '@test/web', version: '1.0.0' }
+        },
+        { 
+          path: 'packages/core',
+          packageJson: { name: '@test/core', version: '1.0.0' }
+        },
+        { 
+          path: 'packages/ulink/auth',
+          packageJson: { name: '@ulink/auth', version: '1.0.0' }
+        },
+        { 
+          path: 'packages/config/eslint/plugins/custom',
+          packageJson: { name: '@config/eslint-plugin-custom', version: '1.0.0' }
+        },
+        { 
+          path: 'libs/shared',
+          packageJson: { name: '@test/shared', version: '1.0.0' }
+        }
+      ], [
+        'apps/*',
+        'packages/*',
+        'packages/ulink/*',
+        'packages/config/eslint/plugins/*',
+        'libs/*'
+      ]);
+
+      const config: EdenMonorepoConfig = {
+        $schema: 'https://sf-unpkg-src.bytedance.net/@ies/eden-monorepo@3.1.0/lib/monorepo.schema.json',
+        config: {
+          cache: false,
+          infraDir: '',
+          pnpmVersion: '9.14.4',
+          edenMonoVersion: '3.5.0',
+          scriptName: {
+            test: ['test'],
+            build: ['build'],
+            start: ['build:watch', 'dev', 'start', 'serve']
+          },
+          pluginsDir: 'packages/plugins/emo',
+          plugins: ['./packages/config/emo/kesong-build.ts', '@ulike/emo-plugin-ci', '@ulike/emo-plugin-lint-assist'],
+          autoInstallDepsForPlugins: false
+        },
+        workspaces: [
+          'apps/*',
+          'packages/*',
+          'packages/ulink/*',
+          'packages/config/eslint/plugins/*',
+          'libs/*'
+        ]
+      };
+
+      const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+      
+      expect(result).toHaveLength(5);
+      expect(result.find(pkg => pkg.name === '@test/web')).toBeDefined();
+      expect(result.find(pkg => pkg.name === '@test/core')).toBeDefined();
+      expect(result.find(pkg => pkg.name === '@ulink/auth')).toBeDefined();
+      expect(result.find(pkg => pkg.name === '@config/eslint-plugin-custom')).toBeDefined();
+      expect(result.find(pkg => pkg.name === '@test/shared')).toBeDefined();
+
+      testProject.cleanup();
+    });
+
+    it('should handle workspace pattern expansion errors gracefully', () => {
+       const testProject = createEdenWorkspacesProject([], []);
+
+       const config: EdenMonorepoConfig = {
+         workspaces: [
+           'packages/*'
+         ]
+       };
+
+       // Test with a workspace pattern that points to a non-directory file
+       const packagesFile = path.join(testProject.rootDir, 'packages');
+       fs.writeFileSync(packagesFile, 'not a directory');
+
+       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+       const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+       
+       expect(result).toHaveLength(0);
+       // The function should handle the error gracefully and return empty array
+       
+       consoleSpy.mockRestore();
+       testProject.cleanup();
+     });
   });
 
   describe('getEdenPackages', () => {
