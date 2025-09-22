@@ -41,28 +41,18 @@ program
         monorepoMode: options.monorepoMode as 'combined' | 'separate'
       });
 
-      // In separate mode, output both individual packages and the combined repository
-      if (options.monorepoMode === 'separate') {
-        
-        // Output the combined repository JSON file to the specified output.json location
-        console.log('Writing combined repository file...');
-        const combinedOutputPath = path.resolve(options.output);
-        fs.writeFileSync(combinedOutputPath, JSON.stringify(repository, null, 2));
-        console.log(`Combined repository written to: ${combinedOutputPath}`);
-        
-      } else {
-        const outputPath = path.resolve(options.output);
-        const jsonOutput = options.pretty 
-          ? JSON.stringify(repository, null, 2)
-          : JSON.stringify(repository);
+      // Output the repository JSON file
+      const outputPath = path.resolve(options.output);
+      const jsonOutput = options.pretty 
+        ? JSON.stringify(repository, null, 2)
+        : JSON.stringify(repository);
 
-        fs.writeFileSync(outputPath, jsonOutput);
-        
-        console.log(`Successfully parsed repository`);
-        console.log(`Output written to: ${outputPath}`);
-        console.log(`Total modules: ${Object.keys(repository.Modules).length}`);
-        console.log(`Total symbols in graph: ${Object.keys(repository.Graph).length}`);
-      }
+      fs.writeFileSync(outputPath, jsonOutput);
+      
+      console.log(`Successfully parsed repository`);
+      console.log(`Output written to: ${outputPath}`);
+      console.log(`Total modules: ${Object.keys(repository.Modules).length}`);
+      console.log(`Total symbols in graph: ${Object.keys(repository.Graph).length}`);
 
     } catch (error) {
       console.error('Error parsing repository:', error);

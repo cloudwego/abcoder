@@ -1,4 +1,4 @@
-import { Project, ts } from 'ts-morph';
+import { Project } from 'ts-morph';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cluster from 'cluster';
@@ -9,7 +9,8 @@ import { MonorepoUtils, MonorepoPackage } from '../utils/monorepo';
 import { processPackagesWithCluster } from '../utils/cluster-processor';
 import { handleWorkerProcess } from '../utils/cluster-worker';
 import { GraphBuilder } from '../utils/graph-builder';
-import { ProjectFactory } from '../utils/package-processor';
+import { ProjectFactory, RepositoryFactory } from '../utils/package-processor';
+import { ParsingStrategySelector } from '../utils/parsing-strategy';
 
 export class RepositoryParser {
   private project?: Project;
@@ -34,49 +35,53 @@ export class RepositoryParser {
     } = {}
   ): Promise<Repository> {
     const absolutePath = path.resolve(repoPath);
-
-    const repository: Repository = {
-      ASTVersion: 'v0.1.3',
-      id: path.basename(absolutePath),
-      Modules: {},
-      Graph: {},
-    };
+    const repository: Repository = RepositoryFactory.createRepository(repoPath);
 
     const isMonorepo = MonorepoUtils.isMonorepo(absolutePath);
 
     if (isMonorepo) {
       const packages = MonorepoUtils.getMonorepoPackages(absolutePath);
-
       const monorepoMode = options.monorepoMode || 'combined';
-      // Using separate output mode - each package will be written to individual JSON files
       if (monorepoMode === 'separate') {
         await this.parseMonorepoSeparateMode(packages, repository, options);
-        // In separate mode, also need to build global graph for merged output
-        this.buildGlobalGraph(repository);
-        return repository;
       } else {
         // Using combined output mode - all packages will be merged into one JSON file
         await this.parseMonorepoCombinedMode(packages, repository, options);
       }
     } else {
-      console.log('Single project detected.');
-      this.project = ProjectFactory.createProjectForSingleRepo(this.projectRoot, this.tsConfigPath, this.tsConfigCache);
-      this.moduleParser = new ModuleParser(this.project, this.projectRoot);
-      const module = await this.moduleParser.parseModule(absolutePath, '.', options);
-      repository.Modules[module.Name] = module;
+      await this.parseSingleProjectMode(absolutePath, repository, options);
     }
 
     this.buildGlobalGraph(repository);
     return repository;
   }
 
-
+  /**
+   * Parse a single project (non-monorepo) repository
+   */
+  private async parseSingleProjectMode(
+    absolutePath: string,
+    repository: Repository,
+    options: {
+      loadExternalSymbols?: boolean;
+      noDist?: boolean;
+      srcPatterns?: string[];
+    }
+  ): Promise<void> {
+    console.log('Single project detected.');
+    this.project = ProjectFactory.createProjectForSingleRepo(
+      this.projectRoot,
+      this.tsConfigPath,
+      this.tsConfigCache
+    );
+    this.moduleParser = new ModuleParser(this.project, this.projectRoot);
+    const module = await this.moduleParser.parseModule(absolutePath, '.', options);
+    repository.Modules[module.Name] = module;
+  }
 
   private buildGlobalGraph(repository: Repository): void {
     GraphBuilder.buildGraph(repository);
   }
-
-
 
   /**
    * Parse monorepo packages in separate mode with cluster-based parallel processing
@@ -110,6 +115,9 @@ export class RepositoryParser {
     if (global.gc) {
       global.gc();
     }
+
+    // Build global graph for the repository
+    this.buildGlobalGraph(repository);
   }
 
   /**
@@ -155,6 +163,27 @@ export class RepositoryParser {
       monorepoMode?: 'combined' | 'separate';
     }
   ): Promise<void> {
+    // Analyze project size and select parsing strategy
+    const analysis = ParsingStrategySelector.analyzeProject(packages);
+    console.log('Project analysis results:');
+    console.log(analysis.summary);
+
+    // Choose parsing mode based on strategy
+    if (analysis.strategy.useCluster) {
+      console.log('Using cluster mode to avoid memory overflow');
+      // Use cluster mode but maintain combined mode to avoid outputting individual files
+      await this.parseMonorepoSeparateMode(packages, repository, {
+        ...options,
+        monorepoMode: 'combined', // Ensure no individual package files are output
+        useCluster: true,
+        maxConcurrency: analysis.strategy.recommendedWorkers,
+      });
+      // In cluster mode, also need to build global graph for merged output
+      this.buildGlobalGraph(repository);
+      return;
+    }
+
+    // For smaller projects, use traditional combined mode
     for (const pkg of packages) {
       let project: Project;
       const packageTsConfigPath = path.join(pkg.absolutePath, 'tsconfig.json');

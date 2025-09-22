@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { GraphBuilder } from '../graph-builder';
 import { Repository, Identity, Relation, Function, Type, Var } from '../../types/uniast';
+import { RepositoryFactory } from '../package-processor';
 
 describe('GraphBuilder', () => {
   describe('createNodeKey', () => {
@@ -382,9 +383,7 @@ describe('GraphBuilder', () => {
   describe('buildReverseRelationships', () => {
     it('should build reverse relationships correctly', () => {
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
-        Modules: {},
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Graph: {
           'source?pkg#func1': {
             ModPath: 'source',
@@ -415,9 +414,7 @@ describe('GraphBuilder', () => {
 
     it('should handle multiple reverse relationships', () => {
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
-        Modules: {},
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Graph: {
           'source1?pkg#func1': {
             ModPath: 'source1',
@@ -457,9 +454,7 @@ describe('GraphBuilder', () => {
 
     it('should handle missing target nodes', () => {
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
-        Modules: {},
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Graph: {
           'source?pkg#func1': {
             ModPath: 'source',
@@ -480,12 +475,7 @@ describe('GraphBuilder', () => {
     });
 
     it('should handle empty graph', () => {
-      const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'empty-repo',
-        Modules: {},
-        Graph: {}
-      };
+      const repository: Repository = RepositoryFactory.createEmptyRepository('empty-repo');
 
       GraphBuilder.buildReverseRelationships(repository);
       expect(Object.keys(repository.Graph)).toHaveLength(0);
@@ -493,9 +483,7 @@ describe('GraphBuilder', () => {
 
     it('should handle nodes without dependencies', () => {
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
-        Modules: {},
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Graph: {
           'standalone?pkg#func': {
             ModPath: 'standalone',
@@ -515,12 +503,7 @@ describe('GraphBuilder', () => {
 
   describe('buildGraph', () => {
     it('should handle empty repository', () => {
-      const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'empty-repo',
-        Modules: {},
-        Graph: {}
-      };
+      const repository: Repository = RepositoryFactory.createEmptyRepository('empty-repo');
 
       GraphBuilder.buildGraph(repository);
       expect(Object.keys(repository.Graph)).toHaveLength(0);
@@ -528,8 +511,7 @@ describe('GraphBuilder', () => {
 
     it('should build graph from repository modules with functions', () => {
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',
@@ -588,8 +570,7 @@ describe('GraphBuilder', () => {
       };
 
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',
@@ -639,8 +620,7 @@ describe('GraphBuilder', () => {
       };
 
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',
@@ -692,8 +672,7 @@ describe('GraphBuilder', () => {
       };
 
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',
@@ -744,8 +723,7 @@ describe('GraphBuilder', () => {
       };
 
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',
@@ -800,8 +778,7 @@ describe('GraphBuilder', () => {
       };
 
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',
@@ -883,8 +860,7 @@ describe('GraphBuilder', () => {
       };
 
       const repository: Repository = {
-        ASTVersion: 'v0.1.3',
-        id: 'test-repo',
+        ...RepositoryFactory.createEmptyRepository('test-repo'),
         Modules: {
           'test-module': {
             Language: '',

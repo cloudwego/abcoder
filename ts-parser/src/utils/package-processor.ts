@@ -61,8 +61,11 @@ export class PackageProcessor {
       // 5. Build graph relationships
       this.buildPackageGraph(repository);
 
-      // 6. Generate output file
-      const outputPath = await this.generateOutput(pkg, repository);
+      // 6. Generate output file (only in separate mode)
+      let outputPath: string | undefined;
+      if (options.monorepoMode !== 'combined') {
+        outputPath = await this.generateOutput(pkg, repository);
+      }
 
       return {
         success: true,
@@ -168,12 +171,7 @@ export class PackageProcessor {
    * Create package repository
    */
   private createPackageRepository(pkg: MonorepoPackage, module: Module): Repository {
-    return {
-      ASTVersion: 'v0.1.3',
-      id: pkg.name || path.basename(pkg.absolutePath),
-      Modules: { [module.Name]: module },
-      Graph: {},
-    };
+    return RepositoryFactory.createPackageRepository(pkg, module);
   }
 
   /**
@@ -479,7 +477,29 @@ export class ProjectFactory {
         });
       }
 
-      project.addSourceFilesAtPaths(parsedConfig.fileNames);
+      // Filter out non-existent files and ensure their directories exist
+      const existingFiles = parsedConfig.fileNames.filter(fileName => {
+        try {
+          // Check if file exists
+          if (!fs.existsSync(fileName)) {
+            return false;
+          }
+          // Check if parent directory exists
+          const parentDir = path.dirname(fileName);
+          return fs.existsSync(parentDir);
+        } catch (error) {
+          // If any error occurs during checking, exclude the file
+          return false;
+        }
+      });
+      
+      if (existingFiles.length > 0) {
+        try {
+          project.addSourceFilesAtPaths(existingFiles);
+        } catch (error) {
+          console.warn('Failed to add source files:', error);
+        }
+      }
 
       const references = parsedConfig.projectReferences;
       if (!references) {
@@ -496,5 +516,49 @@ export class ProjectFactory {
         }
       }
     }
+  }
+}
+
+/**
+ * Repository Factory - Centralized creation of Repository objects
+ */
+export class RepositoryFactory {
+  private static readonly AST_VERSION = 'v0.1.3';
+
+  /**
+   * Create a repository for a single project/repository
+   */
+  static createRepository(repoPath: string): Repository {
+    const absolutePath = path.resolve(repoPath);
+    return {
+      ASTVersion: RepositoryFactory.AST_VERSION,
+      id: path.basename(absolutePath),
+      Modules: {},
+      Graph: {},
+    };
+  }
+
+  /**
+   * Create a repository for a monorepo package
+   */
+  static createPackageRepository(pkg: MonorepoPackage, module: Module): Repository {
+    return {
+      ASTVersion: RepositoryFactory.AST_VERSION,
+      id: pkg.name || path.basename(pkg.absolutePath),
+      Modules: { [module.Name]: module },
+      Graph: {},
+    };
+  }
+
+  /**
+   * Create an empty repository with custom id
+   */
+  static createEmptyRepository(id: string): Repository {
+    return {
+      ASTVersion: RepositoryFactory.AST_VERSION,
+      id,
+      Modules: {},
+      Graph: {},
+    };
   }
 }
