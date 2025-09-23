@@ -117,14 +117,14 @@ $ exit
 
 ABCoder currently supports the following languages:
 
-| Language   | Parser | Writer      |
-| ---------- | ------ | ----------- |
-| Go         | ✅      | ✅           |
-| Rust       | ✅      | Coming Soon |
-| C          | ✅      | Coming Soon |
-| Python     | ✅      | Coming Soon |
-| TypeScript | ✅      | Coming Soon |
-| Java       | ✅      | Coming Soon |
+| Language | Parser | Writer      |
+| -------- | ------ | ----------- |
+| Go       | ✅      | ✅           |
+| Rust     | ✅      | Coming Soon |
+| C        | ✅      | Coming Soon |
+| Python   | ✅      | Coming Soon |
+| JS/TS    | ✅      | Coming Soon |
+| Java     | ✅      | Coming Soon |
 
 
 # Getting Involved

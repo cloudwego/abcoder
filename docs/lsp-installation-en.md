@@ -4,14 +4,14 @@ To parse dependencies between symbols in a repository, the abcoder parser requir
 
 The mapping between languages and language servers is as follows:
 
-| Language   | Language Server                                                                       | Essential Environment |
-| ---------- | ------------------------------------------------------------------------------------- | --------------------- |
-| Go         | NA                                                                                    | golang 1.23+          |
-| TypeScript | NA                                                                                    | node.js 20+           |
-| Rust       | rust-analyzer (official)                                                              | rust-toolchain        |
-| Python     | pylsp ( [modified](https://github.com/Hoblovski/python-lsp-server) based on official) | Python 3.9+           |
-| C          | clangd-18 (official)                                                                  | clang 18+             |
-| Java       | eclipse-jdtls (official)                                                              | openjdk 17+           |
+| Language   | Language Server                                                    | Essential Environment |
+| ---------- | ------------------------------------------------------------------ | --------------------- |
+| Go         | NA                                                                 | golang 1.23+          |
+| TypeScript | NA                                                                 | node.js 20+           |
+| Rust       | rust-analyzer (official)                                           | rust-toolchain        |
+| Python     | pylsp ([modified](https://github.com/Hoblovski/python-lsp-server)) | Python 3.9+           |
+| C          | clangd-18 (official)                                               | clang 18+             |
+| Java       | eclipse-jdtls (official)                                           | java 17+              |
 
 Ensure the corresponding executable is in PATH before running abcoder.
 
