@@ -4,12 +4,14 @@
 
 语言和 language server 的对应关系如下
 
-| 语言   | Language server              | 可执行文件    |
-| ---    | ---                          | ---           |
-| Go     | 不使用 LSP，使用内置 parser  | /             |
-| Rust   | rust-analyzer                | rust-analyzer |
-| Python | (修改后的) python-lsp-server | pylsp         |
-| C      | clangd-18                    | clangd-18     |
+| 语言       | Language server                                                | 必要运行环境   |
+| ---------- | -------------------------------------------------------------- | -------------- |
+| Go         | NA                                                             | golang 1.23+   |
+| TypeScript | NA                                                             | node.js 20+    |
+| Rust       | rust-analyzer (官方)                                           | rust-toolchain |
+| Python     | pylsp ([修改](https://github.com/Hoblovski/python-lsp-server)) | python 3.9+    |
+| C          | clangd-18 (官方)                                               | clang 18+      |
+| Java       | eclipse-jdtls (官方)                                           | java 17+       |
 
 按如下教程完成安装后，在运行 abcoder 前请确保 PATH 中有对应可执行文件
 

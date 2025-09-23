@@ -57,10 +57,12 @@ Action:
    agent        run as an Agent for all repo ASTs (*.json) in the specific directory. WIP: only support code-analyzing at present.
    version      print the version of abcoder
 Language:
+   go           for golang codes
    rust         for rust codes
    cxx          for c codes (cpp support is on the way)
-   go           for golang codes
    python       for python codes
+   ts           for typescript codes
+   js           for javascript codes
    java         for java codes
 `
 

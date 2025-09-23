@@ -4,12 +4,14 @@ To parse dependencies between symbols in a repository, the abcoder parser requir
 
 The mapping between languages and language servers is as follows:
 
-| Language | Language Server                        | Executable      |
-| -------- | -------------------------              | --------------- |
-| Go       | Does not use LSP, uses built-in parser | /               |
-| Rust     | rust-analyzer                          | rust-analyzer   |
-| Python   | (Modified) python-lsp-server           | pylsp           |
-| C        | clangd-18                              | clangd-18       |
+| Language   | Language Server                                                    | Essential Environment |
+| ---------- | ------------------------------------------------------------------ | --------------------- |
+| Go         | NA                                                                 | golang 1.23+          |
+| TypeScript | NA                                                                 | node.js 20+           |
+| Rust       | rust-analyzer (official)                                           | rust-toolchain        |
+| Python     | pylsp ([modified](https://github.com/Hoblovski/python-lsp-server)) | Python 3.9+           |
+| C          | clangd-18 (official)                                               | clang 18+             |
+| Java       | eclipse-jdtls (official)                                           | java 17+              |
 
 Ensure the corresponding executable is in PATH before running abcoder.
 
