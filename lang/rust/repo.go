@@ -30,6 +30,7 @@ import (
 const MaxWaitDuration = 5 * time.Minute
 
 func InstallLanguageServer() (string, error) {
+	log.Info("Installing rust-analyzer...")
 	// check rustup exe exists
 	if _, err := exec.LookPath("rustup"); err != nil {
 		return "", fmt.Errorf("failed to find rustup, please install rustup first: https://rustup.rs")
