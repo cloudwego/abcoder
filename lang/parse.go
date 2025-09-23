@@ -192,6 +192,8 @@ func installLanguageServer(language uniast.Language) (string, error) {
 		return cxx.InstallLanguageServer()
 	case uniast.Python:
 		return python.InstallLanguageServer()
+	case uniast.Rust:
+		return rust.InstallLanguageServer()
 	default:
 		return "", fmt.Errorf("auto installation not supported for language: %s", language)
 	}

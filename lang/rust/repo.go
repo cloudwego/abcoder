@@ -29,6 +29,17 @@ import (
 
 const MaxWaitDuration = 5 * time.Minute
 
+func InstallLanguageServer() (string, error) {
+	// check rustup exe exists
+	if _, err := exec.LookPath("rustup"); err != nil {
+		return "", fmt.Errorf("failed to find rustup, please install rustup first: https://rustup.rs")
+	}
+	if err := RunCmdInDir(".", "rustup", "component", "add", "rust-analyzer"); err != nil {
+		return "", fmt.Errorf("failed to install rust-analyzer: %w", err)
+	}
+	return "rust-analyzer", nil
+}
+
 func CheckRepo(repo string) (string, time.Duration) {
 	// NOTICE: open the Cargo.toml file is required for Rust projects
 	openfile := utils.FirstFile(repo, ".rs", filepath.Join(repo, "target"))
