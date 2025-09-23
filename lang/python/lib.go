@@ -66,13 +66,8 @@ func InstallLanguageServer() (string, error) {
 	}
 	// git submodule init
 	log.Error("Installing pylsp...")
-	if err := exec.Command("git", "submodule", "init").Run(); err != nil {
-		log.Error("git submodule init failed: %v", err)
-		return "", err
-	}
-	// git submodule update
-	if err := exec.Command("git", "submodule", "update").Run(); err != nil {
-		log.Error("git submodule update failed: %v", err)
+	if err := exec.Command("git", "clone", "https://github.com/Hoblovski/python-lsp-server.git", "pylsp").Run(); err != nil {
+		log.Error("git clone failed: %v", err)
 		return "", err
 	}
 	// python -m pip install -e projectRoot/pylsp
