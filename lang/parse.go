@@ -165,38 +165,7 @@ func checkLSP(language uniast.Language, lspPath string, args ParseOptions) (l un
 			return uniast.Unknown, "", fmt.Errorf("unsupported language: %s", language)
 		}
 	}
-
-	// lsp already installed
-	if absLspPath, err := exec.LookPath(s); err == nil {
-		return l, absLspPath, nil
-	}
-
-	// install the lsp.
-	log.Error("Language server %s not found. Trying to auto install.\n", s)
-	s, err = installLanguageServer(language)
-	if err == nil {
-		if absLspPath, err := exec.LookPath(s); err == nil {
-			log.Error("Auto installation ok. lspPath=%s.", absLspPath)
-			return l, absLspPath, nil
-		}
-	}
-
-	// install failed or broken (lsp not in PATH)
-	log.Info("Failed to install language server %s: %+w.\n", s, err)
-	return uniast.Unknown, "", err
-}
-
-func installLanguageServer(language uniast.Language) (string, error) {
-	switch language {
-	case uniast.Cxx:
-		return cxx.InstallLanguageServer()
-	case uniast.Python:
-		return python.InstallLanguageServer()
-	case uniast.Rust:
-		return rust.InstallLanguageServer()
-	default:
-		return "", fmt.Errorf("auto installation not supported for language: %s", language)
-	}
+	return l, s, nil
 }
 
 func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (repo *uniast.Repository, err error) {

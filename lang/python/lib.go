@@ -56,6 +56,10 @@ func CheckPythonVersion() error {
 }
 
 func InstallLanguageServer() (string, error) {
+	if out, err := exec.Command("pylsp", "--version").CombinedOutput(); err == nil {
+		log.Info("pylsp already installed: %v", out)
+		return lspName, nil
+	}
 	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
 		log.Error("Auto installation requires working directory to be /path/to/abcoder/")
 		return "", fmt.Errorf("bad cwd")
@@ -85,6 +89,7 @@ func InstallLanguageServer() (string, error) {
 }
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
+	InstallLanguageServer()
 	return uniast.Python, lspName
 }
 
