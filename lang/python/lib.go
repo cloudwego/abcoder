@@ -16,7 +16,6 @@ package python
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -62,10 +61,6 @@ func InstallLanguageServer() (string, error) {
 	if out, err := exec.Command("pylsp", "--version").CombinedOutput(); err == nil {
 		log.Info("pylsp already installed: %v", out)
 		return lspName, nil
-	}
-	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
-		log.Error("Auto installation requires working directory to be /path/to/abcoder/")
-		return "", fmt.Errorf("bad cwd")
 	}
 	if err := CheckPythonVersion(); err != nil {
 		log.Error("python version check failed: %v", err)
