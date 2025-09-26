@@ -86,7 +86,15 @@ next:
 }
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
-	return uniast.Rust, "rust-analyzer"
+	if _, err := exec.LookPath("rust-analyzer"); err == nil {
+		return uniast.Rust, "rust-analyzer"
+	}
+	name, err := InstallLanguageServer()
+	if err != nil {
+		log.Error("Failed to install rust-analyzer: %v\n", err)
+		os.Exit(1)
+	}
+	return uniast.Rust, name
 }
 
 func GetLastCommitTime(repo string) time.Time {
