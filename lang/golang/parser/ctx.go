@@ -483,7 +483,11 @@ func (ctx *fileContext) getTypeinfo(typ types.Type) (ti typeInfo) {
 		ti.IsStdOrBuiltin = true
 	}
 	// collect sub Named type here
-	for i := 1; i < len(tobjs); i++ {
+	i := 0
+	if isNamed {
+		i = 1
+	}
+	for ; i < len(tobjs); i++ {
 		tobj := tobjs[i]
 		if isGoBuiltins(tobj.Name()) {
 			continue

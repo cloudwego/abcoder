@@ -609,6 +609,11 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 			fn.IsMethod = true
 			fn.IsInterfaceMethod = true
 			fn.Signature = string(ctx.GetRawContent(fieldDecl))
+			// collect func signature deps
+			ty := ctx.GetTypeInfo(fieldDecl.Type)
+			for _, dep := range ty.Deps {
+				fn.Types = InsertDependency(fn.Types, NewDependency(dep, ctx.FileLine(fieldDecl)))
+			}
 		}
 		p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 	}
