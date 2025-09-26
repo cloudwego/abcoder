@@ -12,6 +12,8 @@ jobs:
   run_all_tests:
     runs-on: ubuntu-latest
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
+    env:
+      LANGS: "go rust python java"
     steps:
       - name: Setup Go environment
         uses: actions/setup-go@v5
@@ -29,16 +31,16 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: Checkout pull request code
         uses: actions/checkout@v4
         with:
           path: 'pr_repo'
-          submodules: true
-
-      - name: Install Python dependencies
-        run: |
-          pip install -r ./pr_repo/script/requirements.txt
-          pip install ./pr_repo/pylsp
 
       - name: Checkout main branch code
         uses: actions/checkout@v4
@@ -51,14 +53,26 @@ jobs:
           (cd main_repo && go build -o ../abcoder_old)
           (cd pr_repo && go build -o ../abcoder_new)
 
-      - name: Run test scripts and generate outputs
+      - name: Install evaluation dependencies
+        run: pip install -r ./pr_repo/script/requirements.txt
+
+      - name: Install LSPs
         run: |
-          LANGS="go rust python" OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_all_testdata.sh
-          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_all_testdata.sh
+          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
+          # use the same JDTLS for consistency and to avoid wasting time installing a duplicate JDTLS
+          echo "JDTLS_ROOT_PATH=$(realpath ./pr_repo/lang/java/lsp/jdtls/jdt-language-server-*)" >> $GITHUB_ENV
+
+      - name: Run OLD abcoder
+        run:
+          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
+
+      - name: Run NEW abcoder
+        run:
+          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
 
       - name: Compare outputs and check for regression
         id: diff_check
-        run: ./pr_repo/script/diffjson.py out_old out_new
+        run: ./pr_repo/script/diffjson.py out_old out_new || echo "failed=true" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Upload output directories
@@ -70,3 +84,7 @@ jobs:
             out_old
             out_new
           retention-days: 3
+
+      - name: Status check
+        if: steps.diff_check.outputs.failed == 'true'
+        run: exit 1
