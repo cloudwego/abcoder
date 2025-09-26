@@ -1,6 +1,7 @@
 # Language Server Installation
-
 To parse dependencies between symbols in a repository, the abcoder parser requires the use of language servers for various languages. Please install the corresponding language server before running the parser.
+ABCoder automatically installs the corresponding language server for most languages.
+Should the automatic installation fail, please install manually following the instructions below.
 
 The mapping between languages and language servers is as follows:
 
@@ -25,14 +26,13 @@ Ensure the corresponding executable is in PATH before running abcoder.
 
 ## Python
 * Install Python 3.9+
-* Install pylsp from the git submodule:
+* Install pylsp
   ```bash
-  $ git submodule init
-  $ git submodule update
-  $ cd pylsp
-  $ pip install -e . # Consider executing in a separate conda/venv environment
-  $ export PATH=$(realpath ./bin):$PATH # Add this to your .rc file, or set it before each abcoder run
-  $ pylsp --version # Verify successful installation
+  $ git clone https://github.com/Hoblovski/python-lsp-server.git -b abc
+  $ cd python-lsp-server
+  $ pip install .
+  $ export PATH=$(realpath ./bin):$PATH
+  $ pylsp --version
   ```
 
 ## C

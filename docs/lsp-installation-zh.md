@@ -1,6 +1,7 @@
 # Language server 安装
 为了解析仓库中符号之间的依赖，abcoder parser 需要使用各语言的 language server。
 运行 parser 之前请安装对应的 language server。
+多数语言都能自动安装 language server。如果自动安装失败，可以按以下步骤手动安装。
 
 语言和 language server 的对应关系如下
 
@@ -25,14 +26,13 @@
 
 ## Python
 * 安装 Python 3.9+
-* 从 git submodule 安装 pylsp
+* 安装 pylsp
   ```bash
-  $ git submodule init
-  $ git submodule update
-  $ cd pylsp
-  $ pip install -e .  # 可以考虑在单独的 conda/venv 环境中执行
-  $ export PATH=$(realpath ./bin):$PATH  # 放到 .rc 文件里，或每次运行 abcoder 前都设置一下
-  $ pylsp --version  # 验证安装成功
+  $ git clone https://github.com/Hoblovski/python-lsp-server.git -b abc
+  $ cd python-lsp-server
+  $ pip install .
+  $ export PATH=$(realpath ./bin):$PATH
+  $ pylsp --version
   ```
 
 ## C

@@ -271,7 +271,7 @@ ABCoder 主要通过命令行参数进行配置，没有独立的配置文件（
 - **Go**: 运行 ABCoder 本身需要 Go 语言环境 (`go install ...`)。
 - **Language Servers**: 为了解析不同语言的仓库，必须在环境中预先安装对应的语言服务器。这在 `docs/lsp-installation-zh.md` 中有详细说明：
     - **Rust**: `rust-analyzer`
-    - **Python**: `pylsp` (通过 git submodule 安装)
+    - **Python**: `pylsp`
     - **C/C++**: `clangd`
 - **Git**: 用于克隆代码仓库。
 
