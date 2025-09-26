@@ -13,7 +13,7 @@
 
 if [[ "$1" != "all" && "$1" != "first" ]]; then
 	echo "Usage: $0 all|first" >&2
-	echo "	all:   Run on all testdata." >&2
+	echo "	all:   Run on all testdata." >&2
 	echo "	first: Run only on testdata starting with '0_*' in each language directory." >&2
 	exit 1
 fi
@@ -52,3 +52,21 @@ mkdir -pv "$OUTDIR"
 detect_jobs
 echo
 detect_jobs | parallel $PARALLEL_FLAGS -j$(nproc --all) --jobs 0 "eval {}" 2>&1
+
+echo
+echo "Verifying that all expected output files were generated..."
+all_files_exist=true
+# Rerun detect_jobs to get the list of expected json files and check for their existence.
+for file_path in $(detect_jobs | awk '{print $NF}'); do
+    if [[ ! -f "$file_path" ]]; then
+        echo "Error: Expected output file does not exist: $file_path" >&2
+        all_files_exist=false
+    fi
+done
+
+if [[ "$all_files_exist" == "false" ]]; then
+    echo "One or more output files are missing. Failing." >&2
+    exit 1
+else
+    echo "All expected output files were successfully generated."
+fi
