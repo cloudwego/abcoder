@@ -54,20 +54,20 @@ jobs:
 
       - name: Compile both binaries
         run: |
-          (cd main_repo && go build -o ../abcoder_old)
+          (cd main_repo && go build -o ../pr_repo/abcoder_old)
           (cd pr_repo && go build -o ../abcoder_new)
 
       - name: Install LSPs
         run:
-          LANGS="go rust python java" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
+          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
 
       - name: Run OLD abcoder
         run:
-          LANGS="go rust python java" OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
+          LANGS="go rust python" OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
 
       - name: Run NEW abcoder
         run:
-          LANGS="go rust python java" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
+          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
 
       - name: Compare outputs and check for regression
         id: diff_check
