@@ -1,4 +1,0 @@
-[submodule "pylsp"]
-	path = pylsp
-	url = https://github.com/Hoblovski/python-lsp-server.git
-	branch = abc
