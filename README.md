@@ -36,8 +36,11 @@ see [UniAST Specification](docs/uniast-zh.md)
 2. Use ABCoder to parse a repository to UniAST (JSON)
 
     ```bash
-    abcoder parse {language} {repo-path} > xxx.json
+    abcoder parse {language} {repo-path} -o xxx.json
     ```
+
+    ABCoder will try to install any dependency automatically.
+    In case of failure (or if you want to customize installation), refer to the [docs](./docs/lsp-installation-en.md).
 
     For example, to parse a Go repository:
 
@@ -46,7 +49,6 @@ see [UniAST Specification](docs/uniast-zh.md)
     abcoder parse go localsession -o /abcoder-asts/localsession.json
     ```
 
-    To parse repositories in other languages, [install the corresponding language server first](./docs/lsp-installation-en.md).
 
 3. Integrate ABCoder's MCP tools into your AI agent.
 
