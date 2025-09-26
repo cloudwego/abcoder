@@ -12,12 +12,18 @@
 # OUTDIR=out/ ABCEXE="./other_abcoder" ./script/run_testdata.sh all
 
 if [[ "$1" != "all" && "$1" != "first" ]]; then
-	echo "Usage: $0 all|first" >&2
-	echo "	all:   Run on all testdata." >&2
+	echo "Usage: $0 all|first [--dry-run|-n]" >&2
+	echo "	all:     Run on all testdata." >&2
 	echo "	first: Run only on testdata starting with '0_*' in each language directory." >&2
+	echo "	--dry-run|-n: Print commands without executing them." >&2
 	exit 1
 fi
+
 MODE=$1
+DRY_RUN=false
+if [[ "$2" == "--dry-run" || "$2" == "-n" ]]; then
+       DRY_RUN=true
+fi
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 REPO_ROOT=$(realpath --relative-to=$(pwd) "$SCRIPT_DIR/..")
@@ -37,7 +43,7 @@ detect_jobs() {
 	for repo in $repo_glob; do
 		# Skip if glob doesn't match anything to avoid errors
 		[[ -e "$repo" ]] || continue
-		local rel_path=$(realpath --relative-to="$REPO_ROOT/testdata" "$repo")
+		local rel_path=$(realpath --no-symlinks --relative-to="$REPO_ROOT/testdata" "$repo")
 		local outname=$(echo "$rel_path" | sed 's/[/:? ]/_/g')
 		echo $ABCEXE parse $lang $repo -o $OUTDIR/$outname.json
 		done
@@ -50,6 +56,9 @@ if [[ ! -x "$ABCEXE" ]]; then
 fi
 mkdir -pv "$OUTDIR"
 detect_jobs
+if $DRY_RUN ; then
+	exit 0
+fi
 echo
 detect_jobs | parallel $PARALLEL_FLAGS -j$(nproc --all) --jobs 0 "eval {}" 2>&1
 
