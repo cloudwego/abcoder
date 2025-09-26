@@ -30,6 +30,9 @@ import (
 
 const MaxWaitDuration = 5 * time.Second
 const lspName = "pylsp"
+const lspUrl = "https://github.com/Hoblovski/python-lsp-server.git"
+const lspBranch = "abc"
+const lspPath = "pylsp"
 
 func CheckPythonVersion() error {
 	// Check python3 command availability and get version.
@@ -56,6 +59,10 @@ func CheckPythonVersion() error {
 }
 
 func InstallLanguageServer() (string, error) {
+	if out, err := exec.Command("pylsp", "--version").CombinedOutput(); err == nil {
+		log.Info("pylsp already installed: %v", out)
+		return lspName, nil
+	}
 	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
 		log.Error("Auto installation requires working directory to be /path/to/abcoder/")
 		return "", fmt.Errorf("bad cwd")
@@ -64,15 +71,15 @@ func InstallLanguageServer() (string, error) {
 		log.Error("python version check failed: %v", err)
 		return "", err
 	}
-	// git submodule init
-	log.Error("Installing pylsp...")
-	if err := exec.Command("git", "submodule", "update", "--remote", "--init", "-f").Run(); err != nil {
+	// git clone
+	log.Error("Installing pylsp... Now running git clone -b %s %s %s", lspBranch, lspUrl, lspPath)
+	if err := exec.Command("git", "clone", "-b", lspBranch, lspUrl, lspPath).Run(); err != nil {
 		log.Error("git clone failed: %v", err)
 		return "", err
 	}
 	// python -m pip install -e projectRoot/pylsp
-	log.Error("Running `python3 -m pip install -e pylsp/` .\nThis might take some time, make sure the network connection is ok.")
-	if err := exec.Command("python3", "-m", "pip", "install", "--break-system-packages", "-e", "pylsp/").Run(); err != nil {
+	log.Error("Installing pylsp via pip. This might take some time, make sure the network connection is ok.")
+	if err := exec.Command("python3", "-m", "pip", "install", "--break-system-packages", "-e", lspPath).Run(); err != nil {
 		log.Error("python3 -m pip install failed: %v", err)
 		return "", err
 	}
@@ -85,6 +92,7 @@ func InstallLanguageServer() (string, error) {
 }
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
+	InstallLanguageServer()
 	return uniast.Python, lspName
 }
 
