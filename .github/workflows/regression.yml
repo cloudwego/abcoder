@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     env:
-      LANGS: "go rust python java"
+      LANGS: "go rust python java typescript"
     steps:
       - name: Setup Go environment
         uses: actions/setup-go@v5
