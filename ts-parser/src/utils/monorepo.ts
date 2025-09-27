@@ -3,6 +3,7 @@ import * as path from 'path';
 
 /**
  * Interface for Eden monorepo configuration
+ * Supports both legacy packages format and new workspaces format
  */
 export interface EdenMonorepoConfig {
   $schema?: string;
@@ -14,7 +15,7 @@ export interface EdenMonorepoConfig {
     packagePublish?: {
       tool?: string;
     };
-    cache?: boolean;
+    cache?: boolean | object;
     workspaceCheck?: {
       dependencyVersionCheck?: {
         forceCheck?: boolean;
@@ -23,14 +24,22 @@ export interface EdenMonorepoConfig {
     };
     autoInstallDepsForPlugins?: boolean;
     plugins?: string[];
+    pluginsDir?: string;
     scriptName?: {
-      start?: string[];
+      [key: string]: string[];
+    };
+    outputPaths?: {
+      dirs?: string[];
+      files?: string[];
     };
   };
-  packages: Array<{
+  // Legacy packages format (optional for backward compatibility)
+  packages?: Array<{
     path: string;
     shouldPublish?: boolean;
   }>;
+  // New workspaces format (supports glob patterns)
+  workspaces?: string[];
 }
 
 /**
@@ -53,10 +62,12 @@ export class MonorepoUtils {
   static isMonorepo(rootPath: string): boolean {
     const edenConfigPath = path.join(rootPath, 'eden.monorepo.json');
     const pnpmWorkspacePath = path.join(rootPath, 'pnpm-workspace.yaml');
+    // const yarnWorkspacePath = path.join(rootPath, 'yarn.lock');
     const lernaConfigPath = path.join(rootPath, 'lerna.json');
     
     return fs.existsSync(edenConfigPath) || 
            fs.existsSync(pnpmWorkspacePath) || 
+          //  fs.existsSync(yarnWorkspacePath) || 
            fs.existsSync(lernaConfigPath);
   }
 
@@ -106,37 +117,122 @@ export class MonorepoUtils {
 
   /**
    * Get packages from Eden monorepo configuration
+   * Supports both packages array and workspaces array formats
    */
   static getEdenPackages(rootPath: string, config: EdenMonorepoConfig): MonorepoPackage[] {
     const packages: MonorepoPackage[] = [];
     
-    for (const pkg of config.packages) {
-      const absolutePath = path.resolve(rootPath, pkg.path);
-      
-      // Check if package directory exists
-      if (fs.existsSync(absolutePath)) {
-        // Try to get package name from package.json
-        let packageName: string | undefined;
+    // Handle legacy packages array format
+    if (config.packages && config.packages.length > 0) {
+      for (const pkg of config.packages) {
+        const absolutePath = path.resolve(rootPath, pkg.path);
+        
+        // Check if package directory exists
+        if (fs.existsSync(absolutePath)) {
+          // Try to get package name from package.json
+          let packageName: string | undefined;
+          const packageJsonPath = path.join(absolutePath, 'package.json');
+          
+          if (fs.existsSync(packageJsonPath)) {
+            try {
+              const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+              packageName = packageJson.name;
+            } catch (error) {
+              console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
+            }
+          }
+          
+          packages.push({
+            path: pkg.path,
+            absolutePath,
+            shouldPublish: pkg.shouldPublish ?? false,
+            name: packageName
+          });
+        } else {
+          console.warn(`Package directory does not exist: ${absolutePath}`);
+        }
+      }
+    }
+    
+    // Handle new workspaces array format
+    if (config.workspaces && config.workspaces.length > 0) {
+      for (const workspace of config.workspaces) {
+        const workspacePackages = this.expandWorkspacePattern(rootPath, workspace);
+        packages.push(...workspacePackages);
+      }
+    }
+    
+    return packages;
+  }
+
+  /**
+   * Expand workspace pattern to find actual packages
+   * Supports glob patterns like "packages/*", "apps/*", etc.
+   */
+  private static expandWorkspacePattern(rootPath: string, pattern: string): MonorepoPackage[] {
+    const packages: MonorepoPackage[] = [];
+    
+    try {
+      // Handle glob patterns
+      if (pattern.includes('*')) {
+        const basePath = pattern.replace('/*', '');
+        const baseDir = path.resolve(rootPath, basePath);
+        
+        if (fs.existsSync(baseDir)) {
+          const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+          
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              const packagePath = path.join(basePath, entry.name);
+              const absolutePath = path.resolve(rootPath, packagePath);
+              const packageJsonPath = path.join(absolutePath, 'package.json');
+              
+              // Only include directories that have package.json
+              if (fs.existsSync(packageJsonPath)) {
+                let packageName: string | undefined;
+                
+                try {
+                  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+                  packageName = packageJson.name;
+                } catch (error) {
+                  console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
+                }
+                
+                packages.push({
+                  path: packagePath,
+                  absolutePath,
+                  shouldPublish: false, // Default to false for workspace packages
+                  name: packageName
+                });
+              }
+            }
+          }
+        }
+      } else {
+        // Handle exact path
+        const absolutePath = path.resolve(rootPath, pattern);
         const packageJsonPath = path.join(absolutePath, 'package.json');
         
         if (fs.existsSync(packageJsonPath)) {
+          let packageName: string | undefined;
+          
           try {
             const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
             packageName = packageJson.name;
           } catch (error) {
             console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
           }
+          
+          packages.push({
+            path: pattern,
+            absolutePath,
+            shouldPublish: false,
+            name: packageName
+          });
         }
-        
-        packages.push({
-          path: pkg.path,
-          absolutePath,
-          shouldPublish: pkg.shouldPublish ?? false,
-          name: packageName
-        });
-      } else {
-        console.warn(`Package directory does not exist: ${absolutePath}`);
       }
+    } catch (error) {
+      console.warn(`Failed to expand workspace pattern "${pattern}":`, error);
     }
     
     return packages;

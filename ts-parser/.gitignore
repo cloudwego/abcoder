@@ -7,3 +7,5 @@ dist/
 temp/
 
 output.json
+
+output/

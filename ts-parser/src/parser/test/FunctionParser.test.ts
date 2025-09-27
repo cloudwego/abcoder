@@ -1,6 +1,7 @@
+import { describe, it, expect } from '@jest/globals';
 import path from 'path';
 import { FunctionParser } from '../FunctionParser';
-import { createTestProject, expectToBeDefined } from './test-utils';
+import { createTestProject, createTestProjectWithMultipleFiles, expectToBeDefined } from './test-utils';
 
 describe('FunctionParser', () => {
   describe('parseFunctions', () => {
@@ -250,13 +251,20 @@ describe('FunctionParser', () => {
     });
 
     it('should handle cross-module function calls', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
-        import { externalFunc } from './external';
-        
-        function usesExternal() {
-          externalFunc();
-        }
-      `);
+      const { project, sourceFile, cleanup } = createTestProjectWithMultipleFiles({
+        'test.ts': `
+          import { externalFunc } from './external';
+          
+          function usesExternal() {
+            externalFunc();
+          }
+        `,
+        'external.ts': `
+          export function externalFunc() {
+            return 'external';
+          }
+        `
+      });
       
       const parser = new FunctionParser(project, process.cwd());
       let pkgPathAbsFile : string = sourceFile.getFilePath()

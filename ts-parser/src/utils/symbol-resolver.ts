@@ -279,15 +279,16 @@ export class SymbolResolver {
     return { path: relativePath === '' ? '.' : `${relativePath}` };
   }
 
-  /**
+   /**
    * Find the closest package.json file for a given file path
    * @param fileDir - The directory to start searching from
    * @param projectRoot - Project root
    */
   private findPackageJsonPath(fileDir: string, projectRoot?: string): string | null {
     let currentDir = fileDir;
-    const stopAtRoot = this.normalizePath(projectRoot || this.projectRoot);
     
+    const stopAtRoot = this.normalizePath(projectRoot || this.projectRoot);
+
     while (this.normalizePath(currentDir) !== stopAtRoot && currentDir !== path.dirname(currentDir)) {
       const packageJsonPath = path.join(currentDir, 'package.json');
       if (fs.existsSync(packageJsonPath)) {
