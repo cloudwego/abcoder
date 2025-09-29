@@ -229,7 +229,7 @@ describe('VarParser', () => {
       expect(usesDeps.Dependencies!.length).toBe(2);
 
       const objDeps = expectToBeDefined(vars['objDeps']);
-      expect(objDeps.Dependencies!.length).toBe(3);
+      expect(objDeps.Dependencies!.length).toBe(2);
 
       const arrDeps = expectToBeDefined(vars['arrDeps']);
       expect(arrDeps.Dependencies!.length).toBe(2);
