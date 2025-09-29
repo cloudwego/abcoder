@@ -132,6 +132,35 @@ export class GraphBuilder {
           }
         }
         repository.Graph[targetKey].References = references;
+      } else {
+        // Create missing node with UNKNOWN type
+        const parts = targetKey.split(/[?#]/);
+        const modPath = parts[0];
+        const pkgPath = parts[1];
+        const name = parts[2];
+        
+        const missingNode: Node = {
+          ModPath: modPath,
+          PkgPath: pkgPath,
+          Name: name,
+          Type: 'UNKNOWN'
+        };
+        
+        // Add references to the missing node
+        const references: Relation[] = [];
+        for (const [sourceKey, ] of referringNodes) {
+          const sourceNode = repository.Graph[sourceKey];
+          if (sourceNode) {
+            references.push({
+              ModPath: sourceNode.ModPath,
+              PkgPath: sourceNode.PkgPath,
+              Name: sourceNode.Name,
+              Kind: 'Dependency'
+            });
+          }
+        }
+        missingNode.References = references;
+        repository.Graph[targetKey] = missingNode;
       }
     }
   }

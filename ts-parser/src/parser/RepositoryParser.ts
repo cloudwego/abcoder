@@ -41,18 +41,25 @@ export class RepositoryParser {
 
     if (isMonorepo) {
       const packages = MonorepoUtils.getMonorepoPackages(absolutePath);
-      const monorepoMode = options.monorepoMode || 'combined';
+      console.log(`Monorepo detected. Found ${packages.length} packages.`);
+
+      const { monorepoMode = 'combined' } = options;
       if (monorepoMode === 'separate') {
         await this.parseMonorepoSeparateMode(packages, repository, options);
+        // Graph building is handled within parseMonorepoSeparateMode
       } else {
         // Using combined output mode - all packages will be merged into one JSON file
         await this.parseMonorepoCombinedMode(packages, repository, options);
+        // Graph building is handled within parseMonorepoCombinedMode if using cluster mode
+        // For non-cluster mode, we need to build the graph here
+        if (!this.shouldUseClusterMode(packages)) {
+          this.buildGlobalGraph(repository);
+        }
       }
     } else {
       await this.parseSingleProjectMode(absolutePath, repository, options);
+      this.buildGlobalGraph(repository);
     }
-
-    this.buildGlobalGraph(repository);
     return repository;
   }
 
@@ -81,6 +88,25 @@ export class RepositoryParser {
 
   private buildGlobalGraph(repository: Repository): void {
     GraphBuilder.buildGraph(repository);
+  }
+
+  /**
+   * Build cross-package relationships when using cluster mode
+   * Individual package graphs are already built by worker processes
+   */
+  private buildCrossPackageRelationships(repository: Repository): void {
+    console.log(`Building cross-package relationships for repository ${repository.id}`);
+    
+    // Only build reverse relationships since individual nodes are already created
+    GraphBuilder.buildReverseRelationships(repository);
+  }
+
+  /**
+   * Determine if cluster mode should be used for the given packages
+   */
+  private shouldUseClusterMode(packages: MonorepoPackage[]): boolean {
+    const analysis = ParsingStrategySelector.analyzeProject(packages);
+    return analysis.strategy.useCluster;
   }
 
   /**
@@ -116,8 +142,9 @@ export class RepositoryParser {
       global.gc();
     }
 
-    // Build global graph for the repository
-    this.buildGlobalGraph(repository);
+    // Build cross-package relationships for the repository
+    // Note: Individual package graphs are already built by worker processes
+    this.buildCrossPackageRelationships(repository);
   }
 
   /**
@@ -141,6 +168,13 @@ export class RepositoryParser {
       for (const packageResult of result.results) {
         if (packageResult.success && packageResult.module) {
           repository.Modules[packageResult.module.Name] = packageResult.module;
+          
+          // Merge Graph from worker process
+          if (packageResult.repository && packageResult.repository.Graph) {
+            for (const [nodeKey, node] of Object.entries(packageResult.repository.Graph)) {
+              repository.Graph[nodeKey] = node;
+            }
+          }
         }
       }
 
@@ -178,8 +212,7 @@ export class RepositoryParser {
         useCluster: true,
         maxConcurrency: analysis.strategy.recommendedWorkers,
       });
-      // In cluster mode, also need to build global graph for merged output
-      this.buildGlobalGraph(repository);
+      // Graph building is handled by parseMonorepoSeparateMode
       return;
     }
 
