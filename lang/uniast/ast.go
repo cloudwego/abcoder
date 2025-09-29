@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/cloudwego/abcoder/version"
 )
 
 type Language string
@@ -83,11 +85,14 @@ type NodeGraph map[string]*Node
 
 // Repository
 type Repository struct {
+	// ASTVersion is 'ABCoder Specification Version'
 	ASTVersion string
-	Name       string             `json:"id"` // module name
-	Path       string             // repo path
-	Modules    map[string]*Module // module name => module
-	Graph      NodeGraph          // node id => node
+	// ABCoderToolVersion is 'ABCoder Tool Version'
+	ABCoderToolVersion string
+	Name               string             `json:"id"` // module name
+	Path               string             // repo path
+	Modules            map[string]*Module // module name => module
+	Graph              NodeGraph          // node id => node
 }
 
 func (r Repository) ID() string {
@@ -107,11 +112,12 @@ func (r Repository) InternalModules() []*Module {
 // NOTICE: Repository.Path is set as name by default, if th name isn't a path, set path somewhere
 func NewRepository(name string) Repository {
 	ret := Repository{
-		Name:       name,
-		Path:       name,
-		Modules:    map[string]*Module{},
-		Graph:      map[string]*Node{},
-		ASTVersion: Version,
+		Name:               name,
+		Path:               name,
+		Modules:            map[string]*Module{},
+		Graph:              map[string]*Node{},
+		ASTVersion:         ABCoderSpecificationVersion,
+		ABCoderToolVersion: version.ABCoderToolVersion,
 	}
 	return ret
 }

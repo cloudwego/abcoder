@@ -16,4 +16,4 @@
 
 package uniast
 
-const Version = "v0.1.3"
+const ABCoderSpecificationVersion = "v0.1.3"

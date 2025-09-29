@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-package main
+package version
 
 const (
-	Version = "0.2.1"
+	ABCoderToolVersion = "0.2.1"
 )
