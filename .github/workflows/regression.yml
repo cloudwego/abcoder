@@ -59,6 +59,7 @@ jobs:
 
       - name: Install dependencies for main branch
         run: |
+          ( cd pr_repo/ts-parser/ && npm run build )
           OUTDIR=out_main ABCEXE=./abcoder_main ./pr_repo/script/run_testdata.sh first
           echo "JDTLS_ROOT_PATH=$(realpath ./pr_repo/lang/java/lsp/jdtls/jdt-language-server-*)" >> $GITHUB_ENV
 
