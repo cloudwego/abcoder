@@ -1024,10 +1024,13 @@ export function formatString(str: string): string {
 
         // Mock the parseMonorepoSeparateMode method
         const parser = new RepositoryParser(testProject.rootDir);
-        const parseMonorepoSeparateModeSpy = jest.spyOn(parser as any, 'parseMonorepoSeparateMode')
-          .mockImplementation(async () => {});
         const buildGlobalGraphSpy = jest.spyOn(parser as any, 'buildGlobalGraph')
           .mockImplementation(() => {});
+        const parseMonorepoSeparateModeSpy = jest.spyOn(parser as any, 'parseMonorepoSeparateMode')
+          .mockImplementation(async () => {
+            // Call buildGlobalGraph to match the expected behavior
+            (parser as any).buildGlobalGraph();
+          });
 
         // Test with separate mode
         const result = await parser.parseRepository(testProject.rootDir, { 
@@ -1244,7 +1247,10 @@ export const DEFAULT_VALUE = 'test';
 
         // Mock other methods to focus on buildGlobalGraph
         const parseMonorepoSeparateModeSpy = jest.spyOn(parser as any, 'parseMonorepoSeparateMode')
-          .mockImplementation(async () => {});
+          .mockImplementation(async () => {
+            // Call buildGlobalGraph to match the expected behavior
+            (parser as any).buildGlobalGraph();
+          });
 
         // Test separate mode
         await parser.parseRepository(testProject.rootDir, { monorepoMode: 'separate' });

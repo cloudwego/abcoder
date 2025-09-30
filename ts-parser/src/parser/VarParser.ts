@@ -402,34 +402,37 @@ export class VarParser {
     if (!initializer) return dependencies;
 
 
-    // Extract single symbol
-    const sourceSymbol = initializer.getSymbol();
-    if (sourceSymbol) {
-      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(sourceSymbol, node);
-      if (resolvedSymbol && !resolvedSymbol.isExternal && resolvedRealSymbol) {
-        // Check if the dependency is defined outside this variable declaration
-        const decls = resolvedRealSymbol.getDeclarations()
-        if (decls.length > 0) {
-          const defStart = decls[0].getStart();
-          const defEnd = decls[0].getEnd();
-          if (
-            moduleName !== resolvedSymbol.moduleName ||
-            packagePath !== resolvedSymbol.packagePath ||
-            defEnd > node.getEnd() ||
-            defStart < node.getStart()
-          ) {
-            const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
-            if (!visited.has(key)) {
-              visited.add(key);
-              dependencies.push({
-                ModPath: resolvedSymbol.moduleName || moduleName,
-                PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-                Name: resolvedSymbol.name,
-                File: resolvedSymbol.filePath,
-                Line: resolvedSymbol.line,
-                StartOffset: resolvedSymbol.startOffset,
-                EndOffset: resolvedSymbol.endOffset
-              });
+    // Extract single symbol (skip object/array literals as they create internal __object/__array symbols)
+    if (initializer.getKind() !== SyntaxKind.ObjectLiteralExpression && 
+        initializer.getKind() !== SyntaxKind.ArrayLiteralExpression) {
+      const sourceSymbol = initializer.getSymbol();
+      if (sourceSymbol) {
+        const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(sourceSymbol, node);
+        if (resolvedSymbol && !resolvedSymbol.isExternal && resolvedRealSymbol) {
+          // Check if the dependency is defined outside this variable declaration
+          const decls = resolvedRealSymbol.getDeclarations()
+          if (decls.length > 0) {
+            const defStart = decls[0].getStart();
+            const defEnd = decls[0].getEnd();
+            if (
+              moduleName !== resolvedSymbol.moduleName ||
+              packagePath !== resolvedSymbol.packagePath ||
+              defEnd > node.getEnd() ||
+              defStart < node.getStart()
+            ) {
+              const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+              if (!visited.has(key)) {
+                visited.add(key);
+                dependencies.push({
+                  ModPath: resolvedSymbol.moduleName || moduleName,
+                  PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+                  Name: resolvedSymbol.name,
+                  File: resolvedSymbol.filePath,
+                  Line: resolvedSymbol.line,
+                  StartOffset: resolvedSymbol.startOffset,
+                  EndOffset: resolvedSymbol.endOffset
+                });
+              }
             }
           }
         }

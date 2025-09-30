@@ -470,8 +470,13 @@ describe('GraphBuilder', () => {
 
       GraphBuilder.buildReverseRelationships(repository);
 
-      // Should not throw error and should not create references for missing nodes
-      expect(Object.keys(repository.Graph)).toHaveLength(1);
+      // Should not throw error and should create UNKNOWN nodes for missing dependencies
+      expect(Object.keys(repository.Graph)).toHaveLength(2);
+      
+      // Check that the missing node was created as UNKNOWN type
+      const missingNodeKey = 'missing?pkg#missingFunc';
+      expect(repository.Graph[missingNodeKey]).toBeDefined();
+      expect(repository.Graph[missingNodeKey].Type).toBe('UNKNOWN');
     });
 
     it('should handle empty graph', () => {
@@ -890,12 +895,13 @@ describe('GraphBuilder', () => {
 
       GraphBuilder.buildGraph(repository);
 
-      // Check all nodes are created
-      expect(Object.keys(repository.Graph)).toHaveLength(3);
+      // Check all nodes are created (including UNKNOWN node for missing dependency)
+      expect(Object.keys(repository.Graph)).toHaveLength(4);
       
       const funcKey = 'test/module?test/package#testFunc';
       const typeKey = 'test/module?test/package#TestType';
       const varKey = 'test/module?test/package#testVar';
+      const unknownKey = 'dep/module?dep/package#depFunc';
       
       expect(repository.Graph[funcKey]).toBeDefined();
       expect(repository.Graph[funcKey].Type).toBe('FUNC');
@@ -905,6 +911,10 @@ describe('GraphBuilder', () => {
       
       expect(repository.Graph[varKey]).toBeDefined();
       expect(repository.Graph[varKey].Type).toBe('VAR');
+      
+      // Check that the UNKNOWN node was created for missing dependency
+      expect(repository.Graph[unknownKey]).toBeDefined();
+      expect(repository.Graph[unknownKey].Type).toBe('UNKNOWN');
     });
   });
 });
