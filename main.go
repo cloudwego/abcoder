@@ -276,7 +276,6 @@ func (s *StringArray) String() string {
 }
 
 func parseTSProject(ctx context.Context, repoPath string, opts lang.ParseOptions, outputFlag *string) error {
-	return fmt.Errorf("skipped parseTSProject for test")
 	if outputFlag == nil {
 		return fmt.Errorf("output path is required")
 	}

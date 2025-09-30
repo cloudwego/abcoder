@@ -24,7 +24,7 @@ export class RepositoryParser {
     
     const repository: Repository = {
       ASTVersion: "v0.1.3",
-      id: path.basename(absolutePath),
+      id: "hello",
       Modules: {},
       Graph: {}
     };
