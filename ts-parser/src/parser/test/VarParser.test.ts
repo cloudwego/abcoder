@@ -1,3 +1,4 @@
+import { describe, it, expect } from '@jest/globals';
 import path from 'path';
 import { VarParser } from '../VarParser';
 import { createTestProject, expectToBeDefined } from './test-utils';
