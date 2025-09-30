@@ -15,70 +15,66 @@ jobs:
     env:
       LANGS: "go rust python java typescript"
     steps:
-      - name: Setup Go environment
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+        with: { path: 'pr_repo' }
+      - uses: actions/checkout@v4
+        with: { path: 'main_repo', ref: 'main' }
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+          cache-dependency-path: main_repo/go.sum
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rust-analyzer
-
-      - name: Setup Python environment
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Setup JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Checkout pull request code
-        uses: actions/checkout@v4
-        with:
-          path: 'pr_repo'
-
-      - name: Checkout main branch code
-        uses: actions/checkout@v4
-        with:
-          ref: 'main'
-          path: 'main_repo'
-
       - name: Compile both binaries
         run: |
-          (cd main_repo && go build -o ../abcoder_old)
-          (cd pr_repo && go build -o ../abcoder_new)
+          (cd main_repo && go build -o ../abcoder_main)
+          (cd pr_repo && go build -o ../abcoder_pr)
 
+      # Uses the pr evaluation script.
       - name: Install evaluation dependencies
-        run: pip install -r ./pr_repo/script/requirements.txt
-
-      - name: Install LSPs
         run: |
-          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
-          # use the same JDTLS for consistency and to avoid wasting time installing a duplicate JDTLS
+          pip install -r ./pr_repo/script/requirements.txt
+
+      - name: Install dependencies for main branch
+        run: |
+          OUTDIR=out_main ABCEXE=./abcoder_main ./pr_repo/script/run_testdata.sh first
           echo "JDTLS_ROOT_PATH=$(realpath ./pr_repo/lang/java/lsp/jdtls/jdt-language-server-*)" >> $GITHUB_ENV
 
-      - name: Run OLD abcoder
+      - name: Run main branch abcoder
         run:
-          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
+          OUTDIR=out_main ABCEXE=./abcoder_main ./pr_repo/script/run_testdata.sh all
 
-      - name: Run NEW abcoder
+      # Whether to reset dependencies:
+      # [n] Go:         builtin parser, do not reset
+      # [n] Rust:       assume rls to be same version
+      # [n] Python:     assume pylsp to be same version
+      # [n] Java:       assume jdtls to be same version
+      # [y] TypeScript: need to reset installed parser
+      - name: Reset dependencies
+        run: |
+          npm uninstall -g abcoder-ts-parser
+
+      - name: Install dependencies for PR
+        run: |
+          OUTDIR=out_pr ABCEXE=./abcoder_pr ./pr_repo/script/run_testdata.sh first
+
+      - name: Run PR abcoder
         run:
-          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
-
-      - name: Compare outputs and check for regression
-        id: diff_check
-        run: ./pr_repo/script/diffjson.py out_old out_new || echo "failed=true" >> $GITHUB_OUTPUT
-        continue-on-error: true
+          OUTDIR=out_pr ABCEXE=./abcoder_pr ./pr_repo/script/run_testdata.sh all
 
       - name: Upload output directories
         uses: actions/upload-artifact@v4
@@ -86,10 +82,9 @@ jobs:
         with:
           name: regression-outputs
           path: |
-            out_old
-            out_new
+            out_main
+            out_pr
           retention-days: 3
 
-      - name: Status check
-        if: steps.diff_check.outputs.failed == 'true'
-        run: exit 1
+      - name: Compare outputs and check for regression
+        run: ./pr_repo/script/diffjson.py out_main out_pr
