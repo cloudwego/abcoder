@@ -14,7 +14,8 @@ import {
   VariableDeclaration,
   Symbol,
   Identifier,
-  TypeNode
+  TypeNode,
+  ExportAssignment
 } from 'ts-morph';
 import { Function as UniFunction, Dependency, Receiver } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -118,6 +119,20 @@ export class FunctionParser {
           console.error('Error processing arrow function:', initializer, error);
         }
 
+      }
+    }
+
+    // CORNER CASE: Parse arrow function declared as a default export
+    const defaultExport = sourceFile.getDefaultExportSymbol()
+    if (defaultExport !== undefined) {
+      const decl = defaultExport.getDeclarations()[0]
+      if(Node.isExportAssignment(decl)) {
+        const expr = decl.getExpression()
+        const funcName = assignSymbolName(defaultExport)
+        if(Node.isArrowFunction(expr)) {
+          const funcObj = this.parseArrowFunction(expr, funcName, moduleName, packagePath, sourceFile, decl);
+          functions[funcObj.Name] = funcObj;
+        }
       }
     }
 
@@ -339,13 +354,18 @@ export class FunctionParser {
     };
   }
 
-  private parseArrowFunction(arrowFunc: ArrowFunction | FunctionExpression, name: string, moduleName: string, packagePath: string, sourceFile: SourceFile, varDecl: VariableDeclaration): UniFunction {
+  private parseArrowFunction(arrowFunc: ArrowFunction | FunctionExpression, name: string, moduleName: string, packagePath: string, sourceFile: SourceFile, varDecl: VariableDeclaration | ExportAssignment): UniFunction {
 
 
     const startLine = arrowFunc.getStartLineNumber();
     const startOffset = arrowFunc.getStart();
     const endOffset = arrowFunc.getEnd();
-    const content = varDecl.getVariableStatement()?.getFullText().trim() || arrowFunc.getFullText();
+    let content = ""
+    if(Node.isExportAssignment(varDecl)) {
+      content = varDecl.getExpression().getFullText().trim()
+    } else {
+      content = varDecl.getVariableStatement()?.getFullText().trim() || arrowFunc.getFullText();
+    }
     const signature = this.extractSignature(arrowFunc);
 
     // Parse parameters
@@ -360,8 +380,14 @@ export class FunctionParser {
     const globalVars = this.extractGlobalVarReferences(arrowFunc, moduleName, packagePath, sourceFile);
 
     // Determine export status from the variable declaration
-    const parent = varDecl.getVariableStatement();
-    const isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === arrowFunc.getSymbol() && this.defaultExportSymbol !== undefined)) : false;
+
+    let isExported = false;
+    if(Node.isExportAssignment(varDecl)) {
+      isExported = true;
+    } else {
+      const parent = varDecl.getVariableStatement();
+      isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === arrowFunc.getSymbol() && this.defaultExportSymbol !== undefined)) : false;
+    }
 
     return {
       ModPath: moduleName,

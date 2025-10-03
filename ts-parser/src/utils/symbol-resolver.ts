@@ -322,12 +322,18 @@ export class SymbolResolver {
 const symbolNameCache = new Map<string, Symbol>();
 
 export function assignSymbolName(symbol: Symbol): string {
+
   const decls = symbol.getDeclarations()
   if(decls.length === 0) {
     return symbol.getName()
   }
 
-  const declFile = decls[0].getSourceFile().getFilePath()
+  const declFile = decls[0].getSourceFile()
+  const declFilePath = declFile.getFilePath()
+
+  if(declFile.getDefaultExportSymbol() === symbol) {
+    return declFile.getBaseName() + '_default_export_symbol'
+  }
 
   let rawName = symbol.getName()
 
@@ -375,7 +381,7 @@ export function assignSymbolName(symbol: Symbol): string {
     }
   }
 
-  const id = declFile + "#" + rawName
+  const id = declFilePath + "#" + rawName
   if(!symbolNameCache.has(id)) {
     symbolNameCache.set(id, symbol)
     return rawName
