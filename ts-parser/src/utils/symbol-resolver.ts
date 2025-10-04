@@ -323,19 +323,22 @@ const symbolNameCache = new Map<string, Symbol>();
 
 export function assignSymbolName(symbol: Symbol): string {
 
-  const decls = symbol.getDeclarations()
-  if(decls.length === 0) {
-    return symbol.getName()
+  const decls = symbol.getDeclarations();
+  if (decls.length === 0) {
+    return symbol.getName();
   }
 
-  const declFile = decls[0].getSourceFile()
-  const declFilePath = declFile.getFilePath()
+  const declFile = decls[0].getSourceFile();
+  const declFilePath = declFile.getFilePath();
+  const declDirPath = path.dirname(declFilePath);
 
-  if(declFile.getDefaultExportSymbol() === symbol) {
-    return declFile.getBaseName() + '_default_export_symbol'
+  let rawName = symbol.getName(); // Initialize rawName here
+
+  const id = declDirPath + "#" + rawName;
+
+  if (declFile.getDefaultExportSymbol() === symbol) {
+    return declFile.getBaseName() + '_default_export_symbol';
   }
-
-  let rawName = symbol.getName()
 
   // Handle methods, properties, constructors, and functions with proper naming
   const firstDecl = decls[0];
@@ -381,17 +384,12 @@ export function assignSymbolName(symbol: Symbol): string {
     }
   }
 
-  const id = declFilePath + "#" + rawName
   if(!symbolNameCache.has(id)) {
     symbolNameCache.set(id, symbol)
     return rawName
   }
 
-  const symbolExists = symbolNameCache.get(id)
-  // make ts happy
-  if(!symbolExists) {
-    return rawName
-  }
+  const symbolExists = symbolNameCache.get(id)!
 
   const getDeclsPos = (symbol: Symbol) => {
     const declsPos = []
@@ -404,10 +402,16 @@ export function assignSymbolName(symbol: Symbol): string {
   
   const arr1 = getDeclsPos(symbol)
   const arr2 = getDeclsPos(symbolExists)
-  if(arr1.join(',') === arr2.join(',')) {
+
+  const symbolExistsDecls = symbolExists.getDeclarations()
+  if(symbolExistsDecls.length === 0) {
+    return rawName
+  }
+  const symbolExistsDeclFile = symbolExistsDecls[0].getSourceFile()
+  if(arr1.join(',') === arr2.join(',') && symbolExistsDeclFile.getFilePath() === declFilePath) {
     return rawName
   }
 
   // mangled name
-  return rawName + "_" + getDeclsPos(symbol).join(".")
+  return rawName + "_" + path.basename(declFilePath) + "_" + getDeclsPos(symbol).join(".")
 }
