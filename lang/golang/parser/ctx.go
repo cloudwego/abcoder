@@ -142,6 +142,14 @@ func (ctx *fileContext) GetMod(impt string) (string, error) {
 	if isSysPkg(impt) {
 		return "", errSysImport
 	}
+
+	// fileContext 中的 import 信息只有**当前文件的引用路径**，但是存在一种场景就是实际调用的节点在另外的一个Package，导致漏解析
+	// 常见于"链式调用"、"另一个 pkg 的全局变量的类型在另外一个 pkg 下"
+	if ctx.module != nil && ctx.module.Packages != nil {
+		if _, exist := ctx.module.Packages[impt]; exist {
+			return ctx.module.Name, nil
+		}
+	}
 	for _, ims := range ctx.imports.ProjectImports {
 		if ims == impt {
 			return ctx.module.Name, nil
