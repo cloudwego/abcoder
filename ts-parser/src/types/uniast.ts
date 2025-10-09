@@ -9,10 +9,14 @@
  * Root object representing an entire code repository.
  */
 export interface Repository {
-  /** UNIAST specification version. Fixed to "v0.1.3". */
-  ASTVersion: string;
   /** Unique identifier for the repository. Field name in JSON is "id". */
   id: string;
+  /** UNIAST specification version. Fixed to "v0.1.3". */
+  ASTVersion: string;
+  /** abcoder version used to parse the repository. Field name in JSON is "ToolVersion". */
+  ToolVersion: string;
+  /** File directory of the repository, usually should be an absolute path. */
+  Path: string;
   /** Map of all modules in the repository. Keys are unique path identifiers. */
   Modules: Record<string, Module>;
   /**

@@ -10,7 +10,7 @@ const program = new Command();
 program
   .name('abcoder-ts-parser')
   .description('TypeScript AST parser for UNIAST v0.1.3 specification')
-  .version('1.0.0');
+  .version('0.0.4');
 
 program
   .command('parse')
@@ -25,14 +25,14 @@ program
   .action(async (directory, options) => {
     try {
       const repoPath = path.resolve(directory);
-      
+
       if (!fs.existsSync(repoPath)) {
         console.error(`Error: Directory ${repoPath} does not exist`);
         process.exit(1);
       }
 
       console.log(`Parsing TypeScript repository: ${repoPath}`);
-      
+
       const parser = new RepositoryParser(repoPath, options.tsconfig);
       const repository = await parser.parseRepository(repoPath, {
         loadExternalSymbols: false,
@@ -43,12 +43,12 @@ program
 
       // Output the repository JSON file
       const outputPath = path.resolve(options.output);
-      const jsonOutput = options.pretty 
+      const jsonOutput = options.pretty
         ? JSON.stringify(repository, null, 2)
         : JSON.stringify(repository);
 
       fs.writeFileSync(outputPath, jsonOutput);
-      
+
       console.log(`Successfully parsed repository`);
       console.log(`Output written to: ${outputPath}`);
       console.log(`Total modules: ${Object.keys(repository.Modules).length}`);
