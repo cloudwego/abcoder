@@ -83,11 +83,12 @@ type NodeGraph map[string]*Node
 
 // Repository
 type Repository struct {
-	ASTVersion string
-	Name       string             `json:"id"` // module name
-	Path       string             // repo path
-	Modules    map[string]*Module // module name => module
-	Graph      NodeGraph          // node id => node
+	Name        string             `json:"id"` // module name
+	ASTVersion  string             // uniast version
+	ToolVersion string             // abcoder version
+	Path        string             // repo absolute path
+	Modules     map[string]*Module // module name => module
+	Graph       NodeGraph          // node id => node
 }
 
 func (r Repository) ID() string {

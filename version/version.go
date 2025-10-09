@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package version
 
 import (
 	"debug/buildinfo"
@@ -22,7 +22,7 @@ import (
 	"os"
 )
 
-var Version = "0.0.0"
+var Version = "unknown"
 
 func init() {
 	path, err := os.Executable()

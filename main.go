@@ -47,6 +47,7 @@ import (
 	"github.com/cloudwego/abcoder/llm/agent"
 	"github.com/cloudwego/abcoder/llm/mcp"
 	"github.com/cloudwego/abcoder/llm/tool"
+	"github.com/cloudwego/abcoder/version"
 )
 
 const Usage = `abcoder <Action> [Language] <Path> [Flags]
@@ -106,7 +107,7 @@ func main() {
 
 	switch action {
 	case "version":
-		fmt.Fprintf(os.Stdout, "%s\n", Version)
+		fmt.Fprintf(os.Stdout, "%s\n", version.Version)
 
 	case "parse":
 		language, uri := parseArgsAndFlags(flags, true, flagHelp, flagVerbose)
@@ -183,7 +184,7 @@ func main() {
 
 		svr := mcp.NewServer(mcp.ServerOptions{
 			ServerName:    "abcoder",
-			ServerVersion: Version,
+			ServerVersion: version.Version,
 			Verbose:       *flagVerbose,
 			ASTReadToolsOptions: tool.ASTReadToolsOptions{
 				RepoASTsDir: uri,
@@ -308,6 +309,8 @@ func parseTSProject(ctx context.Context, repoPath string, opts lang.ParseOptions
 
 	cmd := exec.CommandContext(ctx, parserPath, args...)
 	cmd.Env = append(os.Environ(), "NODE_OPTIONS=--max-old-space-size=65536")
+	cmd.Env = append(cmd.Env, "ABCODER_TOOL_VERSION="+version.Version)
+	cmd.Env = append(cmd.Env, "ABCODER_AST_VERSION="+uniast.Version)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
