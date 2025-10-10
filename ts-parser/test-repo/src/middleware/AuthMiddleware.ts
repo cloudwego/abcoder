@@ -1,4 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
+import { NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { config } from '../config/app.config';
 import { Logger } from '@utils/Logger';

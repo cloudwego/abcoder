@@ -19,8 +19,6 @@ export interface ResolvedSymbol {
 export class SymbolResolver {
   private project: Project;
   private projectRoot: string;
-  private resolutionCache = new Map<string, ResolvedSymbol | null>();
-  private resolutionSymbolCache = new Map<string, Symbol | null>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private packageJsonCache = new Map<string, any>();
   private mainPackageName: string;
@@ -55,10 +53,6 @@ export class SymbolResolver {
     if (!declarations || declarations.length === 0) {
       return [null, null];
     }
-    const cacheKey = `${declarations[0].getSourceFile().getFilePath()}#${symbol.getEscapedName()}_${symbol.getDeclarations()?.[0].getStart()}`;
-    if (this.resolutionCache.has(cacheKey) && this.resolutionSymbolCache.has(cacheKey)) {
-      return [this.resolutionCache.get(cacheKey)!, this.resolutionSymbolCache.get(cacheKey)!];
-    }
 
     const definitionNode = this.findActualDefinition(symbol);
     const definitionSymbol = definitionNode?.getSymbol();
@@ -69,8 +63,6 @@ export class SymbolResolver {
         this.cannotResolveSymbolNames.add(symbol.getName());
         console.warn(`Symbol not found: ${symbol.getName()}.`)
       }
-      this.resolutionSymbolCache.set(cacheKey, null);
-      this.resolutionCache.set(cacheKey, null);
       return [null, null];
     }
 
@@ -82,6 +74,9 @@ export class SymbolResolver {
     const packageInfo = this.extractPackageInfo(filePath, isExternal);
 
     const exprSourceFile = expression.getSourceFile().getFilePath();
+
+
+    // The `resolved.line`, `resolved.column` are the position of the expression, not the definition.
 
     const resolved: ResolvedSymbol = {
       name: assignSymbolName(definitionSymbol), // Use the original symbol name
@@ -95,8 +90,6 @@ export class SymbolResolver {
       packagePath: packageInfo.path,
     };
 
-    this.resolutionSymbolCache.set(cacheKey, definitionSymbol);
-    this.resolutionCache.set(cacheKey, resolved);
     return [resolved, definitionSymbol];
   }
 
@@ -311,12 +304,6 @@ export class SymbolResolver {
     return path.relative(this.projectRoot, filePath).replace(/\\/g, '/');
   }
 
-  /**
-   * Clear the resolution cache
-   */
-  clearCache(): void {
-    this.resolutionCache.clear();
-  }
 }
 
 const symbolNameCache = new Map<string, Symbol>();
