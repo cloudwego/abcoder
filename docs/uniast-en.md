@@ -81,7 +81,10 @@ A repository consists of entity Modules and relationship Graph
 
 ```json
 {
-    "Identity": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "id": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "ASTVersion": "xx",
+    "ToolVersion": "yy",
+    "Path": "/a/b/localsession",
     "Modules": {
         "github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b": {},
         "github.com/cloudwego/localsession": {}
@@ -90,7 +93,7 @@ A repository consists of entity Modules and relationship Graph
 }
 ```
 
-- Identity: The unique name of the repo. Since the abcoder parser does not currently retrieve repository git information, the absolute path where it is currently located is generally used as the Identity
+- id: The unique name of the repo. Since the abcoder parser does not currently retrieve repository git information, the absolute path where it is currently located is generally used as the Identity
 
 
 - Modules: Contains submodules, a dictionary of {ModPath}: {Module AST}. Both repository modules and external dependency modules can appear in Modules, but need to be distinguished by ModulePath.
@@ -104,7 +107,10 @@ A repository consists of entity Modules and relationship Graph
 
 - Path: The file directory of the repository, usually should be an absolute path
 
-- ASTVersion: The UniAST version used to parse
+- ASTVersion: The UniAST version spefication when the repository is parsed
+
+- ToolVersion: The abcoder version used to parse
+
 
 ### Module
 

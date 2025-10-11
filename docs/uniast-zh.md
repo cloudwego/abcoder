@@ -81,7 +81,10 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 
 ```json
 {
-    "Identity": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "id": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "ASTVersion": "xx",
+    "ToolVersion": "yy",
+    "Path": "/a/b/localsession",
     "Modules": {
         "github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b": {},
         "github.com/cloudwego/localsession": {}
@@ -90,7 +93,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 }
 ```
 
-- Identity: repo 的唯一名称。由于 abcoder parser 目前不获取仓库 git 信息，因此一般使用当前所处的绝对路径作为 Identity
+- id: repo 的唯一名称。由于 abcoder parser 目前不获取仓库 git 信息，因此一般使用当前所处的绝对路径作为 Identity
 
 
 - Modules: 包含的子模块，{ModPath} : {Module AST} 的字典，本仓库模块和外部依赖模块都可以出现在 Modules 中，但是需要通过 ModulePath 来区分。
@@ -104,7 +107,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 
 - Path: 仓库的文件目录，通常应该为绝对路径
 
-- ASTVersion: 解析时使用的 UniAST 版本
+- ASTVersion: 解析时对应的 UniAST 版本
+
+- ToolVersion: 解析时使用的 abcoder 版本
 
 
 ### Module

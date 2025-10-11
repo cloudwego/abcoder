@@ -161,3 +161,7 @@ var CaseVarFunc CaseStruct = func() CaseStruct {
 		FieldExternalType: entity.MyStruct{},
 	}
 }()
+
+type CaseInterface interface {
+	CaseMethodDeps(a int, b entity.MyStruct) Integer
+}
