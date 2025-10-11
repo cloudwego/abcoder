@@ -371,7 +371,7 @@ export class ProjectFactory {
    * Handles tsconfig.json resolution and project references
    */
   static createProjectForSingleRepo(
-    projectRoot: string, 
+    projectRoot: string,
     tsConfigPath?: string,
     tsConfigCache?: TsConfigCache
   ): Project {
@@ -492,7 +492,7 @@ export class ProjectFactory {
           return false;
         }
       });
-      
+
       if (existingFiles.length > 0) {
         try {
           project.addSourceFilesAtPaths(existingFiles);
@@ -523,7 +523,8 @@ export class ProjectFactory {
  * Repository Factory - Centralized creation of Repository objects
  */
 export class RepositoryFactory {
-  private static readonly AST_VERSION = 'v0.1.3';
+  private static AST_VERSION = process.env.ABCODER_AST_VERSION || 'unknown';
+  private static TOOL_VERSION = process.env.ABCODER_TOOL_VERSION || 'unknown';
 
   /**
    * Create a repository for a single project/repository
@@ -532,7 +533,9 @@ export class RepositoryFactory {
     const absolutePath = path.resolve(repoPath);
     return {
       ASTVersion: RepositoryFactory.AST_VERSION,
+      ToolVersion: RepositoryFactory.TOOL_VERSION,
       id: path.basename(absolutePath),
+      Path: absolutePath,
       Modules: {},
       Graph: {},
     };
@@ -544,6 +547,8 @@ export class RepositoryFactory {
   static createPackageRepository(pkg: MonorepoPackage, module: Module): Repository {
     return {
       ASTVersion: RepositoryFactory.AST_VERSION,
+      ToolVersion: RepositoryFactory.TOOL_VERSION,
+      Path: pkg.absolutePath,
       id: pkg.name || path.basename(pkg.absolutePath),
       Modules: { [module.Name]: module },
       Graph: {},
@@ -556,6 +561,8 @@ export class RepositoryFactory {
   static createEmptyRepository(id: string): Repository {
     return {
       ASTVersion: RepositoryFactory.AST_VERSION,
+      ToolVersion: RepositoryFactory.TOOL_VERSION,
+      Path: '',
       id,
       Modules: {},
       Graph: {},

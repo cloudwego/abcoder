@@ -35,6 +35,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/register"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
+	"github.com/cloudwego/abcoder/version"
 )
 
 // ParseOptions is the options for parsing the repo.
@@ -105,6 +106,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	}
 
 	repo.ASTVersion = uniast.Version
+	repo.ToolVersion = version.Version
 
 	out, err := json.Marshal(repo)
 	if err != nil {

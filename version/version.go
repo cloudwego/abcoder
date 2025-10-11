@@ -14,8 +14,31 @@
  * limitations under the License.
  */
 
-package main
+package version
 
-const (
-	Version = "0.2.1"
+import (
+	"debug/buildinfo"
+	"fmt"
+	"os"
 )
+
+var Version = "unknown"
+
+func init() {
+	path, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fail to get executable path: %v\n", err)
+		return
+	}
+	data, err := os.Open(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fail to read executable file: %v\n", err)
+		return
+	}
+	info, err := buildinfo.Read(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fail to read build info: %v\n", err)
+		return
+	}
+	Version = info.Main.Version
+}
