@@ -29,3 +29,6 @@ export class ApiService {
 }
 
 
+export default () => {
+  return ApiService.createService('https://api.example.com');
+}

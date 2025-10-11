@@ -513,5 +513,43 @@ describe('FunctionParser', () => {
       
       cleanup();
     });
+
+    it('should give mangled names for 2 symbol located in different files', () => {
+      const { project, sourceFile, cleanup } = createTestProjectWithMultipleFiles({
+        'file1.ts': `
+          export function sharedName() {
+            return 'from file1';
+          }
+        `,
+        'file2.ts': `
+          export function sharedName() {
+            return 'from file2';
+          }
+        `,
+        'test.ts': `
+          import { sharedName as sharedName1 } from './file1';
+          import { sharedName as sharedName2 } from './file2';
+
+          function testFunction() {
+            sharedName1();
+            sharedName2();
+          }
+        `
+      });
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const testFunction = expectToBeDefined(functions['testFunction']);
+      expect(testFunction.FunctionCalls).toBeDefined();
+
+      const callNames = expectToBeDefined(testFunction.FunctionCalls).map(call => call.Name);
+      expect(callNames).toHaveLength(2);
+      cleanup();
+    });
   });
 });

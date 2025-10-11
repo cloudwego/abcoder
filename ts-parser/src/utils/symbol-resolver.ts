@@ -19,8 +19,6 @@ export interface ResolvedSymbol {
 export class SymbolResolver {
   private project: Project;
   private projectRoot: string;
-  private resolutionCache = new Map<string, ResolvedSymbol | null>();
-  private resolutionSymbolCache = new Map<string, Symbol | null>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private packageJsonCache = new Map<string, any>();
   private mainPackageName: string;
@@ -55,10 +53,6 @@ export class SymbolResolver {
     if (!declarations || declarations.length === 0) {
       return [null, null];
     }
-    const cacheKey = `${declarations[0].getSourceFile().getFilePath()}#${symbol.getEscapedName()}_${symbol.getDeclarations()?.[0].getStart()}`;
-    if (this.resolutionCache.has(cacheKey) && this.resolutionSymbolCache.has(cacheKey)) {
-      return [this.resolutionCache.get(cacheKey)!, this.resolutionSymbolCache.get(cacheKey)!];
-    }
 
     const definitionNode = this.findActualDefinition(symbol);
     const definitionSymbol = definitionNode?.getSymbol();
@@ -69,8 +63,6 @@ export class SymbolResolver {
         this.cannotResolveSymbolNames.add(symbol.getName());
         console.warn(`Symbol not found: ${symbol.getName()}.`)
       }
-      this.resolutionSymbolCache.set(cacheKey, null);
-      this.resolutionCache.set(cacheKey, null);
       return [null, null];
     }
 
@@ -82,6 +74,9 @@ export class SymbolResolver {
     const packageInfo = this.extractPackageInfo(filePath, isExternal);
 
     const exprSourceFile = expression.getSourceFile().getFilePath();
+
+
+    // The `resolved.line`, `resolved.column` are the position of the expression, not the definition.
 
     const resolved: ResolvedSymbol = {
       name: assignSymbolName(definitionSymbol), // Use the original symbol name
@@ -95,8 +90,6 @@ export class SymbolResolver {
       packagePath: packageInfo.path,
     };
 
-    this.resolutionSymbolCache.set(cacheKey, definitionSymbol);
-    this.resolutionCache.set(cacheKey, resolved);
     return [resolved, definitionSymbol];
   }
 
@@ -311,25 +304,28 @@ export class SymbolResolver {
     return path.relative(this.projectRoot, filePath).replace(/\\/g, '/');
   }
 
-  /**
-   * Clear the resolution cache
-   */
-  clearCache(): void {
-    this.resolutionCache.clear();
-  }
 }
 
 const symbolNameCache = new Map<string, Symbol>();
 
 export function assignSymbolName(symbol: Symbol): string {
-  const decls = symbol.getDeclarations()
-  if(decls.length === 0) {
-    return symbol.getName()
+
+  const decls = symbol.getDeclarations();
+  if (decls.length === 0) {
+    return symbol.getName();
   }
 
-  const declFile = decls[0].getSourceFile().getFilePath()
+  const declFile = decls[0].getSourceFile();
+  const declFilePath = declFile.getFilePath();
+  const declDirPath = path.dirname(declFilePath);
 
-  let rawName = symbol.getName()
+  let rawName = symbol.getName(); // Initialize rawName here
+
+  const id = declDirPath + "#" + rawName;
+
+  if (declFile.getDefaultExportSymbol() === symbol) {
+    return declFile.getBaseName() + '_default_export_symbol';
+  }
 
   // Handle methods, properties, constructors, and functions with proper naming
   const firstDecl = decls[0];
@@ -375,17 +371,12 @@ export function assignSymbolName(symbol: Symbol): string {
     }
   }
 
-  const id = declFile + "#" + rawName
   if(!symbolNameCache.has(id)) {
     symbolNameCache.set(id, symbol)
     return rawName
   }
 
-  const symbolExists = symbolNameCache.get(id)
-  // make ts happy
-  if(!symbolExists) {
-    return rawName
-  }
+  const symbolExists = symbolNameCache.get(id)!
 
   const getDeclsPos = (symbol: Symbol) => {
     const declsPos = []
@@ -398,10 +389,16 @@ export function assignSymbolName(symbol: Symbol): string {
   
   const arr1 = getDeclsPos(symbol)
   const arr2 = getDeclsPos(symbolExists)
-  if(arr1.join(',') === arr2.join(',')) {
+
+  const symbolExistsDecls = symbolExists.getDeclarations()
+  if(symbolExistsDecls.length === 0) {
+    return rawName
+  }
+  const symbolExistsDeclFile = symbolExistsDecls[0].getSourceFile()
+  if(arr1.join(',') === arr2.join(',') && symbolExistsDeclFile.getFilePath() === declFilePath) {
     return rawName
   }
 
   // mangled name
-  return rawName + "_" + getDeclsPos(symbol).join(".")
+  return rawName + "_" + path.basename(declFilePath) + "_" + getDeclsPos(symbol).join(".")
 }

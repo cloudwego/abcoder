@@ -394,35 +394,6 @@ describe('SymbolResolver', () => {
     });
   });
 
-  describe('clearCache', () => {
-    it('should clear the resolution cache', () => {
-      const { project: testProject, sourceFile, cleanup } = createTestProject(`
-        const test = 42;
-      `);
-
-      try {
-        const variableDeclaration = sourceFile.getVariableDeclaration('test');
-        const symbol = variableDeclaration?.getSymbol();
-        
-        if (symbol) {
-          // First resolution
-          const [resolved1, _] = symbolResolver.resolveSymbol(symbol!, variableDeclaration!);
-          expect(resolved1).toBeDefined();
-
-          // Clear cache
-          symbolResolver.clearCache();
-
-          // Second resolution should work the same
-          const [resolved2, __] = symbolResolver.resolveSymbol(symbol!, variableDeclaration!);
-          expect(resolved2).toBeDefined();
-          expect(resolved2?.name).toBe(resolved1?.name);
-        }
-      } finally {
-        cleanup();
-      }
-    });
-  });
-
   describe('assignSymbolName', () => {
     it('should handle simple variable names', () => {
       const { project: testProject, sourceFile, cleanup } = createTestProject(`
