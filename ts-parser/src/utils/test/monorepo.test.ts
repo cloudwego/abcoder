@@ -710,6 +710,113 @@ describe('MonorepoUtils', () => {
     });
   });
 
+  describe('pnpmWorkspace support', () => {
+    describe('getEdenPackages with pnpmWorkspace', () => {
+      it('should parse pnpmWorkspace configuration and extract packages', () => {
+        const testProject = createPnpmWorkspaceProject([
+          { 
+            path: 'packages/core',
+            packageJson: {
+              name: '@test/core',
+              version: '1.0.0',
+              dependencies: {
+                'react': '^18.0.0',
+                'lodash': '^4.17.21'
+              }
+            }
+          },
+          { 
+            path: 'packages/utils',
+            packageJson: {
+              name: '@test/utils',
+              version: '1.0.0',
+              dependencies: {
+                'typescript': '^5.0.0'
+              }
+            }
+          }
+        ], ['packages/*']);
+
+        const config: EdenMonorepoConfig = {
+          pnpmWorkspace: {
+            packages: ['packages/*']
+          }
+        };
+
+        const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+        
+        expect(result).toHaveLength(2);
+        
+        const corePackage = result.find(pkg => pkg.name === '@test/core');
+        expect(corePackage).toBeDefined();
+        expect(corePackage?.path).toBe('packages/core');
+        
+        const utilsPackage = result.find(pkg => pkg.name === '@test/utils');
+        expect(utilsPackage).toBeDefined();
+        expect(utilsPackage?.path).toBe('packages/utils');
+
+        testProject.cleanup();
+      });
+
+      it('should prioritize pnpmWorkspace over workspaces and packages', () => {
+        const testProject = createPnpmWorkspaceProject([
+          { 
+            path: 'packages/core',
+            packageJson: {
+              name: '@test/core',
+              version: '1.0.0'
+            }
+          }
+        ], ['packages/*']);
+
+        const config: EdenMonorepoConfig = {
+          pnpmWorkspace: {
+            packages: ['packages/*']
+          },
+          workspaces: ['apps/*'],
+          packages: [
+            { path: 'legacy/*', shouldPublish: true }
+          ]
+        };
+
+        const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+        
+        expect(result).toHaveLength(1);
+        expect(result[0].name).toBe('@test/core');
+        expect(result[0].path).toBe('packages/core');
+
+        testProject.cleanup();
+      });
+
+      it('should handle pnpmWorkspace without catalog configuration', () => {
+        const testProject = createPnpmWorkspaceProject([
+          { 
+            path: 'apps/web',
+            packageJson: {
+              name: '@test/web',
+              version: '1.0.0'
+            }
+          }
+        ], ['apps/*']);
+
+        const config: EdenMonorepoConfig = {
+          pnpmWorkspace: {
+            packages: ['apps/*']
+          }
+        };
+
+        const result = MonorepoUtils.getEdenPackages(testProject.rootDir, config);
+        
+        expect(result).toHaveLength(1);
+         expect(result[0].name).toBe('@test/web');
+
+        testProject.cleanup();
+      });
+    });
+
+
+  });
+
   describe('findPackageForPath', () => {
     const packages: MonorepoPackage[] = [
       {
