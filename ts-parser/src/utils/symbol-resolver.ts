@@ -318,11 +318,10 @@ export function assignSymbolName(symbol: Symbol): string {
 
   const declFile = decls[0].getSourceFile();
   const declFilePath = declFile.getFilePath();
-  const declDirPath = path.dirname(declFilePath);
 
   let rawName = symbol.getName(); // Initialize rawName here
 
-  const id = declDirPath + "#" + rawName;
+  const id = declFilePath + "#" + rawName;
 
   // Get first declaration
   const firstDecl = decls[0];
