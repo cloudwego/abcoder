@@ -169,7 +169,7 @@ export class ParsingStrategySelector {
       tooManyFiles: totalFiles > this.THRESHOLDS.TOTAL_FILES_LARGE,
       tooLarge: totalSizeMB > this.THRESHOLDS.TOTAL_SIZE_LARGE_MB,
       tooManyPackages: packageCount > this.THRESHOLDS.PACKAGE_COUNT_LARGE,
-      hasLargePackages: hasLargePackages,
+      hasLargePackages,
       highAvgFiles: avgFilesPerPackage > this.THRESHOLDS.AVG_FILES_PER_PACKAGE,
       highMemoryUsage: estimatedMemoryUsageMB > this.THRESHOLDS.MEMORY_USAGE_LARGE_MB,
     };

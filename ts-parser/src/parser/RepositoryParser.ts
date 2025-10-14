@@ -153,8 +153,10 @@ export class RepositoryParser {
   private async processPackagesWithClusterMode(
     packages: MonorepoPackage[],
     repository: Repository,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     options: any
   ): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((cluster as any).isPrimary || (cluster as any).isMaster) {
       const result = await processPackagesWithCluster(packages, this.projectRoot, options);
 
