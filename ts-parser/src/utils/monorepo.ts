@@ -2,6 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
+ * Interface for Eden monorepo pnpmWorkspace configuration
+ * Available when emo version >= 3.6.0
+ */
+export interface PnpmWorkspaceConfig {
+  // Workspace packages configuration (same as workspaces)
+  packages?: string[];
+}
+
+/**
  * Interface for Eden monorepo configuration
  * Supports both legacy packages format and new workspaces format
  */
@@ -40,6 +49,8 @@ export interface EdenMonorepoConfig {
   }>;
   // New workspaces format (supports glob patterns)
   workspaces?: string[];
+  // This has higher priority than packages and workspaces
+  pnpmWorkspace?: PnpmWorkspaceConfig;
 }
 
 /**
@@ -117,10 +128,27 @@ export class MonorepoUtils {
 
   /**
    * Get packages from Eden monorepo configuration
-   * Supports both packages array and workspaces array formats
+   * Supports packages array, workspaces array, and pnpmWorkspace formats
+   * pnpmWorkspace has the highest priority (emo >= 3.6.0)
    */
   static getEdenPackages(rootPath: string, config: EdenMonorepoConfig): MonorepoPackage[] {
     const packages: MonorepoPackage[] = [];
+    
+    if (config.pnpmWorkspace && config.pnpmWorkspace.packages && config.pnpmWorkspace.packages.length > 0) {
+      for (const workspace of config.pnpmWorkspace.packages) {
+        const workspacePackages = this.expandWorkspacePattern(rootPath, workspace);
+        packages.push(...workspacePackages);
+      }
+      return packages; // Return early if pnpmWorkspace is configured
+    }
+    
+    // Handle new workspaces array format
+    if (config.workspaces && config.workspaces.length > 0) {
+      for (const workspace of config.workspaces) {
+        const workspacePackages = this.expandWorkspacePattern(rootPath, workspace);
+        packages.push(...workspacePackages);
+      }
+    }
     
     // Handle legacy packages array format
     if (config.packages && config.packages.length > 0) {
@@ -151,14 +179,6 @@ export class MonorepoUtils {
         } else {
           console.warn(`Package directory does not exist: ${absolutePath}`);
         }
-      }
-    }
-    
-    // Handle new workspaces array format
-    if (config.workspaces && config.workspaces.length > 0) {
-      for (const workspace of config.workspaces) {
-        const workspacePackages = this.expandWorkspacePattern(rootPath, workspace);
-        packages.push(...workspacePackages);
       }
     }
     
@@ -327,4 +347,6 @@ export class MonorepoUtils {
     
     return null;
   }
+
+
 }
