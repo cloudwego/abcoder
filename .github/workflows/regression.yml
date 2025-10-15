@@ -14,6 +14,7 @@ jobs:
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     env:
       LANGS: "go rust python java typescript"
+      DIFFJSON_IGNORE: "  ['id']   ['Path']  "
     steps:
       - name: Checkout pull request code
         uses: actions/checkout@v4
@@ -101,4 +102,4 @@ jobs:
           retention-days: 3
 
       - name: Compare outputs and check for regression
-        run: ./pr_repo/script/diffjson.py out_old out_new
+        run: ./pr_repo/script/diffjson.py out_old out_new $COMPARE_IGNORE

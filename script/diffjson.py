@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
+import re
 import sys
 from pathlib import Path
 from typing import Literal
@@ -9,6 +11,56 @@ from deepdiff import DeepDiff
 
 # Define status types for clarity
 Status = Literal["OK", "BAD", "FILE_ERROR"]
+
+
+def parse_accessor(accessor_string: str) -> list[str | int]:
+    """
+    Parses a field accessor string like "['key'][0]" into a list ['key', 0].
+    This allows for programmatic access to nested JSON elements.
+    """
+    # Regex to find content within brackets, e.g., ['key'] or [0]
+    parts = re.findall(r"\[([^\]]+)\]", accessor_string)
+    keys = []
+    for part in parts:
+        try:
+            # Try to convert to an integer for list indices
+            keys.append(int(part))
+        except ValueError:
+            # Otherwise, it's a string key; strip surrounding quotes
+            keys.append(part.strip("'\""))
+    return keys
+
+
+def delete_path(data: dict | list, path: list[str | int]):
+    """
+    Deletes a value from a nested dictionary or list based on a path.
+    This function modifies the data in place. If the path is invalid
+    or doesn't exist, it does nothing.
+    """
+    if not path:
+        return
+
+    # Traverse to the parent of the target element to delete it
+    parent = data
+    key_to_delete = path[-1]
+    path_to_parent = path[:-1]
+
+    try:
+        for key in path_to_parent:
+            parent = parent[key]
+
+        # Check if the final key/index exists in the parent before deleting
+        if isinstance(parent, dict) and key_to_delete in parent:
+            del parent[key_to_delete]
+        elif (
+            isinstance(parent, list)
+            and isinstance(key_to_delete, int)
+            and 0 <= key_to_delete < len(parent)
+        ):
+            del parent[key_to_delete]
+    except (KeyError, IndexError, TypeError):
+        # Path is invalid (e.g., key missing, index out of bounds). Ignore and proceed.
+        pass
 
 
 def format_diff_custom(diff: DeepDiff) -> str:
@@ -65,12 +117,15 @@ def format_diff_custom(diff: DeepDiff) -> str:
     return "\n".join(output)
 
 
-def compare_json_files(file1_path: Path, file2_path: Path) -> Status:
+def compare_json_files(
+    file1_path: Path, file2_path: Path, ignore_fields: list[str] | None = None
+) -> tuple[Status, DeepDiff | None]:
     """
-    Compares the content of two JSON files without printing output.
+    Compares two JSON files, optionally ignoring specified fields.
 
     Returns:
-        "OK" if they match, "BAD" if they don't, "FILE_ERROR" on read/parse error.
+        A tuple containing the status ("OK", "BAD", "FILE_ERROR")
+        and the DeepDiff object if differences were found.
     """
     try:
         with open(file1_path, "r", encoding="utf-8") as f1:
@@ -78,14 +133,23 @@ def compare_json_files(file1_path: Path, file2_path: Path) -> Status:
         with open(file2_path, "r", encoding="utf-8") as f2:
             json2 = json.load(f2)
     except (FileNotFoundError, json.JSONDecodeError):
-        return "FILE_ERROR"
+        return "FILE_ERROR", None
+
+    # Delete ignored fields from both JSON objects before comparison
+    if ignore_fields:
+        for field_accessor in ignore_fields:
+            path = parse_accessor(field_accessor)
+            delete_path(json1, path)
+            delete_path(json2, path)
 
     diff = DeepDiff(json1, json2, ignore_order=True)
 
-    return "BAD" if diff else "OK"
+    return ("BAD", diff) if diff else ("OK", None)
 
 
-def process_directory_comparison(old_dir: Path, new_dir: Path) -> bool:
+def process_directory_comparison(
+    old_dir: Path, new_dir: Path, ignore_fields: list[str] | None = None
+) -> bool:
     """
     Compares JSON files across two directories and prints results in a list format.
     """
@@ -94,7 +158,9 @@ def process_directory_comparison(old_dir: Path, new_dir: Path) -> bool:
     new_files = {p.name for p in new_dir.glob("*.json")}
 
     for filename in sorted(old_files.intersection(new_files)):
-        status = compare_json_files(old_dir / filename, new_dir / filename)
+        status, _ = compare_json_files(
+            old_dir / filename, new_dir / filename, ignore_fields
+        )
         results["BAD" if status != "OK" else "OK"].append(filename)
 
     for filename in sorted(old_files - new_files):
@@ -125,7 +191,24 @@ def main():
     parser.add_argument(
         "path2", type=Path, help="Path to the second file or 'new' directory."
     )
+    parser.add_argument(
+        "-i",
+        "--ignore",
+        action="append",
+        default=[],
+        help="Field to ignore, as an accessor string. Can be used multiple times. "
+        "Also reads whitespace-separated values from $DIFFJSON_IGNORE. "
+        "Example: -i \"['metadata']['timestamp']\"",
+    )
     args = parser.parse_args()
+
+    # --- Combine ignore fields from CLI and environment variable ---
+    cli_ignore_fields = args.ignore
+    env_ignore_str = os.environ.get("DIFFJSON_IGNORE", "")
+    env_ignore_fields = env_ignore_str.split() if env_ignore_str else []
+
+    # Combine both sources and remove duplicates
+    all_ignore_fields = list(set(cli_ignore_fields + env_ignore_fields))
 
     path1, path2 = args.path1, args.path2
 
@@ -139,7 +222,7 @@ def main():
     # --- Handle Directory Comparison ---
     if path1.is_dir() and path2.is_dir():
         print(f"Comparing directories:\n- Old: {path1}\n- New: {path2}\n")
-        if process_directory_comparison(path1, path2):
+        if process_directory_comparison(path1, path2, all_ignore_fields):
             print("\nComparison finished with errors.", file=sys.stderr)
             return 1
         else:
@@ -148,23 +231,17 @@ def main():
 
     # --- Handle Single File Comparison ---
     elif path1.is_file() and path2.is_file():
-        try:
-            with open(path1, "r", encoding="utf-8") as f1:
-                json1 = json.load(f1)
-            with open(path2, "r", encoding="utf-8") as f2:
-                json2 = json.load(f2)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Error reading or parsing file: {e}", file=sys.stderr)
+        status, diff = compare_json_files(path1, path2, all_ignore_fields)
+
+        if status == "FILE_ERROR":
+            print("Error reading or parsing a file.", file=sys.stderr)
             return 1
 
-        diff = DeepDiff(json1, json2, ignore_order=True)
-
-        if diff:
+        if status == "BAD" and diff:
             print(
                 f"Differences found between '{path1.name}' and '{path2.name}':\n",
                 file=sys.stderr,
             )
-            # Format the diff into a custom readable format and print to stderr
             custom_output = format_diff_custom(diff)
             print(custom_output, file=sys.stderr)
             return 1
