@@ -262,14 +262,15 @@ export class SymbolResolver {
     if (isExternal) {
       return { path: this.extractModuleInfo(filePath, isExternal).name };
     }
-    const dir = this.normalizePath(path.dirname(filePath));
-    const packageJsonPath = this.findPackageJsonPath(dir);
+    // For internal files, return the file path relative to project root (not directory)
+    const normalizedFilePath = this.normalizePath(filePath);
+    const packageJsonPath = this.findPackageJsonPath(path.dirname(normalizedFilePath));
     let packageRoot = this.projectRoot;
     if (packageJsonPath) {
       packageRoot = path.dirname(packageJsonPath);
     }
-    const relativePath = path.relative(packageRoot, dir);
-    return { path: relativePath === '' ? '.' : `${relativePath}` };
+    const relativePath = path.relative(packageRoot, normalizedFilePath);
+    return { path: relativePath === '' ? '.' : relativePath };
   }
 
    /**
@@ -317,18 +318,33 @@ export function assignSymbolName(symbol: Symbol): string {
 
   const declFile = decls[0].getSourceFile();
   const declFilePath = declFile.getFilePath();
-  const declDirPath = path.dirname(declFilePath);
 
   let rawName = symbol.getName(); // Initialize rawName here
 
-  const id = declDirPath + "#" + rawName;
+  const id = declFilePath + "#" + rawName;
 
+  // Get first declaration
+  const firstDecl = decls[0];
+
+  // Handle default exports - check if it has an actual name
   if (declFile.getDefaultExportSymbol() === symbol) {
-    return declFile.getBaseName() + '_default_export_symbol';
+    // For named default exports (e.g., export default function foo()), use the actual name
+    if (Node.isFunctionDeclaration(firstDecl) || Node.isClassDeclaration(firstDecl)) {
+      const actualName = firstDecl.getName();
+      if (actualName && actualName !== 'default') {
+        rawName = actualName;
+        // Continue with the rest of the logic below
+      } else {
+        // Anonymous default export
+        return declFile.getBaseName() + '_default_export_symbol';
+      }
+    } else {
+      // Other types of default exports (variables, etc.)
+      return declFile.getBaseName() + '_default_export_symbol';
+    }
   }
 
   // Handle methods, properties, constructors, and functions with proper naming
-  const firstDecl = decls[0];
   
   // Handle class/interface members with parent prefix
   if(Node.isMethodDeclaration(firstDecl) || Node.isMethodSignature(firstDecl) || 

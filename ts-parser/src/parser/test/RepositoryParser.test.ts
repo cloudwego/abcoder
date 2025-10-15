@@ -248,31 +248,42 @@ export interface ServerConfig {
       const sharedUtilsModule = result.Modules['@test/shared-utils'];
       expect(sharedUtilsModule).toBeDefined();
       expect(sharedUtilsModule.Packages).toBeDefined();
-      expect(sharedUtilsModule.Packages.src).toBeDefined();
+
+      // Collect all functions, types, and vars from all file-based packages
+      const allFunctions: Record<string, any> = {};
+      const allTypes: Record<string, any> = {};
+      const allVars: Record<string, any> = {};
+
+      Object.values(sharedUtilsModule.Packages).forEach((pkg: any) => {
+        if (pkg.Functions) Object.assign(allFunctions, pkg.Functions);
+        if (pkg.Types) Object.assign(allTypes, pkg.Types);
+        if (pkg.Vars) Object.assign(allVars, pkg.Vars);
+      });
 
       // Verify functions are parsed
-      const sharedUtilsFunctions = sharedUtilsModule.Packages.src.Functions;
-      expect(sharedUtilsFunctions).toBeDefined();
-      expect(sharedUtilsFunctions['formatMessage']).toBeDefined();
-      expect(sharedUtilsFunctions['capitalize']).toBeDefined();
-      expect(sharedUtilsFunctions['formatDate']).toBeDefined();
-      expect(sharedUtilsFunctions['addDays']).toBeDefined();
+      expect(allFunctions['formatMessage']).toBeDefined();
+      expect(allFunctions['capitalize']).toBeDefined();
+      expect(allFunctions['formatDate']).toBeDefined();
+      expect(allFunctions['addDays']).toBeDefined();
 
       // Verify types are parsed
-      const sharedUtilsTypes = sharedUtilsModule.Packages.src.Types;
-      expect(sharedUtilsTypes).toBeDefined();
-      expect(sharedUtilsTypes['StringOptions']).toBeDefined();
+      expect(allTypes['StringOptions']).toBeDefined();
 
       // Verify variables are parsed
-      const sharedUtilsVars = sharedUtilsModule.Packages.src.Vars;
-      expect(sharedUtilsVars).toBeDefined();
-      expect(sharedUtilsVars['SHARED_CONSTANTS']).toBeDefined();
+      expect(allVars['SHARED_CONSTANTS']).toBeDefined();
 
       // Verify api-server module
       const apiServerModule = result.Modules['@test/api-server'];
       expect(apiServerModule).toBeDefined();
-      expect(apiServerModule.Packages.src.Types['ApiServer']).toBeDefined();
-      expect(apiServerModule.Packages.src.Types['ServerConfig']).toBeDefined();
+
+      // Collect types from api-server packages
+      const apiServerTypes: Record<string, any> = {};
+      Object.values(apiServerModule.Packages).forEach((pkg: any) => {
+        if (pkg.Types) Object.assign(apiServerTypes, pkg.Types);
+      });
+
+      expect(apiServerTypes['ApiServer']).toBeDefined();
+      expect(apiServerTypes['ServerConfig']).toBeDefined();
 
       // Verify dependency graph includes cross-package dependencies
       expect(result.Graph).toBeDefined();
@@ -476,7 +487,14 @@ export class WebApplication {
 
       // Verify inheritance is captured
       const uiModule = result.Modules['@test/ui-components'];
-      const uiServiceType = uiModule.Packages.src.Types['UIService'];
+
+      // Collect types from all ui-components packages
+      const uiTypes: Record<string, any> = {};
+      Object.values(uiModule.Packages).forEach((pkg: any) => {
+        if (pkg.Types) Object.assign(uiTypes, pkg.Types);
+      });
+
+      const uiServiceType = uiTypes['UIService'];
       expect(uiServiceType).toBeDefined();
       expect(uiServiceType.Exported).toBe(true);
 
@@ -668,18 +686,34 @@ export function createButton(props: ComponentProps): string {
       // Verify core module structure
       const coreModule = result.Modules['@test/core'];
       expect(coreModule).toBeDefined();
-      expect(coreModule.Packages.src).toBeDefined();
-      expect(coreModule.Packages.src.Types['Config']).toBeDefined();
-      expect(coreModule.Packages.src.Types['BaseService']).toBeDefined();
-      expect(coreModule.Packages.src.Functions['createConfig']).toBeDefined();
+
+      // Collect types and functions from all core packages
+      const coreTypes: Record<string, any> = {};
+      const coreFunctions: Record<string, any> = {};
+      Object.values(coreModule.Packages).forEach((pkg: any) => {
+        if (pkg.Types) Object.assign(coreTypes, pkg.Types);
+        if (pkg.Functions) Object.assign(coreFunctions, pkg.Functions);
+      });
+
+      expect(coreTypes['Config']).toBeDefined();
+      expect(coreTypes['BaseService']).toBeDefined();
+      expect(coreFunctions['createConfig']).toBeDefined();
 
       // Verify UI module structure and dependencies
       const uiModule = result.Modules['@test/ui'];
       expect(uiModule).toBeDefined();
-      expect(uiModule.Packages.src).toBeDefined();
-      expect(uiModule.Packages.src.Types['UIService']).toBeDefined();
-      expect(uiModule.Packages.src.Types['ComponentProps']).toBeDefined();
-      expect(uiModule.Packages.src.Functions['createButton']).toBeDefined();
+
+      // Collect types and functions from all ui packages
+      const uiTypes: Record<string, any> = {};
+      const uiFunctions: Record<string, any> = {};
+      Object.values(uiModule.Packages).forEach((pkg: any) => {
+        if (pkg.Types) Object.assign(uiTypes, pkg.Types);
+        if (pkg.Functions) Object.assign(uiFunctions, pkg.Functions);
+      });
+
+      expect(uiTypes['UIService']).toBeDefined();
+      expect(uiTypes['ComponentProps']).toBeDefined();
+      expect(uiFunctions['createButton']).toBeDefined();
 
       // Verify cross-module dependencies in graph
       const graphKeys = Object.keys(result.Graph);
@@ -936,12 +970,26 @@ export class UserService {
 
       // Verify inheritance chains are captured
       const domainModule = result.Modules['@complex/domain'];
-      const userType = domainModule.Packages.src.Types['User'];
+
+      // Collect types from all domain packages
+      const domainTypes: Record<string, any> = {};
+      Object.values(domainModule.Packages).forEach((pkg: any) => {
+        if (pkg.Types) Object.assign(domainTypes, pkg.Types);
+      });
+
+      const userType = domainTypes['User'];
       expect(userType).toBeDefined();
       expect(userType.Exported).toBe(true);
 
       const serviceModule = result.Modules['@complex/service'];
-      const userServiceType = serviceModule.Packages.src.Types['UserService'];
+
+      // Collect types from all service packages
+      const serviceTypes: Record<string, any> = {};
+      Object.values(serviceModule.Packages).forEach((pkg: any) => {
+        if (pkg.Types) Object.assign(serviceTypes, pkg.Types);
+      });
+
+      const userServiceType = serviceTypes['UserService'];
       expect(userServiceType).toBeDefined();
 
       // Verify complex dependency graph
@@ -1218,7 +1266,7 @@ export const DEFAULT_VALUE = 'test';
           .mockImplementation(() => {});
 
         // Test without specifying monorepoMode (should default to combined)
-        const result = await parser.parseRepository(testProject.rootDir, {});
+        await parser.parseRepository(testProject.rootDir, {});
 
         // Verify combined mode was called (default behavior)
         expect(parseMonorepoCombinedModeSpy).toHaveBeenCalled();

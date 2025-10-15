@@ -181,44 +181,32 @@ export class TypeScriptStructureAnalyzer {
 
   private createPackagesFromDirectory(module: ModuleInfo, sourceDir: string, options: { noDist?: boolean } = {}): PackageInfo[] {
     const packages: PackageInfo[] = [];
-    
+
     // Find all TypeScript files
     const tsFiles = this.findTypeScriptFiles(sourceDir, options);
-    
-    // Group files by directory (each directory = one package)
-    const dirGroups = new Map<string, string[]>();
-    
+
+    // Each file becomes a separate package
     for (const file of tsFiles) {
-      const dir = path.dirname(file);
-      if (!dirGroups.has(dir)) {
-        dirGroups.set(dir, []);
-      }
-      dirGroups.get(dir)!.push(file);
-    }
+      // Calculate file path relative to the package root (module path)
+      const relativeFilePath = path.relative(module.path, file);
+      const pkgPath = relativeFilePath.replace(/\\/g, '/');
 
-    // Create packages from directory groups
-    for (const [dir, files] of dirGroups) {
-      // Calculate path relative to the package root (module path) instead of monorepo root
-      const relativeDir = path.relative(module.path, dir);
-      const pkgPath = (relativeDir === '' ? '.' : relativeDir).replace(/\\/g, '/');
-      
-      // TODO: REWRITE isMain Logic
-      const isMain = files.some(file => 
-        path.basename(file, path.extname(file)) === 'index' ||
-        path.basename(file, path.extname(file)) === 'main'
-      );
+      // Check if this is a main file (index or main)
+      const baseName = path.basename(file, path.extname(file));
+      const isMain = baseName === 'index' || baseName === 'main';
 
-      const relativePath = path.relative(module.path, dir);
-      
-      const isTest = relativePath.includes('test') || relativePath.includes('__tests__') ||
-                     files.some(file => file.includes('.test.') || file.includes('.spec.'));
+      // Check if this is a test file
+      const isTest = relativeFilePath.includes('test') ||
+                     relativeFilePath.includes('__tests__') ||
+                     file.includes('.test.') ||
+                     file.includes('.spec.');
 
       packages.push({
         pkgPath,
         moduleName: module.name,
         isMain,
         isTest,
-        files,
+        files: [file], // Each package contains only one file
         imports: [] // Will be populated during parsing
       });
     }

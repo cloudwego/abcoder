@@ -9,8 +9,8 @@ const program = new Command();
 
 program
   .name('abcoder-ts-parser')
-  .description('TypeScript AST parser for UNIAST v0.1.3 specification')
-  .version('0.0.4');
+  .description('TypeScript AST parser for UNIAST specification')
+  .version('0.0.9');
 
 program
   .command('parse')

@@ -317,23 +317,70 @@ describe('FunctionParser', () => {
           second() { return this; }
           third() { return 'done'; }
         }
-        
+
         function chainUser() {
           new Chain().first().second().third();
         }
       `);
-      
+
       const parser = new FunctionParser(project, process.cwd());
       let pkgPathAbsFile : string = sourceFile.getFilePath()
       pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
       const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
-      
-      
+
+
       const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
-      
+
       const chainUser = expectToBeDefined(functions['chainUser']);
       expect(chainUser.MethodCalls).toBeDefined();
-      
+
+      cleanup();
+    });
+
+    it('should extract method calls on parameter objects', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        interface Context {
+          logError(message: string, error: any): void;
+          render(template: string, data: any): Promise<void>;
+          status: number;
+        }
+
+        function getConfig(key: string, ctx: any): Promise<any> {
+          return Promise.resolve({ value: 'default' });
+        }
+
+        async function handleRequest(ctx: Context, error: any) {
+          if (error.code === 404) {
+            ctx.status = 404;
+            return;
+          }
+          ctx.logError('Error occurred: ' + error.message, error);
+          const config = await getConfig('app.config', ctx);
+          await ctx.render('error-page', { message: config.value || error.message || '' });
+          ctx.status = 500;
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const handleRequest = expectToBeDefined(functions['handleRequest']);
+      expect(handleRequest.MethodCalls).toBeDefined();
+
+      const methodCallNames = expectToBeDefined(handleRequest.MethodCalls).map(call => call.Name);
+      // Method calls on parameter objects should include the interface name prefix
+      expect(methodCallNames).toContain('Context.logError');
+      expect(methodCallNames).toContain('Context.render');
+
+      // Should also have function calls
+      expect(handleRequest.FunctionCalls).toBeDefined();
+      const functionCallNames = expectToBeDefined(handleRequest.FunctionCalls).map(call => call.Name);
+      expect(functionCallNames).toContain('getConfig');
+
       cleanup();
     });
   });
