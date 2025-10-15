@@ -69,7 +69,7 @@ jobs:
       - name: Install dependencies for old
         run: |
           # HACK: auto installation uses the published version, not our local version
-          (cd ./main_repo/ts-parser && npm install && npm install -g .)
+          (cd ./main_repo/ts-parser && npm install && npm run build && npm install -g .)
           OUTDIR=out_old ABCEXE=./abcoder_old ./main_repo/script/run_testdata.sh first
           # avoid wasting time install a new jdtls
           echo "JDTLS_ROOT_PATH=$(realpath ./main_repo/lang/java/lsp/jdtls/jdt-language-server-*)" >> $GITHUB_ENV
@@ -84,7 +84,7 @@ jobs:
 
       - name: Install dependencies for new
         run: |
-          (cd ./pr_repo/ts-parser && npm install && npm install -g .)
+          (cd ./pr_repo/ts-parser && npm install && npm run build && npm install -g .)
           OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
 
       - name: Run NEW abcoder
