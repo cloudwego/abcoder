@@ -17,11 +17,11 @@
 package utils
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 )
 
 func MarshalJSONIndent(input any) (string, error) {
-	js, err := sonic.MarshalIndent(input, "", "  ")
+	js, err := json.MarshalIndent(input, "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -29,7 +29,7 @@ func MarshalJSONIndent(input any) (string, error) {
 }
 
 func MarshalJSONIndentNoError(input any) string {
-	js, err := sonic.MarshalIndent(input, "", "  ")
+	js, err := json.MarshalIndent(input, "", "  ")
 	if err != nil {
 		return ""
 	}
@@ -37,13 +37,13 @@ func MarshalJSONIndentNoError(input any) string {
 }
 
 func MarshalJSONBytes(input any) ([]byte, error) {
-	return sonic.Marshal(input)
+	return json.Marshal(input)
 }
 
 func UnmarshalJSON(input string, output any) error {
-	return sonic.UnmarshalString(input, output)
+	return json.Unmarshal([]byte(input), output)
 }
 
 func UnmarshalJSONBytes(input []byte, output any) error {
-	return sonic.Unmarshal(input, output)
+	return json.Unmarshal(input, output)
 }
