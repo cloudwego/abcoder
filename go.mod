@@ -1,6 +1,8 @@
 module github.com/cloudwego/abcoder
 
-go 1.23.4
+go 1.24.0
+
+toolchain go1.24.1
 
 require (
 	github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible
@@ -20,8 +22,8 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/stretchr/testify v1.10.0
 	github.com/vifraa/gopom v1.0.0
-	golang.org/x/mod v0.24.0
-	golang.org/x/tools v0.32.0
+	golang.org/x/mod v0.29.0
+	golang.org/x/tools v0.37.0
 )
 
 require (
@@ -87,10 +89,10 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/arch v0.14.0 // indirect
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/net v0.44.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
