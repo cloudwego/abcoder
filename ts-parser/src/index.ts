@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import * as path from 'path';
+import fs from 'fs';
+import path from 'path';
 import { RepositoryParser } from './parser/RepositoryParser';
-import * as fs from 'fs';
+import { JsonStreamStringify } from 'json-stream-stringify';
 
 const program = new Command();
 
@@ -43,22 +44,22 @@ program
 
       // Output the repository JSON file
       const outputPath = path.resolve(options.output);
-      const jsonOutput = options.pretty
-        ? JSON.stringify(repository, null, 2)
-        : JSON.stringify(repository);
+      const jsonStream = new JsonStreamStringify(repository, undefined, options.pretty ? 2 : undefined);
+      const fileStream = fs.createWriteStream(outputPath);
+      jsonStream.pipe(fileStream);
 
-      fs.writeFileSync(outputPath, jsonOutput);
+      fileStream.on('finish', () => {
+        console.log(`Repository has been parsed and saved to ${outputPath}`);
+      });
 
-      console.log(`Successfully parsed repository`);
-      console.log(`Output written to: ${outputPath}`);
-      console.log(`Total modules: ${Object.keys(repository.Modules).length}`);
-      console.log(`Total symbols in graph: ${Object.keys(repository.Graph).length}`);
+      fileStream.on('error', (err) => {
+        console.error('Error writing to file:', err);
+      });
 
     } catch (error) {
       console.error('Error parsing repository:', error);
       process.exit(1);
     }
   });
-
 
 program.parse();

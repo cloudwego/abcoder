@@ -149,7 +149,7 @@ export function processPackagesWithCluster(
           totalProcessed: results.length,
           errors: [...errors, new Error('Processing timeout')],
         });
-      }, 15 * 60 * 1000); // 15 minutes
+      }, 120 * 60 * 1000); // 120 minutes
     };
 
     cluster.on('message', (worker: Worker, message: WorkerResult) => {

@@ -225,7 +225,14 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 
 // newFunc allocate a function in the repo
 func (p *GoParser) newFunc(mod, pkg, name string) *Function {
-	ret := &Function{Identity: NewIdentity(mod, pkg, name), Exported: isUpperCase(name[0])}
+	var exported bool
+	if ind := strings.LastIndexByte(name, '.'); ind != -1 && ind+1 < len(name) {
+		exported = isUpperCase(name[ind+1])
+	} else {
+		exported = isUpperCase(name[0])
+	}
+
+	ret := &Function{Identity: NewIdentity(mod, pkg, name), Exported: exported}
 	return p.repo.SetFunction(ret.Identity, ret)
 }
 
