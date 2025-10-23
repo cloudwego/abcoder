@@ -24,6 +24,7 @@ import (
 	"go/types"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strings"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/Knetic/govaluate"
 	. "github.com/cloudwego/abcoder/lang/uniast"
-	"golang.org/x/mod/modfile"
 )
 
 func shouldIgnoreDir(path string) bool {
@@ -181,26 +181,6 @@ func getModuleName(modFilePath string) (string, []byte, error) {
 	return "", data, nil
 }
 
-// parse go.mod and get a map of module name to module_path@version
-func parseModuleFile(data []byte) (map[string]string, error) {
-	ast, err := modfile.Parse("go.mod", data, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse go.mod file: %v", err)
-	}
-	modules := make(map[string]string)
-	for _, req := range ast.Require {
-		// if req.Indirect {
-		// 	continue
-		// }
-		modules[req.Mod.Path] = req.Mod.Path + "@" + req.Mod.Version
-	}
-	// replaces
-	for _, replace := range ast.Replace {
-		modules[replace.Old.Path] = replace.New.Path + "@" + replace.New.Version
-	}
-	return modules, nil
-}
-
 func isGoBuiltins(name string) bool {
 	switch name {
 	case "append", "cap", "close", "complex", "copy", "delete", "imag", "len", "make", "new", "panic", "print", "println", "real", "recover":
@@ -336,4 +316,14 @@ func newIdentity(mod, pkg, name string) Identity {
 
 func isUpperCase(c byte) bool {
 	return c >= 'A' && c <= 'Z'
+}
+
+func getCommitHash(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit hash: %v", err)
+	}
+	return strings.TrimSpace(string(output)), nil
 }

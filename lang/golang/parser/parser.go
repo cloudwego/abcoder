@@ -17,6 +17,7 @@ package parser
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -94,12 +95,11 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 }
 
 func (p *GoParser) collectGoMods(startDir string) error {
-
 	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
 		}
-		name, content, err := getModuleName(path)
+		name, _, err := getModuleName(path)
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,8 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		}
 		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
-		deps, err := parseModuleFile(content)
+
+		deps, err := getDeps(filepath.Dir(path))
 		if err != nil {
 			return err
 		}
@@ -124,6 +125,75 @@ func (p *GoParser) collectGoMods(startDir string) error {
 	}
 
 	return nil
+}
+
+type replace struct {
+	Path    string `json:"Path"`
+	Version string `json:"Version"`
+	Dir     string `json:"Dir"`
+	GoMod   string `json:"GoMod"`
+}
+
+type dep struct {
+	Module struct {
+		Path     string   `json:"Path"`
+		Version  string   `json:"Version"`
+		Replace  *replace `json:"Replace,omitempty"`
+		Indirect bool     `json:"Indirect"`
+		Dir      string   `json:"Dir"`
+		GoMod    string   `json:"GoMod"`
+	} `json:"Module"`
+}
+
+func getDeps(dir string) (map[string]string, error) {
+	// run go mod tidy first to ensure all dependencies are resolved
+	cmd := exec.Command("go", "mod", "tidy", "-e")
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+	}
+
+	cmd = exec.Command("go", "list", "-json", "all")
+	cmd.Dir = dir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s", err, string(output))
+	}
+
+	deps := make(map[string]string)
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	for {
+		var mod dep
+		if err := decoder.Decode(&mod); err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return nil, fmt.Errorf("failed to decode json: %v", err)
+		}
+		module := mod.Module
+		// golang internal package, ignore it.
+		if module.Path == "" {
+			continue
+		}
+		if module.Replace != nil {
+			deps[module.Path] = module.Replace.Path + "@" + module.Replace.Version
+		} else {
+			if module.Version != "" {
+				deps[module.Path] = module.Path + "@" + module.Version
+			} else {
+				// If no version, it's a local package. So we use local commit as version
+				commit, err := getCommitHash(dir)
+				if err != nil {
+					deps[module.Path] = module.Path
+				} else {
+					deps[module.Path] = module.Path + "@" + commit
+				}
+			}
+		}
+	}
+
+	return deps, nil
 }
 
 // ParseRepo parse the entiry repo from homePageDir recursively until end
