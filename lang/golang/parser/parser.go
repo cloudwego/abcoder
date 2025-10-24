@@ -147,7 +147,7 @@ type dep struct {
 
 func getDeps(dir string) (map[string]string, error) {
 	// run go mod tidy first to ensure all dependencies are resolved
-	cmd := exec.Command("go", "mod", "tidy", "-e")
+	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
