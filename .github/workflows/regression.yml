@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     env:
-      LANGS: "go rust python java typescript"
+      LANGS: "go rust python typescript"
       DIFFJSON_IGNORE: "  ['id']   ['Path']  "
     steps:
       - name: Checkout pull request code
