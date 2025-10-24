@@ -1,0 +1,7 @@
+run:
+  skip-dirs:
+    - testdata
+    - testrepo
+    - sentry
+  skip-files:
+    - ".*_test\\.go$"
