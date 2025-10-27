@@ -14,7 +14,12 @@ jobs:
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     env:
       LANGS: "go rust python typescript"
-      DIFFJSON_IGNORE: "  ['id']   ['Path']  "
+      # ignore package version for Go e.g. 'a.b/c@506fb8ece467f3a71c29322169bef9b0bc92d554'
+      DIFFJSON_IGNORE: >
+        ['id']
+        ['Path']
+        ['Modules']['a.b/c']['Dependencies']['a.b/c']
+        ['Modules']['a.b/c/cmdx']['Dependencies']['a.b/c/cmdx']
     steps:
       - name: Checkout pull request code
         uses: actions/checkout@v4
