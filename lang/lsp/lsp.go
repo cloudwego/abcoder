@@ -180,6 +180,15 @@ type TextDocumentItem struct {
 	Definitions map[Position][]Location   `json:"-"`
 }
 
+type HierarchicalDocumentSymbol struct {
+	Name           string                       `json:"name"`
+	Detail         string                       `json:"detail,omitempty"`
+	Kind           SymbolKind                   `json:"kind"`
+	Range          Range                        `json:"range"`
+	SelectionRange Range                        `json:"selectionRange"`
+	Children       []HierarchicalDocumentSymbol `json:"children,omitempty"`
+}
+
 type DocumentSymbol struct {
 	Name     string            `json:"name"`
 	Kind     SymbolKind        `json:"kind"`

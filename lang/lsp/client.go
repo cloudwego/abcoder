@@ -141,8 +141,10 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 				"dynamicRegistration": true,
 			},
 		},
-		"documentSymbol": map[string]interface{}{
-			"hierarchicalDocumentSymbolSupport": true,
+		"textDocument": map[string]interface{}{
+			"documentSymbol": map[string]interface{}{
+				"hierarchicalDocumentSymbolSupport": true,
+			},
 		},
 	}
 

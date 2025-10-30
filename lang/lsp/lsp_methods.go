@@ -16,6 +16,7 @@ package lsp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -63,6 +64,25 @@ func (cli *LSPClient) DidOpen(ctx context.Context, file DocumentURI) (*TextDocum
 	return f, nil
 }
 
+func flattenHierarchicalDocumentSymbols(symbols []HierarchicalDocumentSymbol, uri DocumentURI) []DocumentSymbol {
+	var result []DocumentSymbol
+	for _, sym := range symbols {
+		result = append(result, DocumentSymbol{
+			Name: sym.Name,
+			Kind: sym.Kind,
+			Location: Location{
+				URI:   uri,
+				Range: sym.Range,
+			},
+		})
+		if len(sym.Children) > 0 {
+			childSymbols := flattenHierarchicalDocumentSymbols(sym.Children, uri)
+			result = append(result, childSymbols...)
+		}
+	}
+	return result
+}
+
 func (cli *LSPClient) DocumentSymbols(ctx context.Context, file DocumentURI) (map[Range]*DocumentSymbol, error) {
 	// open file first
 	f, err := cli.DidOpen(ctx, file)
@@ -78,10 +98,14 @@ func (cli *LSPClient) DocumentSymbols(ctx context.Context, file DocumentURI) (ma
 			URI: uri,
 		},
 	}
-	var resp []DocumentSymbol
-	if err := cli.Call(ctx, "textDocument/documentSymbol", req, &resp); err != nil {
+	var respHierarchical []HierarchicalDocumentSymbol
+	if err := cli.Call(ctx, "textDocument/documentSymbol", req, &respHierarchical); err != nil {
 		return nil, err
 	}
+	if s, err := json.MarshalIndent(respHierarchical, "", "  "); err == nil {
+		_ = os.WriteFile("docsyms_hie.json", s, 0644)
+	}
+	resp := flattenHierarchicalDocumentSymbols(respHierarchical, file)
 	// cache symbols
 	f.Symbols = make(map[Range]*DocumentSymbol, len(resp))
 	for i := range resp {
