@@ -143,7 +143,9 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		},
 		"textDocument": map[string]interface{}{
 			"documentSymbol": map[string]interface{}{
-				"hierarchicalDocumentSymbolSupport": (language != uniast.Java),
+				// Java uses tree-sitter instead of hierarchical symbols
+				// Golang stays the same as older versions. ABCoder do not use gopls, so don't play with it.
+				"hierarchicalDocumentSymbolSupport": (language != uniast.Java && language != uniast.Golang),
 			},
 		},
 	}
