@@ -16,7 +16,6 @@ package lsp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -64,19 +63,38 @@ func (cli *LSPClient) DidOpen(ctx context.Context, file DocumentURI) (*TextDocum
 	return f, nil
 }
 
-func flattenHierarchicalDocumentSymbols(symbols []HierarchicalDocumentSymbol, uri DocumentURI) []DocumentSymbol {
-	var result []DocumentSymbol
+func flattenDocumentSymbols(symbols []*DocumentSymbol, uri DocumentURI) []*DocumentSymbol {
+	var result []*DocumentSymbol
 	for _, sym := range symbols {
-		result = append(result, DocumentSymbol{
-			Name: sym.Name,
-			Kind: sym.Kind,
-			Location: Location{
+		var location Location
+		if sym.Range != nil {
+			location = Location{
 				URI:   uri,
-				Range: sym.Range,
-			},
-		})
+				Range: *sym.Range,
+			}
+		} else {
+			location = sym.Location
+		}
+		flatSymbol := DocumentSymbol{
+			// copy
+			Name:     sym.Name,
+			Kind:     sym.Kind,
+			Tags:     sym.Tags,
+			Text:     sym.Text,
+			Tokens:   sym.Tokens,
+			Node:     sym.Node,
+			Children: sym.Children,
+			// new
+			Location: location,
+			// empty
+			Role:           0,
+			Range:          nil,
+			SelectionRange: nil,
+		}
+		result = append(result, &flatSymbol)
+
 		if len(sym.Children) > 0 {
-			childSymbols := flattenHierarchicalDocumentSymbols(sym.Children, uri)
+			childSymbols := flattenDocumentSymbols(sym.Children, uri)
 			result = append(result, childSymbols...)
 		}
 	}
@@ -98,18 +116,15 @@ func (cli *LSPClient) DocumentSymbols(ctx context.Context, file DocumentURI) (ma
 			URI: uri,
 		},
 	}
-	var respHierarchical []HierarchicalDocumentSymbol
-	if err := cli.Call(ctx, "textDocument/documentSymbol", req, &respHierarchical); err != nil {
+	var resp []*DocumentSymbol
+	if err := cli.Call(ctx, "textDocument/documentSymbol", req, &resp); err != nil {
 		return nil, err
 	}
-	if s, err := json.MarshalIndent(respHierarchical, "", "  "); err == nil {
-		_ = os.WriteFile("docsyms_hie.json", s, 0644)
-	}
-	resp := flattenHierarchicalDocumentSymbols(respHierarchical, file)
+	respFlatten := flattenDocumentSymbols(resp, file)
 	// cache symbols
-	f.Symbols = make(map[Range]*DocumentSymbol, len(resp))
-	for i := range resp {
-		s := &resp[i]
+	f.Symbols = make(map[Range]*DocumentSymbol, len(respFlatten))
+	for i := range respFlatten {
+		s := respFlatten[i]
 		f.Symbols[s.Location.Range] = s
 	}
 	return f.Symbols, nil
