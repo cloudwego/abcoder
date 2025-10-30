@@ -59,7 +59,7 @@ func CheckPythonVersion() error {
 
 func InstallLanguageServer() (string, error) {
 	if out, err := exec.Command("pylsp", "--version").CombinedOutput(); err == nil {
-		log.Info("pylsp already installed: %v", out)
+		log.Info("pylsp already installed: %v", string(out))
 		return lspName, nil
 	}
 	if err := CheckPythonVersion(); err != nil {
