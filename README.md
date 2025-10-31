@@ -145,6 +145,10 @@ project, kindly check out our guide:
 
 &ensp;&ensp;&ensp; <img src="images/lark_group_zh.png" alt="LarkGroup" width="200"/>
 
+# Contributors
+Thank you for your contribution to ABCoder!
+
+[![Contributors](https://contrib.rocks/image?repo=cloudwego/abcoder)](https://github.com/cloudwego/abcoder/graphs/contributors)
 
 # License
 This project is licensed under the [Apache-2.0 License](LICENSE-APACHE).
