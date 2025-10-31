@@ -18,6 +18,7 @@ jobs:
       DIFFJSON_IGNORE: >
         ['id']
         ['Path']
+        ['ToolVersion']
         ['Modules']['a.b/c']['Dependencies']['a.b/c']
         ['Modules']['a.b/c/cmdx']['Dependencies']['a.b/c/cmdx']
     steps:

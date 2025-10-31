@@ -21,8 +21,10 @@ jobs:
       #   test tries to retrieve non-existent node
       # TestParser_NodeFieldsConsistency:
       #   Vars.Content only includes name, not whole body
+      # TestCollector_CollectByTreeSitter_Java
+      #   JDTLS download was rate-limited on github actions
       SKIPPED_TESTS: >-
-        TestPatcher|TestCases|Test_goParser_ParseNode|TestParser_NodeFieldsConsistency|TestRustLSP
+        TestPatcher|TestCases|Test_goParser_ParseNode|TestParser_NodeFieldsConsistency|TestRustLSP|TestCollector_CollectByTreeSitter_Java
 
     steps:
       - name: Checkout code
