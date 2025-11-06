@@ -386,7 +386,8 @@ export class FunctionParser {
       isExported = true;
     } else {
       const parent = varDecl.getVariableStatement();
-      isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === arrowFunc.getSymbol() && this.defaultExportSymbol !== undefined)) : false;
+      const varSymbol = varDecl.getSymbol();
+      isExported = parent ? (parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === varSymbol && this.defaultExportSymbol !== undefined)) : false;
     }
 
     return {
