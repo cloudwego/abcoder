@@ -195,7 +195,7 @@ export class MonorepoUtils {
     try {
       // Handle glob patterns
       if (pattern.includes('*')) {
-        const basePath = pattern.replace('/*', '');
+        const basePath = pattern.replace(/\/\*.*$/, '');
         const baseDir = path.resolve(rootPath, basePath);
 
         if (fs.existsSync(baseDir)) {
