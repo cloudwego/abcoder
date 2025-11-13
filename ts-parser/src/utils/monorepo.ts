@@ -69,287 +69,113 @@ export interface MonorepoPackage {
 export class MonorepoUtils {
   /**
    * Check if a directory contains a monorepo configuration
+   * Now determines monorepo by counting package.json files (>= 2 means monorepo)
    */
   static isMonorepo(rootPath: string): boolean {
-    const edenConfigPath = path.join(rootPath, 'eden.monorepo.json');
-    const pnpmWorkspacePath = path.join(rootPath, 'pnpm-workspace.yaml');
-    // const yarnWorkspacePath = path.join(rootPath, 'yarn.lock');
-    const lernaConfigPath = path.join(rootPath, 'lerna.json');
-
-    return fs.existsSync(edenConfigPath) ||
-      fs.existsSync(pnpmWorkspacePath) ||
-      //  fs.existsSync(yarnWorkspacePath) || 
-      fs.existsSync(lernaConfigPath);
+    const packageJsonCount = this.countPackageJsonFiles(rootPath);
+    return packageJsonCount >= 2;
   }
 
   /**
-   * Detect monorepo type and return configuration file path
+   * Count the number of package.json files in the directory tree
    */
-  static detectMonorepoType(rootPath: string): { type: string; configPath: string } | null {
-    const edenConfigPath = path.join(rootPath, 'eden.monorepo.json');
-    const pnpmWorkspacePath = path.join(rootPath, 'pnpm-workspace.yaml');
-    // const yarnWorkspacePath = path.join(rootPath, 'yarn.lock');
-    const lernaConfigPath = path.join(rootPath, 'lerna.json');
-
-    if (fs.existsSync(edenConfigPath)) {
-      return { type: 'eden', configPath: edenConfigPath };
-    }
-    if (fs.existsSync(pnpmWorkspacePath)) {
-      return { type: 'pnpm', configPath: pnpmWorkspacePath };
-    }
-    // if (fs.existsSync(yarnWorkspacePath)) {
-    //   return { type: 'yarn', configPath: yarnWorkspacePath };
-    // }
-    if (fs.existsSync(lernaConfigPath)) {
-      return { type: 'lerna', configPath: lernaConfigPath };
-    }
-
-    return null;
-  }
-
-  /**
-   * Parse Eden monorepo configuration
-   */
-  static parseEdenMonorepoConfig(configPath: string): EdenMonorepoConfig | null {
+  private static countPackageJsonFiles(rootPath: string): number {
     try {
-      if (!fs.existsSync(configPath)) {
-        return null;
-      }
-
-      const configContent = fs.readFileSync(configPath, 'utf-8');
-      const config: EdenMonorepoConfig = JSON.parse(configContent);
-
-      return config;
-    } catch (error) {
-      console.warn(`Failed to parse Eden monorepo config at ${configPath}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Get packages from Eden monorepo configuration
-   * Supports packages array, workspaces array, and pnpmWorkspace formats
-   * pnpmWorkspace has the highest priority (emo >= 3.6.0)
-   */
-  static getEdenPackages(rootPath: string, config: EdenMonorepoConfig): MonorepoPackage[] {
-    const packages: MonorepoPackage[] = [];
-
-    if (config.pnpmWorkspace && config.pnpmWorkspace.packages && config.pnpmWorkspace.packages.length > 0) {
-      for (const workspace of config.pnpmWorkspace.packages) {
-        const workspacePackages = this.expandWorkspacePattern(rootPath, workspace);
-        packages.push(...workspacePackages);
-      }
-      return packages; // Return early if pnpmWorkspace is configured
-    }
-
-    // Handle new workspaces array format
-    if (config.workspaces && config.workspaces.length > 0) {
-      for (const workspace of config.workspaces) {
-        const workspacePackages = this.expandWorkspacePattern(rootPath, workspace);
-        packages.push(...workspacePackages);
-      }
-    }
-
-    // Handle legacy packages array format
-    if (config.packages && config.packages.length > 0) {
-      for (const pkg of config.packages) {
-        const absolutePath = path.resolve(rootPath, pkg.path);
-
-        // Check if package directory exists
-        if (fs.existsSync(absolutePath)) {
-          // Try to get package name from package.json
-          let packageName: string | undefined;
-          const packageJsonPath = path.join(absolutePath, 'package.json');
-
+      let count = 0;
+      const items = fs.readdirSync(rootPath);
+      
+      for (const item of items) {
+        const fullPath = path.join(rootPath, item);
+        const stat = fs.statSync(fullPath);
+        
+        if (stat.isDirectory()) {
+          // Skip node_modules and hidden directories
+          if (item === 'node_modules' || item.startsWith('.')) {
+            continue;
+          }
+          
+          // Check if this directory has a package.json
+          const packageJsonPath = path.join(fullPath, 'package.json');
           if (fs.existsSync(packageJsonPath)) {
-            try {
-              const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-              packageName = packageJson.name;
-            } catch (error) {
-              console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
-            }
+            count++;
           }
-
-          packages.push({
-            path: pkg.path,
-            absolutePath,
-            shouldPublish: pkg.shouldPublish ?? false,
-            name: packageName
-          });
-        } else {
-          console.warn(`Package directory does not exist: ${absolutePath}`);
+          
+          // Recursively count in subdirectories
+          count += this.countPackageJsonFiles(fullPath);
         }
       }
-    }
-
-    return packages;
-  }
-
-  /**
-   * Expand workspace pattern to find actual packages
-   * Supports glob patterns like "packages/*", "apps/*", etc.
-   */
-  private static expandWorkspacePattern(rootPath: string, pattern: string): MonorepoPackage[] {
-    const packages: MonorepoPackage[] = [];
-
-    try {
-      // Handle glob patterns
-      if (pattern.includes('*')) {
-        const basePath = pattern.replace('/*', '');
-        const baseDir = path.resolve(rootPath, basePath);
-
-        if (fs.existsSync(baseDir)) {
-          const entries = fs.readdirSync(baseDir, { withFileTypes: true });
-
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              const packagePath = path.join(basePath, entry.name);
-              const absolutePath = path.resolve(rootPath, packagePath);
-              const packageJsonPath = path.join(absolutePath, 'package.json');
-
-              // Only include directories that have package.json
-              if (fs.existsSync(packageJsonPath)) {
-                let packageName: string | undefined;
-
-                try {
-                  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-                  packageName = packageJson.name;
-                } catch (error) {
-                  console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
-                }
-
-                packages.push({
-                  path: packagePath,
-                  absolutePath,
-                  shouldPublish: false, // Default to false for workspace packages
-                  name: packageName
-                });
-              }
-            }
-          }
-        }
-      } else {
-        // Handle exact path
-        const absolutePath = path.resolve(rootPath, pattern);
-        const packageJsonPath = path.join(absolutePath, 'package.json');
-
-        if (fs.existsSync(packageJsonPath)) {
-          let packageName: string | undefined;
-
-          try {
-            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-            packageName = packageJson.name;
-          } catch (error) {
-            console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
-          }
-
-          packages.push({
-            path: pattern,
-            absolutePath,
-            shouldPublish: false,
-            name: packageName
-          });
-        }
-      }
+      
+      return count;
     } catch (error) {
-      console.warn(`Failed to expand workspace pattern "${pattern}":`, error);
+      console.warn(`Error counting package.json files in ${rootPath}:`, error);
+      return 0;
     }
-
-    return packages;
   }
 
   /**
    * Get all packages from a monorepo
+   * Unified approach: discover packages by package.json files only
    */
   static getMonorepoPackages(rootPath: string): MonorepoPackage[] {
-    const monorepoInfo = this.detectMonorepoType(rootPath);
+    // Simply use generic package discovery, ignoring monorepo type
+    return this.getGenericPackages(rootPath);
+  }
 
-    if (!monorepoInfo) {
-      return [];
-    }
 
-    switch (monorepoInfo.type) {
-      case 'eden': {
-        const config = this.parseEdenMonorepoConfig(monorepoInfo.configPath);
-        if (config) {
-          return this.getEdenPackages(rootPath, config);
-        }
-        break;
-      }
-      case 'pnpm': {
-        const configContent = fs.readFileSync(monorepoInfo.configPath, 'utf-8');
-        const packages: MonorepoPackage[] = [];
-        const lines = configContent.split('\n');
-        let inPackages = false;
-        for (const line of lines) {
-          if (line.startsWith('packages:')) {
-            inPackages = true;
-            continue;
-          }
-          if (inPackages && line.trim().startsWith('-')) {
-            let glob = line.trim().substring(1).trim().replace(/'/g, '').replace(/"/g, '');
-            if (glob.endsWith('/*')) {
-              glob = glob.slice(0, -2);
-            } 
-              let packageDir = path.join(rootPath, glob);
-            if (fs.existsSync(packageDir) && fs.statSync(packageDir).isDirectory()) {
-              const packageNames = fs.readdirSync(packageDir);
-              packageNames.push(".");
-              for (const pkgName of packageNames) {
-                const pkgAbsolutePath = path.join(packageDir, pkgName);
-                if (fs.statSync(pkgAbsolutePath).isDirectory()) {
-                  const pkgRelativePath = path.relative(rootPath, pkgAbsolutePath);
-                  let packageName: string | undefined;
-                  const packageJsonPath = path.join(pkgAbsolutePath, 'package.json');
-                  if (fs.existsSync(packageJsonPath)) {
-                    try {
-                      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-                      packageName = packageJson.name;
-                      packages.push({
-                        path: pkgRelativePath,
-                        absolutePath: pkgAbsolutePath,
-                        shouldPublish: false, // Cannot determine from pnpm-workspace.yaml
-                        name: packageName
-                      });
-                    } catch (error) {
-                      console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
-                    }
-                  }
-                }
-              }
-            }
-          } else if (inPackages && !/^\s*$/.test(line) && !/^\s+-/.test(line)) {
-            // We are out of the packages section if the line is not empty and not a package entry
-            break;
-          }
-        }
-        console.log('pnpm packages:', packages);
-        return packages;
-      }
-      // TODO: Add support for other monorepo types (yarn, lerna)
-      default:
-        console.warn(`Monorepo type '${monorepoInfo.type}' is not yet supported`);
-        break;
-    }
 
-    return [];
+  /**
+   * Get packages by discovering package.json files (generic approach)
+   */
+  private static getGenericPackages(rootPath: string): MonorepoPackage[] {
+    const packages: MonorepoPackage[] = [];
+    this.discoverPackagesRecursive(rootPath, rootPath, packages);
+    return packages;
   }
 
   /**
-   * Check if a path is within any of the monorepo packages
+   * Recursively discover packages by finding package.json files
    */
-  static findPackageForPath(filePath: string, packages: MonorepoPackage[]): MonorepoPackage | null {
-    const absoluteFilePath = path.resolve(filePath);
-
-    for (const pkg of packages) {
-      if (absoluteFilePath.startsWith(pkg.absolutePath + path.sep) ||
-        absoluteFilePath === pkg.absolutePath) {
-        return pkg;
+  private static discoverPackagesRecursive(rootPath: string, currentDir: string, packages: MonorepoPackage[]): void {
+    try {
+      const items = fs.readdirSync(currentDir, { withFileTypes: true });
+      
+      for (const item of items) {
+        if (!item.isDirectory()) {
+          continue;
+        }
+        
+        const dirName = item.name;
+        const fullPath = path.join(currentDir, dirName);
+        
+        // Skip node_modules and hidden directories
+        if (dirName === 'node_modules' || dirName.startsWith('.')) {
+          continue;
+        }
+        
+        // Check if this directory has a package.json
+        const packageJsonPath = path.join(fullPath, 'package.json');
+        if (fs.existsSync(packageJsonPath)) {
+          try {
+            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+            const relativePath = path.relative(rootPath, fullPath);
+            
+            packages.push({
+              path: relativePath,
+              absolutePath: fullPath,
+              shouldPublish: false, // Default to false for generic discovery
+              name: packageJson.name
+            });
+          } catch (error) {
+            console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
+          }
+        }
+        
+        // Recursively search in subdirectories
+        this.discoverPackagesRecursive(rootPath, fullPath, packages);
       }
+    } catch (error) {
+      console.warn(`Error discovering packages in ${currentDir}:`, error);
     }
-
-    return null;
   }
-
 
 }
