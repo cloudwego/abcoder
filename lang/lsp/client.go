@@ -56,7 +56,7 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 		return nil, err
 	}
 
-	cli, err := initLSPClient(context.Background(), svr, NewURI(repo), opts.Verbose, opts.InitializationOptions)
+	cli, err := initLSPClient(context.Background(), svr, NewURI(repo), opts.Verbose, opts.Language, opts.InitializationOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (c *LSPClient) InitFiles() {
 	}
 }
 
-func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI, verbose bool, InitializationOptions interface{}) (*LSPClient, error) {
+func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI, verbose bool, language uniast.Language, InitializationOptions interface{}) (*LSPClient, error) {
 	h := newLSPHandler()
 	stream := jsonrpc2.NewBufferedStream(svr, jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, h)
@@ -141,8 +141,12 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 				"dynamicRegistration": true,
 			},
 		},
-		"documentSymbol": map[string]interface{}{
-			"hierarchicalDocumentSymbolSupport": true,
+		"textDocument": map[string]interface{}{
+			"documentSymbol": map[string]interface{}{
+				// Java uses tree-sitter instead of hierarchical symbols
+				// Golang stays the same as older versions. ABCoder do not use gopls, so don't play with it.
+				"hierarchicalDocumentSymbolSupport": (language != uniast.Java && language != uniast.Golang),
+			},
 		},
 	}
 
