@@ -91,7 +91,7 @@ export class ModuleParser {
     }
 
     return {
-      Language: '', // TypeScript
+      Language: 'typescript', // TypeScript
       Version: moduleVersion,
       Name: moduleName,
       Dir: isExternal ? '' : relativeDir,

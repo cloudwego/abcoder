@@ -34,6 +34,7 @@ const (
 	TypeScript Language = "typescript"
 	Java       Language = "java"
 	Unknown    Language = ""
+	Kotlin     Language = "kotlin"
 )
 
 func (l Language) String() string {
@@ -72,6 +73,8 @@ func NewLanguage(lang string) (l Language) {
 		return TypeScript
 	case "java":
 		return Java
+	case "kotlin":
+		return Kotlin
 	default:
 		return Unknown
 	}
