@@ -394,7 +394,15 @@ func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collec
 		// 	return false
 		// }
 		if use, ok := ctx.pkgTypeInfo.Uses[expr]; ok {
-			id := NewIdentity(ctx.module.Name, ctx.pkgPath, callName)
+			pkg := use.Pkg()
+			if pkg == nil {
+				return true
+			}
+			mod, err := ctx.GetMod(pkg.Path())
+			if err != nil {
+				return true
+			}
+			id := NewIdentity(mod, pkg.Path(), use.Name())
 			dep := NewDependency(id, ctx.FileLine(expr))
 			// type name
 			if _, isNamed := use.(*types.TypeName); isNamed {
