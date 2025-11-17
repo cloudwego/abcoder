@@ -184,12 +184,18 @@ type DocumentSymbol struct {
 	Name     string            `json:"name"`
 	Kind     SymbolKind        `json:"kind"`
 	Tags     []json.RawMessage `json:"tags"`
-	Location Location          `json:"location"`
 	Children []*DocumentSymbol `json:"children"`
 	Text     string            `json:"text"`
 	Tokens   []Token           `json:"tokens"`
 	Node     *sitter.Node      `json:"-"`
 	Role     SymbolRole        `json:"-"`
+
+	// Older LSPs might return SymbolInformation[] which have `Location`.
+	// Newer LSPs return DocumentSymbol[] which have `Range` and `SelectionRange`.
+	// ABCoder uses `Location`, and converts `Range` to `Location` when needed.
+	Location       Location `json:"location"`
+	Range          *Range   `json:"range"`
+	SelectionRange *Range   `json:"selectionRange"`
 }
 
 type TextDocumentPositionParams struct {
