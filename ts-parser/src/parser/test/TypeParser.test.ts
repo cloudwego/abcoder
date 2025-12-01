@@ -671,5 +671,38 @@ describe('TypeParser', () => {
 
       cleanup();
     });
+
+    it('should filter out self-referencing recursive types in InlineStruct', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type TreeNode = {
+          value: string;
+          children: TreeNode[];
+        };
+
+        export type LinkedListNode = {
+          data: number;
+          next: LinkedListNode | null;
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // TreeNode should not include itself in InlineStruct (self-reference should be filtered)
+      const treeNode = expectToBeDefined(types['TreeNode']);
+      const treeNodeInlineNames = (treeNode.InlineStruct || []).map(dep => dep.Name);
+      expect(treeNodeInlineNames).not.toContain('TreeNode');
+
+      // LinkedListNode should not include itself in InlineStruct
+      const linkedListNode = expectToBeDefined(types['LinkedListNode']);
+      const linkedListInlineNames = (linkedListNode.InlineStruct || []).map(dep => dep.Name);
+      expect(linkedListInlineNames).not.toContain('LinkedListNode');
+
+      cleanup();
+    });
   });
 });

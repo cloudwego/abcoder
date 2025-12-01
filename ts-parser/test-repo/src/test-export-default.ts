@@ -9,3 +9,14 @@ export default foo;
 export const bar = () => {
   console.log('baz')
 }
+
+export type Status = 'normal' | 'abnormal'
+
+export type ServerStatus = {
+  code: number;
+  status: Status;
+}
+
+export const flipStatus = (s: Status): Status => {
+  return s === 'normal' ? 'abnormal' : 'normal';
+}

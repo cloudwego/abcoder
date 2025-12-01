@@ -749,5 +749,39 @@ describe('FunctionParser', () => {
 
       cleanup();
     });
+
+    it('should filter out self-referencing recursive types', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type TreeNode = {
+          value: string;
+          children: TreeNode[];
+        };
+
+        export function processTree(node: TreeNode): void {
+          console.log(node.value);
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const processTree = expectToBeDefined(functions['processTree']);
+
+      // Should have TreeNode in Types array
+      expect(processTree.Types).toBeDefined();
+      const typeNames = expectToBeDefined(processTree.Types).map(dep => dep.Name);
+
+      expect(typeNames).toContain('TreeNode');
+
+      // TreeNode should only appear once (the self-reference in TreeNode definition should be filtered)
+      const treeNodeCount = typeNames.filter(name => name === 'TreeNode').length;
+      expect(treeNodeCount).toBe(1);
+
+      cleanup();
+    });
   });
 });

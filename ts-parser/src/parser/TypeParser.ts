@@ -313,19 +313,12 @@ export class TypeParser {
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
           const decls = resolvedRealSymbol?.getDeclarations() || [];
           if (decls.length > 0) {
-            const defStartOffset = decls[0].getStart();
-            const defEndOffset = decls[0].getEnd();
             const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
 
-            // Check if this is not a self-reference
-            const isSelfReference = (
-              resolvedSymbol.moduleName === moduleName &&
-              this.getPkgPath(resolvedSymbol.packagePath || packagePath) === packagePath &&
-              defStartOffset <= resolvedSymbol.startOffset &&
-              resolvedSymbol.endOffset <= defEndOffset
-            );
+            // Check if this is a self-reference: the type reference is within its own definition
+            const isSelfRef = typeNode.getAncestors().some(ancestor => ancestor === decls[0]);
 
-            if (!visited.has(key) && !isSelfReference) {
+            if (!visited.has(key) && !isSelfRef) {
               visited.add(key);
               dependencies.push({
                 ModPath: resolvedSymbol.moduleName || moduleName,
@@ -380,8 +373,11 @@ export class TypeParser {
         continue;
       }
 
-      const defStartOffset = decls[0].getStart();
-      const defEndOffset = decls[0].getEnd();
+      // Check if this is a self-reference: the type reference is within its own definition
+      // If typeRef's ancestors include decls[0], it's a self-reference
+      const isSelfRef = typeRef.getAncestors().some(ancestor => ancestor === decls[0]);
+
+      if (isSelfRef) continue;
 
       visited.add(key);
       const dep: Dependency = {
@@ -394,13 +390,6 @@ export class TypeParser {
         EndOffset: resolvedSymbol.endOffset
       };
 
-      // Skip self-references
-      if (
-        dep.ModPath === moduleName &&
-        dep.PkgPath === packagePath &&
-        defStartOffset <= resolvedSymbol.startOffset &&
-        resolvedSymbol.endOffset <= defEndOffset
-      ) continue;
       dependencies.push(dep);
     }
 

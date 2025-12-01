@@ -705,12 +705,12 @@ export class FunctionParser {
               const defEndOffset = decls[0].getEnd();
               const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
 
-              // Check if this is not a self-reference within the same function
+              // Check if this is a self-reference (type reference within its own definition)
               const isSelfReference = (
                 resolvedSymbol.moduleName === moduleName &&
                 this.getPkgPath(resolvedSymbol.packagePath || packagePath) === packagePath &&
-                defEndOffset <= node.getEnd() &&
-                defStartOffset >= node.getStart()
+                defStartOffset <= resolvedSymbol.startOffset &&
+                resolvedSymbol.endOffset <= defEndOffset
               );
 
               if (!visited.has(key) && !isSelfReference) {
@@ -775,11 +775,12 @@ export class FunctionParser {
           EndOffset: resolvedSymbol.endOffset
         };
 
+        // Check if this is a self-reference (type reference within its own definition)
         if (
           dep.ModPath === moduleName &&
           dep.PkgPath === packagePath &&
-          defEndOffset <= node.getEnd() &&
-          defStartOffset >= node.getStart()
+          defStartOffset <= resolvedSymbol.startOffset &&
+          resolvedSymbol.endOffset <= defEndOffset
         ) {
           continue;
         }
