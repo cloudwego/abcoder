@@ -655,6 +655,12 @@ export class FunctionParser {
     const types: Dependency[] = [];
     const visited = new Set<string>();
 
+    // Collect all type parameter names from this node to filter them out
+    const typeParamNames = new Set<string>();
+    for (const typeParam of node.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Extract from type references and find their definitions
     const typeNodes: TypeNode[] = node.getDescendantsOfKind(SyntaxKind.TypeReference)
 
@@ -696,6 +702,10 @@ export class FunctionParser {
 
       if (directSymbol) {
         const directTypeName = directSymbol.getName();
+        // Skip if this is a type parameter
+        if (typeParamNames.has(directTypeName)) {
+          continue;
+        }
         if (!this.isPrimitiveType(directTypeName)) {
           const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(directSymbol, typeNode);
           if (resolvedSymbol && !resolvedSymbol.isExternal) {
@@ -737,6 +747,11 @@ export class FunctionParser {
       for (const typeRef of typeReferences) {
         let typeName = typeRef.getText();
         if (this.isPrimitiveType(typeName)) {
+          continue;
+        }
+
+        // Skip if this is a type parameter
+        if (typeParamNames.has(typeName)) {
           continue;
         }
 

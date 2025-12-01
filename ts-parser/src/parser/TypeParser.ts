@@ -105,6 +105,12 @@ export class TypeParser {
     const content = cls.getFullText();
     const isExported = cls.isExported() || cls.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of cls.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
@@ -128,7 +134,7 @@ export class TypeParser {
       const typeNodes = clause.getTypeNodes();
 
       for (const typeNode of typeNodes) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
         if (clauseType === SyntaxKind.ImplementsKeyword) {
           implementsInterfaces.push(...dependencies);
         } else if (clauseType === SyntaxKind.ExtendsKeyword) {
@@ -170,6 +176,12 @@ export class TypeParser {
     const content = iface.getFullText();
     const isExported = iface.isExported() || iface.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of iface.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
@@ -190,7 +202,7 @@ export class TypeParser {
       if (clause.getToken() === SyntaxKind.ExtendsKeyword) {
         const typeNodes = clause.getTypeNodes();
         for (const typeNode of typeNodes) {
-          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
           extendsInterfaces.push(...dependencies);
         }
       }
@@ -229,11 +241,17 @@ export class TypeParser {
     const content = typeAlias.getFullText();
     const isExported = typeAlias.isExported() || typeAlias.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of typeAlias.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Extract type dependencies from the type alias
     const typeDependencies: Dependency[] = [];
     const typeNode = typeAlias.getTypeNode();
     if (typeNode) {
-      const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+      const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
       typeDependencies.push(...dependencies);
     }
 
@@ -290,7 +308,7 @@ export class TypeParser {
    * This handles union types, intersection types, generics, arrays, etc.
    * Uses SymbolResolver for consistent dependency resolution, similar to extractTypeReferences
    */
-  private extractTypeDependencies(typeNode: TypeNode, moduleName: string, packagePath: string): Dependency[] {
+  private extractTypeDependencies(typeNode: TypeNode, moduleName: string, packagePath: string, typeParamNames?: Set<string>): Dependency[] {
     const dependencies: Dependency[] = [];
     const visited = new Set<string>();
 
@@ -311,24 +329,29 @@ export class TypeParser {
       if (symbol) {
         const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
-          const decls = resolvedRealSymbol?.getDeclarations() || [];
-          if (decls.length > 0) {
-            const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+          // Skip if this is a type parameter
+          if (typeParamNames && typeParamNames.has(resolvedSymbol.name)) {
+            // Skip this type parameter
+          } else {
+            const decls = resolvedRealSymbol?.getDeclarations() || [];
+            if (decls.length > 0) {
+              const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
 
-            // Check if this is a self-reference: the type reference is within its own definition
-            const isSelfRef = typeNode.getAncestors().some(ancestor => ancestor === decls[0]);
+              // Check if this is a self-reference: the type reference is within its own definition
+              const isSelfRef = typeNode.getAncestors().some(ancestor => ancestor === decls[0]);
 
-            if (!visited.has(key) && !isSelfRef) {
-              visited.add(key);
-              dependencies.push({
-                ModPath: resolvedSymbol.moduleName || moduleName,
-                PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
-                Name: resolvedSymbol.name,
-                File: resolvedSymbol.filePath,
-                Line: resolvedSymbol.line,
-                StartOffset: resolvedSymbol.startOffset,
-                EndOffset: resolvedSymbol.endOffset
-              });
+              if (!visited.has(key) && !isSelfRef) {
+                visited.add(key);
+                dependencies.push({
+                  ModPath: resolvedSymbol.moduleName || moduleName,
+                  PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+                  Name: resolvedSymbol.name,
+                  File: resolvedSymbol.filePath,
+                  Line: resolvedSymbol.line,
+                  StartOffset: resolvedSymbol.startOffset,
+                  EndOffset: resolvedSymbol.endOffset
+                });
+              }
             }
           }
         }
@@ -360,6 +383,11 @@ export class TypeParser {
 
       const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeRef);
       if (!resolvedSymbol || resolvedSymbol.isExternal) {
+        continue;
+      }
+
+      // Skip if this is a type parameter
+      if (typeParamNames && typeParamNames.has(resolvedSymbol.name)) {
         continue;
       }
 
@@ -424,6 +452,12 @@ export class TypeParser {
     const endOffset = classExpr.getEnd();
     const content = classExpr.getFullText();
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of classExpr.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
@@ -447,7 +481,7 @@ export class TypeParser {
       const typeNodes = clause.getTypeNodes();
 
       for (const typeNode of typeNodes) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
 
         if (clauseType === SyntaxKind.ImplementsKeyword) {
           implementsInterfaces.push(...dependencies);
