@@ -177,5 +177,4 @@ export class MonorepoUtils {
       console.warn(`Error discovering packages in ${currentDir}:`, error);
     }
   }
-
 }

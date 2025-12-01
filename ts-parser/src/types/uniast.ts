@@ -29,7 +29,7 @@ export interface Repository {
  * A compilation unit, e.g., a Go module or an npm package.
  */
 export interface Module {
-  Language: 'go' | 'rust' | 'cxx' | 'python' | '';
+  Language: 'go' | 'rust' | 'cxx' | 'python' | 'typescript' | '';
   Version: string;
   Name: string;
   /** Path relative to the repository root. Empty string "" denotes an external dependency module. */
