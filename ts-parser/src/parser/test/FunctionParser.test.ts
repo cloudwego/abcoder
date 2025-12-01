@@ -599,4 +599,155 @@ describe('FunctionParser', () => {
       cleanup();
     });
   });
+
+  describe('type alias dependencies in function parameters and return types', () => {
+    it('should extract union type alias dependencies from function parameters', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Status = 'normal' | 'abnormal';
+
+        export const flipStatus = (s: Status): Status => {
+          return s === 'normal' ? 'abnormal' : 'normal';
+        };
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // flipStatus function should exist
+      const flipStatus = expectToBeDefined(functions['flipStatus']);
+      expect(flipStatus.Exported).toBe(true);
+
+      // Should have Status in Types array
+      expect(flipStatus.Types).toBeDefined();
+      expect(expectToBeDefined(flipStatus.Types).length).toBeGreaterThan(0);
+
+      const typeNames = expectToBeDefined(flipStatus.Types).map(dep => dep.Name);
+      expect(typeNames).toContain('Status');
+
+      cleanup();
+    });
+
+    it('should extract type alias dependencies from complex function signatures', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserId = string;
+        export type UserRole = 'admin' | 'user' | 'guest';
+
+        export type User = {
+          id: UserId;
+          role: UserRole;
+          name: string;
+        };
+
+        export function createUser(id: UserId, role: UserRole, name: string): User {
+          return { id, role, name };
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const createUser = expectToBeDefined(functions['createUser']);
+
+      // Should have all type aliases in Types array
+      expect(createUser.Types).toBeDefined();
+      const typeNames = expectToBeDefined(createUser.Types).map(dep => dep.Name);
+
+      expect(typeNames).toContain('UserId');
+      expect(typeNames).toContain('UserRole');
+      expect(typeNames).toContain('User');
+
+      cleanup();
+    });
+
+    it('should not include primitive types in Types array', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export function processData(name: string, age: number, active: boolean): void {
+          console.log(name, age, active);
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const processData = expectToBeDefined(functions['processData']);
+
+      // Should not have primitive types
+      const typeNames = (processData.Types || []).map(dep => dep.Name);
+      expect(typeNames).not.toContain('string');
+      expect(typeNames).not.toContain('number');
+      expect(typeNames).not.toContain('boolean');
+      expect(typeNames).not.toContain('void');
+
+      cleanup();
+    });
+
+    it('should extract type aliases from arrow function parameters and return types', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Result<T> = { success: true; data: T } | { success: false; error: string };
+        export type UserData = { name: string; email: string };
+
+        export const fetchUser = async (id: string): Promise<Result<UserData>> => {
+          return { success: true, data: { name: 'John', email: 'john@example.com' } };
+        };
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const fetchUser = expectToBeDefined(functions['fetchUser']);
+
+      // Should have type aliases in Types array
+      expect(fetchUser.Types).toBeDefined();
+      const typeNames = expectToBeDefined(fetchUser.Types).map(dep => dep.Name);
+
+      expect(typeNames).toContain('Result');
+      expect(typeNames).toContain('UserData');
+
+      cleanup();
+    });
+
+    it('should handle multiple occurrences of the same type alias', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Status = 'active' | 'inactive';
+
+        export function updateStatus(oldStatus: Status, newStatus: Status): Status {
+          return newStatus;
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const updateStatus = expectToBeDefined(functions['updateStatus']);
+
+      // Should have Status only once (deduplication)
+      expect(updateStatus.Types).toBeDefined();
+      const typeNames = expectToBeDefined(updateStatus.Types).map(dep => dep.Name);
+      const statusCount = typeNames.filter(name => name === 'Status').length;
+
+      expect(statusCount).toBe(1);
+
+      cleanup();
+    });
+  });
 });

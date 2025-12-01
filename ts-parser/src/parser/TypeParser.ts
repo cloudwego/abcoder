@@ -7,7 +7,8 @@ import {
   SyntaxKind,
   TypeNode,
   ClassExpression,
-  Symbol
+  Symbol,
+  Node
 } from 'ts-morph';
 import { Type as UniType, Dependency } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -248,9 +249,9 @@ export class TypeParser {
       TypeKind: 'typedef',
       Content: content,
       Methods: {},
-      Implements: typeDependencies,
+      Implements: [],
       SubStruct: [],
-      InlineStruct: []
+      InlineStruct: typeDependencies
     };
   }
 
@@ -293,19 +294,82 @@ export class TypeParser {
     const dependencies: Dependency[] = [];
     const visited = new Set<string>();
 
-    // Extract from identifiers and find their definitions
-    const types = this.dependencyUtils.extractAtomicTypeReferences(typeNode);
+    // Collect all type reference nodes (including the root typeNode itself if it's a TypeReference)
+    const typeReferences: TypeNode[] = [];
 
-    for (const t of types) {
-      const symbol = t.getSymbol();
-      if (!symbol) {
-        continue;
+    // Handle ExpressionWithTypeArguments (used in extends/implements clauses)
+    if (Node.isExpressionWithTypeArguments(typeNode)) {
+      const expression = typeNode.getExpression();
+      let symbol: Symbol | undefined;
+
+      if (Node.isIdentifier(expression)) {
+        symbol = expression.getSymbol();
+      } else if (Node.isPropertyAccessExpression(expression)) {
+        symbol = expression.getSymbol();
       }
-      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
-      // if symbol is not external, add it to dependencies
+
+      if (symbol) {
+        const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
+        if (resolvedSymbol && !resolvedSymbol.isExternal) {
+          const decls = resolvedRealSymbol?.getDeclarations() || [];
+          if (decls.length > 0) {
+            const defStartOffset = decls[0].getStart();
+            const defEndOffset = decls[0].getEnd();
+            const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+
+            // Check if this is not a self-reference
+            const isSelfReference = (
+              resolvedSymbol.moduleName === moduleName &&
+              this.getPkgPath(resolvedSymbol.packagePath || packagePath) === packagePath &&
+              defStartOffset <= resolvedSymbol.startOffset &&
+              resolvedSymbol.endOffset <= defEndOffset
+            );
+
+            if (!visited.has(key) && !isSelfReference) {
+              visited.add(key);
+              dependencies.push({
+                ModPath: resolvedSymbol.moduleName || moduleName,
+                PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+                Name: resolvedSymbol.name,
+                File: resolvedSymbol.filePath,
+                Line: resolvedSymbol.line,
+                StartOffset: resolvedSymbol.startOffset,
+                EndOffset: resolvedSymbol.endOffset
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Handle TypeReference nodes
+    if (Node.isTypeReference(typeNode)) {
+      typeReferences.push(typeNode);
+    }
+
+    // Also get all descendant type references
+    typeReferences.push(...typeNode.getDescendantsOfKind(SyntaxKind.TypeReference));
+
+    // Process each type reference
+    for (const typeRef of typeReferences) {
+      if (!Node.isTypeReference(typeRef)) continue;
+
+      const typeName = typeRef.getTypeName();
+      let symbol: Symbol | undefined;
+
+      if (Node.isIdentifier(typeName)) {
+        symbol = typeName.getSymbol();
+      } else if (Node.isQualifiedName(typeName)) {
+        symbol = typeName.getRight().getSymbol();
+      }
+
+      if (!symbol) continue;
+
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeRef);
       if (!resolvedSymbol || resolvedSymbol.isExternal) {
         continue;
       }
+
       const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
       if (visited.has(key)) {
         continue;
@@ -329,6 +393,8 @@ export class TypeParser {
         StartOffset: resolvedSymbol.startOffset,
         EndOffset: resolvedSymbol.endOffset
       };
+
+      // Skip self-references
       if (
         dep.ModPath === moduleName &&
         dep.PkgPath === packagePath &&

@@ -36,13 +36,25 @@ export class DependencyUtils {
         if (t.isTypeParameter()) {
           return;
         }
-        
+
         if(t.isUnion()) {
+          // If the union type has a symbol (i.e., it's a type alias), add it first
+          const symbol = t.getSymbol();
+          if (symbol) {
+            results.push(t);
+          }
+          // Then recursively process union members
           t.getUnionTypes().forEach(visit);
           return;
         }
 
         if (t.isIntersection()) {
+          // If the intersection type has a symbol (i.e., it's a type alias), add it first
+          const symbol = t.getSymbol();
+          if (symbol) {
+            results.push(t);
+          }
+          // Then recursively process intersection members
           t.getIntersectionTypes().forEach(visit);
           return;
         }
@@ -70,7 +82,7 @@ export class DependencyUtils {
         console.error('Error processing type:', t, error);
       }
     }
-    
+
     visit(type);
     return results;
   }

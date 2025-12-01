@@ -299,7 +299,7 @@ describe('TypeParser', () => {
       const { project, sourceFile, cleanup } = createTestProject(`
         class CustomType {}
         interface CustomInterface {}
-        
+
         type SimpleAlias = CustomType;
         type ComplexAlias = {
           prop: CustomType;
@@ -313,37 +313,38 @@ describe('TypeParser', () => {
           };
         };
       `);
-      
+
       const parser = new TypeParser(process.cwd());
       let pkgPathAbsFile : string = sourceFile.getFilePath()
       pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
       const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
-      
+
       const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
-      
+
       const simpleAlias = expectToBeDefined(types['SimpleAlias']);
       const complexAlias = expectToBeDefined(types['ComplexAlias']);
       const unionAlias = expectToBeDefined(types['UnionAlias']);
       const genericAlias = expectToBeDefined(types['GenericAlias']);
       const nestedAlias = expectToBeDefined(types['NestedAlias']);
-      
-      expect(expectToBeDefined(simpleAlias.Implements).length).toBeGreaterThan(0);
-      expect(expectToBeDefined(complexAlias.Implements).length).toBeGreaterThan(0);
-      expect(expectToBeDefined(unionAlias.Implements).length).toBeGreaterThan(0);
-      expect(expectToBeDefined(genericAlias.Implements).length).toBeGreaterThan(0);
-      expect(expectToBeDefined(nestedAlias.Implements).length).toBeGreaterThan(0);
-      
+
+      // Type aliases should have dependencies in InlineStruct, not Implements
+      expect(expectToBeDefined(simpleAlias.InlineStruct).length).toBeGreaterThan(0);
+      expect(expectToBeDefined(complexAlias.InlineStruct).length).toBeGreaterThan(0);
+      expect(expectToBeDefined(unionAlias.InlineStruct).length).toBeGreaterThan(0);
+      expect(expectToBeDefined(genericAlias.InlineStruct).length).toBeGreaterThan(0);
+      expect(expectToBeDefined(nestedAlias.InlineStruct).length).toBeGreaterThan(0);
+
       const allTypeNames = [
-        ...expectToBeDefined(simpleAlias.Implements),
-        ...expectToBeDefined(complexAlias.Implements),
-        ...expectToBeDefined(unionAlias.Implements),
-        ...expectToBeDefined(genericAlias.Implements),
-        ...expectToBeDefined(nestedAlias.Implements)
+        ...expectToBeDefined(simpleAlias.InlineStruct),
+        ...expectToBeDefined(complexAlias.InlineStruct),
+        ...expectToBeDefined(unionAlias.InlineStruct),
+        ...expectToBeDefined(genericAlias.InlineStruct),
+        ...expectToBeDefined(nestedAlias.InlineStruct)
       ].map(dep => expectToBeDefined(dep).Name);
-      
+
       expect(allTypeNames).toContain('CustomType');
       expect(allTypeNames).toContain('CustomInterface');
-      
+
       cleanup();
     });
 
@@ -518,6 +519,156 @@ describe('TypeParser', () => {
       expect(types['CallbackType']).toBeDefined();
       expect(types['UsesFunctionTypes']).toBeDefined();
       
+      cleanup();
+    });
+  });
+
+  describe('type alias dependencies in InlineStruct', () => {
+    it('should extract union type alias dependencies into InlineStruct', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Status = 'normal' | 'abnormal';
+
+        export type ServerStatus = {
+          code: number;
+          status: Status;
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // Status type should exist
+      expect(types['Status']).toBeDefined();
+      expect(types['Status'].TypeKind).toBe('typedef');
+
+      // ServerStatus should exist
+      const serverStatus = expectToBeDefined(types['ServerStatus']);
+      expect(serverStatus.TypeKind).toBe('typedef');
+
+      // ServerStatus should have Status in InlineStruct, not Implements
+      expect(serverStatus.Implements).toEqual([]);
+      expect(expectToBeDefined(serverStatus.InlineStruct).length).toBeGreaterThan(0);
+
+      const inlineStructNames = expectToBeDefined(serverStatus.InlineStruct).map(dep => dep.Name);
+      expect(inlineStructNames).toContain('Status');
+
+      cleanup();
+    });
+
+    it('should extract complex type alias dependencies into InlineStruct', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserId = string;
+        export type UserRole = 'admin' | 'user' | 'guest';
+
+        export type User = {
+          id: UserId;
+          role: UserRole;
+          name: string;
+        };
+
+        export type UserWithMetadata = User & {
+          createdAt: Date;
+          updatedAt: Date;
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // User type should have dependencies in InlineStruct
+      const user = expectToBeDefined(types['User']);
+      expect(user.Implements).toEqual([]);
+      expect(expectToBeDefined(user.InlineStruct).length).toBeGreaterThan(0);
+
+      const userInlineNames = expectToBeDefined(user.InlineStruct).map(dep => dep.Name);
+      expect(userInlineNames).toContain('UserId');
+      expect(userInlineNames).toContain('UserRole');
+
+      // UserWithMetadata should have User in InlineStruct
+      const userWithMetadata = expectToBeDefined(types['UserWithMetadata']);
+      expect(userWithMetadata.Implements).toEqual([]);
+      expect(expectToBeDefined(userWithMetadata.InlineStruct).length).toBeGreaterThan(0);
+
+      const metadataInlineNames = expectToBeDefined(userWithMetadata.InlineStruct).map(dep => dep.Name);
+      expect(metadataInlineNames).toContain('User');
+
+      cleanup();
+    });
+
+    it('should not include primitive types in InlineStruct', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Config = {
+          host: string;
+          port: number;
+          enabled: boolean;
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const config = expectToBeDefined(types['Config']);
+
+      // Should not have primitive types in InlineStruct
+      const inlineStructNames = (config.InlineStruct || []).map(dep => dep.Name);
+      expect(inlineStructNames).not.toContain('string');
+      expect(inlineStructNames).not.toContain('number');
+      expect(inlineStructNames).not.toContain('boolean');
+
+      cleanup();
+    });
+
+    it('should handle nested type references in InlineStruct', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Address = {
+          street: string;
+          city: string;
+        };
+
+        export type ContactInfo = {
+          email: string;
+          address: Address;
+        };
+
+        export type Person = {
+          name: string;
+          contact: ContactInfo;
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile : string = sourceFile.getFilePath()
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/')
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile)
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // ContactInfo should reference Address
+      const contactInfo = expectToBeDefined(types['ContactInfo']);
+      expect(expectToBeDefined(contactInfo.InlineStruct).length).toBeGreaterThan(0);
+
+      const contactInfoInlineNames = expectToBeDefined(contactInfo.InlineStruct).map(dep => dep.Name);
+      expect(contactInfoInlineNames).toContain('Address');
+
+      // Person should reference ContactInfo
+      const person = expectToBeDefined(types['Person']);
+      expect(expectToBeDefined(person.InlineStruct).length).toBeGreaterThan(0);
+
+      const personInlineNames = expectToBeDefined(person.InlineStruct).map(dep => dep.Name);
+      expect(personInlineNames).toContain('ContactInfo');
+
       cleanup();
     });
   });
