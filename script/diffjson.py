@@ -38,32 +38,32 @@ class DiffResult:
         if self.diff is not None and "dictionary_item_added" in self.diff:
             for path in self.diff["dictionary_item_added"]:
                 one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
-                add_item(f"New item: {path}\n    Add: {one_liner}")
+                add_item(f"{path}\n{format_color('green', '+ ' + one_liner)}")
 
         if self.diff is not None and "iterable_item_added" in self.diff:
             for path, value in self.diff["iterable_item_added"].items():
                 one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
-                add_item(f"New item: {path}\n    Add: {one_liner}")
+                add_item(f"{path}\n{format_color('green', '+ ' + one_liner)}")
 
         # Handle removed items (dictionary_item_removed and iterable_item_removed)
         if self.diff is not None and "dictionary_item_removed" in self.diff:
             for path, value in self.diff["dictionary_item_removed"]:
                 one_liner = _format_value_one_liner(value)
-                add_item(f"Removed item: {path}\n    Remove: {one_liner}")
+                add_item(f"{path}\n{format_color('red', '- ' + one_liner)}")
 
         if self.diff is not None and "iterable_item_removed" in self.diff:
             for path, value in self.diff["iterable_item_removed"].items():
                 one_liner = _format_value_one_liner(value)
-                add_item(f"Removed item: {path}\n    Remove: {one_liner}")
+                add_item(f"{path}\n{format_color('red', '- ' + one_liner)}")
 
         # Handle changed values
         if self.diff is not None and "values_changed" in self.diff:
             for path, changes in self.diff["values_changed"].items():
                 old_one_liner = _format_value_one_liner(changes["old_value"])
                 new_one_liner = _format_value_one_liner(changes["new_value"])
-                add_item(
-                    f"Changed item: {path}\n    Old: {old_one_liner}\n    New: {new_one_liner}"
-                )
+                oldl = format_color("red", "- " + old_one_liner)
+                newl = format_color("green", "+ " + new_one_liner)
+                add_item(f"{path}\n{oldl}\n{newl}")
 
         # Handle items moved (position changes in lists)
         if (
@@ -72,7 +72,8 @@ class DiffResult:
             and "iterable_item_moved" in self.diff
         ):
             for path, changes in self.diff["iterable_item_moved"].items():
-                add_item(f"Moved item: {path}\n    Position changed in list")
+                movel = format_color("yellow", "~ Position changed in list")
+                add_item(f"{path}\n{movel}")
 
         # Add truncation notice if needed
         if truncate_items > 0 and items_count > truncate_items:
@@ -178,7 +179,34 @@ def _format_value_one_liner(value: Any) -> str:
         res = f"[ ({len(value)} items) ]"
     if len(res) < ONE_LINER_LEN:
         return res
-    return res[:ONE_LINER_LEN] + f"... {len(res) - ONE_LINER_LEN} more chars"
+    return res[:ONE_LINER_LEN] + f"...({len(res) - ONE_LINER_LEN} more chars)"
+
+
+_color_codes = {}
+_reset_code = ""
+
+
+def init_colors():
+    global _color_codes, _reset_code
+    _color_codes = {
+        "red": "\033[31m",
+        "green": "\033[32m",
+        "yellow": "\033[33m",
+    }
+    _reset_code = "\033[0m"
+
+
+def format_color(color: str, text: str) -> str:
+    code = _color_codes.get(color.lower())
+    if code is None:
+        return text
+    return code + text + _reset_code
+
+
+def print_color(color: str, *args, **kwargs):
+    sep = kwargs.get("sep", " ")
+    s = format_color(color, sep.join(str(arg) for arg in args))
+    print(s, **{k: v for k, v in kwargs.items() if k not in ("sep")})
 
 
 def compare_files(
@@ -208,11 +236,7 @@ def compare_files(
 
     diff = DeepDiff(json1, json2, ignore_order=True)
 
-    return (
-        DiffResult("BAD", diff, json1, json2)
-        if diff
-        else DiffResult("OK", None, json1, json2)
-    )
+    return DiffResult("BAD", diff, json1, json2) if diff else DiffResult("OK", None, json1, json2)
 
 
 def compare_and_report_files(
@@ -224,17 +248,20 @@ def compare_and_report_files(
 ) -> int:
     result = compare_files(old_path, new_path, ignore_fields)
     if result.status == "FILE_ERROR":
-        print("Error reading or parsing a file.", file=sys.stderr)
+        print_color(
+            "red", f"❌ [ERROR] reading or parsing {old_path} or {new_path}.", file=sys.stderr
+        )
         return 1
 
     if result.status == "BAD" and result.diff:
-        print(f"Files {old_path.name} and {new_path.name} differ.", file=sys.stderr)
+        print_color("red", f"❌ [DIFF] {str(old_path):<40} <-> {new_path}", file=sys.stderr)
         if verbose:
             new_output = result.format(truncate_items)
+            new_output = "\n    ".join([""] + new_output.splitlines())
             print(new_output, file=sys.stderr)
         return 1
     else:
-        print(f"Files '{old_path.name}' and '{new_path.name}' are identical.")
+        print_color("green", f"✅ [IDENTICAL] {str(old_path):<40} <-> {new_path}")
         return 0
 
 
@@ -257,23 +284,17 @@ def get_compare_file_list_bothdir(
 
 def get_compare_file_list(path1: Path, path2: Path) -> list[tuple[Path, Path]]:
     if not path1.exists() or not path2.exists():
-        raise ValueError(
-            f"Error: Path does not exist: {path1 if not path1.exists() else path2}"
-        )
+        raise ValueError(f"Error: Path does not exist: {path1 if not path1.exists() else path2}")
     if path1.is_dir() and path2.is_dir():
-        miss_files, new_files, compare_files = get_compare_file_list_bothdir(
-            path1, path2
-        )
+        miss_files, new_files, compare_files = get_compare_file_list_bothdir(path1, path2)
         for filename in miss_files:
-            print(f"[MISS]  {filename}", file=sys.stderr)
+            print_color("red", f"❌ [MISS]  {filename}", file=sys.stderr)
         for filename in new_files:
-            print(f"[NEW ]  {filename}")
+            print_color("red", f"❌ [NEW ]  {filename}")
     elif path1.is_file() and path2.is_file():
         compare_files = [(path1, path2)]
     else:
-        raise ValueError(
-            "Error: Both arguments must be files or both must be directories."
-        )
+        raise ValueError("Error: Both arguments must be files or both must be directories.")
     return compare_files
 
 
@@ -281,12 +302,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Compare two JSON files or two directories of JSON files."
     )
-    parser.add_argument(
-        "path1", type=Path, help="Path to the first file or 'old' directory."
-    )
-    parser.add_argument(
-        "path2", type=Path, help="Path to the second file or 'new' directory."
-    )
+    parser.add_argument("path1", type=Path, help="Path to the first file or 'old' directory.")
+    parser.add_argument("path2", type=Path, help="Path to the second file or 'new' directory.")
     parser.add_argument(
         "-i",
         "--ignore",
@@ -317,6 +334,7 @@ def main() -> int:
     env_ignore_fields = env_ignore_str.split() if env_ignore_str else []
     ignore_fields = list(set(cli_ignore_fields + env_ignore_fields))
 
+    init_colors()
     compare_files = get_compare_file_list(args.path1, args.path2)
     exit_code = 0
     for file1, file2 in compare_files:
