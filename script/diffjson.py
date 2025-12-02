@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from dataclasses import dataclass
 import json
 import os
 import re
@@ -7,13 +8,81 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+import IPython
 from deepdiff import DeepDiff
 
-# Define status types for clarity
+ONE_LINER_LEN = 100
+
 Status = Literal["OK", "BAD", "FILE_ERROR"]
 
 
-def parse_accessor(accessor_string: str) -> list[str | int]:
+@dataclass
+class DiffResult:
+    status: Status
+    diff: DeepDiff | None
+    json1: any
+    json2: any
+
+    def format(self, truncate_items: int) -> str:
+        output = []
+        items_count = 0
+
+        def add_item(text: str):
+            nonlocal items_count
+            if truncate_items == 0 or items_count < truncate_items:
+                output.append(text)
+                output.append("--------------------")
+            items_count += 1
+
+        # Handle new items (dictionary_item_added and iterable_item_added)
+        if "dictionary_item_added" in self.diff:
+            for path in self.diff["dictionary_item_added"]:
+                one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
+                add_item(f"New item: {path}\n    Add: {one_liner}")
+
+        if "iterable_item_added" in self.diff:
+            for path, value in self.diff["iterable_item_added"].items():
+                one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
+                add_item(f"New item: {path}\n    Add: {one_liner}")
+
+        # Handle removed items (dictionary_item_removed and iterable_item_removed)
+        if "dictionary_item_removed" in self.diff:
+            for path, value in self.diff["dictionary_item_removed"]:
+                one_liner = _format_value_one_liner(value)
+                add_item(f"Removed item: {path}\n    Remove: {one_liner}")
+
+        if "iterable_item_removed" in self.diff:
+            for path, value in self.diff["iterable_item_removed"].items():
+                one_liner = _format_value_one_liner(value)
+                add_item(f"Removed item: {path}\n    Remove: {one_liner}")
+
+        # Handle changed values
+        if "values_changed" in self.diff:
+            for path, changes in self.diff["values_changed"].items():
+                old_one_liner = _format_value_one_liner(changes["old_value"])
+                new_one_liner = _format_value_one_liner(changes["new_value"])
+                add_item(
+                    f"Changed item: {path}\n    Old: {old_one_liner}\n    New: {new_one_liner}"
+                )
+
+        # Handle items moved (position changes in lists)
+        if "values_changed" not in self.diff and "iterable_item_moved" in self.diff:
+            for path, changes in self.diff["iterable_item_moved"].items():
+                add_item(f"Moved item: {path}\n    Position changed in list")
+
+        # Add truncation notice if needed
+        if truncate_items > 0 and items_count > truncate_items:
+            remaining = items_count - truncate_items
+            output.append(f"...({remaining} more items)")
+
+        # Clean up the last separator for a tidy output
+        if output and output[-1] == "--------------------":
+            output.pop()
+
+        return "\n".join(output)
+
+
+def _parse_accessor(accessor_string: str) -> list[str | int]:
     """
     Parses a field accessor string like "['key'][0]" into a list ['key', 0].
     This allows for programmatic access to nested JSON elements.
@@ -31,7 +100,7 @@ def parse_accessor(accessor_string: str) -> list[str | int]:
     return keys
 
 
-def delete_path(data: dict | list, path: list[str | int]):
+def _delete_path(data: dict | list, path: list[str | int]):
     """
     Deletes a value from a nested dictionary or list based on a path.
     This function modifies the data in place. If the path is invalid
@@ -63,63 +132,44 @@ def delete_path(data: dict | list, path: list[str | int]):
         pass
 
 
-def format_diff_custom(diff: DeepDiff) -> str:
+def _get_path(data: dict | list, path: list[str | int]) -> any:
     """
-    Formats a DeepDiff object into a custom human-readable string.
-    This provides a clear, indented view of changes.
+    Retrieves a value from a nested dictionary or list based on a path.
+    Returns None if the path is invalid or doesn't exist.
     """
-    output = []
-
-    # Helper to format a value for printing. Pretty-prints dicts/lists.
-    def format_value(value):
-        if isinstance(value, (dict, list)):
-            return json.dumps(value, indent=2)
-        return repr(value)
-
-    # Handle changed values
-    if "values_changed" in diff:
-        for path, changes in diff["values_changed"].items():
-            output.append(f"Value Changed at: {path}")
-            output.append(f"  - old: {format_value(changes['old_value'])}")
-            output.append(f"  + new: {format_value(changes['new_value'])}")
-            output.append("--------------------")
-
-    # Handle added items to lists/sets
-    if "iterable_item_added" in diff:
-        for path, value in diff["iterable_item_added"].items():
-            output.append(f"Item Added at: {path}")
-            output.append(f"  + new: {format_value(value)}")
-            output.append("--------------------")
-
-    # Handle removed items from lists/sets
-    if "iterable_item_removed" in diff:
-        for path, value in diff["iterable_item_removed"].items():
-            output.append(f"Item Removed at: {path}")
-            output.append(f"  - old: {format_value(value)}")
-            output.append("--------------------")
-
-    # Handle added keys in dictionaries
-    if "dictionary_item_added" in diff:
-        for path in diff["dictionary_item_added"]:
-            output.append(f"Dictionary Key Added: {path}")
-            output.append("--------------------")
-
-    # Handle removed keys in dictionaries
-    if "dictionary_item_removed" in diff:
-        for path in diff["dictionary_item_removed"]:
-            output.append(f"Dictionary Key Removed: {path}")
-            output.append("--------------------")
-
-    # Clean up the last separator for a tidy output
-    if output and output[-1] == "--------------------":
-        output.pop()
-
-    return "\n".join(output)
+    current = data
+    try:
+        for key in path:
+            current = current[key]
+        return current
+    except (KeyError, IndexError, TypeError):
+        return None
 
 
-def compare_json_files(
+def _get_accessor(data: dict | list, accessor_string: str) -> any:
+    if accessor_string.startswith("root"):
+        accessor_string = accessor_string[4:]  # Remove 'root' prefix
+    path = _parse_accessor(accessor_string)
+    return _get_path(data, path)
+
+
+def _format_value_one_liner(value) -> str:
+    res = json.dumps(value)
+    if len(res) < ONE_LINER_LEN:
+        return res
+    if isinstance(value, dict):
+        keys_str = ", ".join(f'"{key}": ...' for key in value.keys())
+        res = f"{{ {keys_str} }}"
+    elif isinstance(value, list):
+        res = f"[ ({len(value)} items) ]"
+    if len(res) < ONE_LINER_LEN:
+        return res
+    return res[:ONE_LINER_LEN] + f"... {len(res) - ONE_LINER_LEN} more chars"
+
+
+def compare_files(
     file1_path: Path, file2_path: Path, ignore_fields: list[str] | None = None
-) -> tuple[Status, DeepDiff | None]:
+) -> DiffResult:
     """
     Compares two JSON files, optionally ignoring specified fields.
 
@@ -138,47 +188,79 @@ def compare_json_files(
     # Delete ignored fields from both JSON objects before comparison
     if ignore_fields:
         for field_accessor in ignore_fields:
-            path = parse_accessor(field_accessor)
-            delete_path(json1, path)
-            delete_path(json2, path)
+            path = _parse_accessor(field_accessor)
+            _delete_path(json1, path)
+            _delete_path(json2, path)
 
     diff = DeepDiff(json1, json2, ignore_order=True)
 
-    return ("BAD", diff) if diff else ("OK", None)
+    return (
+        DiffResult("BAD", diff, json1, json2)
+        if diff
+        else DiffResult("OK", None, json1, json2)
+    )
 
 
-def process_directory_comparison(
-    old_dir: Path, new_dir: Path, ignore_fields: list[str] | None = None
+def compare_and_report_files(
+    old_path: Path,
+    new_path: Path,
+    ignore_fields: list[str] | None = None,
+    truncate_items: int = 100,
+    verbose: bool = False,
 ) -> bool:
-    """
-    Compares JSON files across two directories and prints results in a list format.
-    """
-    results: dict[str, list[str]] = {"OK": [], "BAD": [], "MISS": [], "NEW": []}
+    result = compare_files(old_path, new_path, ignore_fields)
+    if result.status == "FILE_ERROR":
+        print("Error reading or parsing a file.", file=sys.stderr)
+        return 1
+
+    if result.status == "BAD" and result.diff:
+        print(f"Files {old_path.name} and {new_path.name} differ.", file=sys.stderr)
+        if verbose:
+            new_output = result.format(truncate_items)
+            print(new_output, file=sys.stderr)
+        return 1
+    else:
+        print(f"Files '{old_path.name}' and '{new_path.name}' are identical.")
+        return 0
+
+
+def get_compare_file_list_bothdir(
+    old_dir: Path, new_dir: Path
+) -> tuple[list[str], list[str], list[tuple[Path, Path]]]:
     old_files = {p.name for p in old_dir.glob("*.json")}
     new_files = {p.name for p in new_dir.glob("*.json")}
-
+    compare_file = []
+    miss_file = []
+    new_file = []
     for filename in sorted(old_files.intersection(new_files)):
-        status, _ = compare_json_files(
-            old_dir / filename, new_dir / filename, ignore_fields
-        )
-        results["BAD" if status != "OK" else "OK"].append(filename)
-
+        compare_file.append((old_dir / filename, new_dir / filename))
     for filename in sorted(old_files - new_files):
-        results["MISS"].append(filename)
-
+        miss_file.append(filename)
     for filename in sorted(new_files - old_files):
-        results["NEW"].append(filename)
+        new_file.append(filename)
+    return miss_file, new_file, compare_file
 
-    for filename in results["OK"]:
-        print(f"[OK  ]  {filename}")
-    for filename in results["NEW"]:
-        print(f"[NEW ]  {filename}")
-    for filename in results["BAD"]:
-        print(f"[BAD ]  {filename}", file=sys.stderr)
-    for filename in results["MISS"]:
-        print(f"[MISS]  {filename}", file=sys.stderr)
 
-    return bool(results["BAD"] or results["MISS"])
+def get_compare_file_list(path1: Path, path2: Path) -> list[tuple[Path, Path]]:
+    if not path1.exists() or not path2.exists():
+        raise ValueError(
+            f"Error: Path does not exist: {path1 if not path1.exists() else path2}"
+        )
+    if path1.is_dir() and path2.is_dir():
+        miss_files, new_files, compare_files = get_compare_file_list_bothdir(
+            path1, path2
+        )
+        for filename in miss_files:
+            print(f"[MISS]  {filename}", file=sys.stderr)
+        for filename in new_files:
+            print(f"[NEW ]  {filename}")
+    elif path1.is_file() and path2.is_file():
+        compare_files = [(path1, path2)]
+    else:
+        raise ValueError(
+            "Error: Both arguments must be files or both must be directories."
+        )
+    return compare_files
 
 
 def main():
@@ -200,62 +282,32 @@ def main():
         "Also reads whitespace-separated values from $DIFFJSON_IGNORE. "
         "Example: -i \"['metadata']['timestamp']\"",
     )
+    parser.add_argument(
+        "-t",
+        "--truncate_items",
+        type=int,
+        default=100,
+        help="Maximum number of items to output. If 0, no truncation. Default: 100",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output for directory comparison.",
+    )
     args = parser.parse_args()
 
     # --- Combine ignore fields from CLI and environment variable ---
     cli_ignore_fields = args.ignore
     env_ignore_str = os.environ.get("DIFFJSON_IGNORE", "")
     env_ignore_fields = env_ignore_str.split() if env_ignore_str else []
+    ignore_fields = list(set(cli_ignore_fields + env_ignore_fields))
 
-    # Combine both sources and remove duplicates
-    all_ignore_fields = list(set(cli_ignore_fields + env_ignore_fields))
-
-    path1, path2 = args.path1, args.path2
-
-    if not path1.exists() or not path2.exists():
-        print(
-            f"Error: Path does not exist: {path1 if not path1.exists() else path2}",
-            file=sys.stderr,
+    compare_files = get_compare_file_list(args.path1, args.path2)
+    for file1, file2 in compare_files:
+        compare_and_report_files(
+            file1, file2, ignore_fields, args.truncate_items, args.verbose
         )
-        return 1
-
-    # --- Handle Directory Comparison ---
-    if path1.is_dir() and path2.is_dir():
-        print(f"Comparing directories:\n- Old: {path1}\n- New: {path2}\n")
-        if process_directory_comparison(path1, path2, all_ignore_fields):
-            print("\nComparison finished with errors.", file=sys.stderr)
-            return 1
-        else:
-            print("\nComparison finished successfully.")
-            return 0
-
-    # --- Handle Single File Comparison ---
-    elif path1.is_file() and path2.is_file():
-        status, diff = compare_json_files(path1, path2, all_ignore_fields)
-
-        if status == "FILE_ERROR":
-            print("Error reading or parsing a file.", file=sys.stderr)
-            return 1
-
-        if status == "BAD" and diff:
-            print(
-                f"Differences found between '{path1.name}' and '{path2.name}':\n",
-                file=sys.stderr,
-            )
-            custom_output = format_diff_custom(diff)
-            print(custom_output, file=sys.stderr)
-            return 1
-        else:
-            print(f"Files '{path1.name}' and '{path2.name}' are identical.")
-            return 0
-
-    # --- Handle Invalid Input ---
-    else:
-        print(
-            "Error: Both arguments must be files or both must be directories.",
-            file=sys.stderr,
-        )
-        return 1
 
 
 if __name__ == "__main__":
