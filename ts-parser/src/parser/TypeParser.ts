@@ -114,6 +114,8 @@ export class TypeParser {
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
+
+    // Parse instance methods
     const classMethods = cls.getMethods();
     for (const method of classMethods) {
       const methodName = method.getName() || 'anonymous';
@@ -121,6 +123,51 @@ export class TypeParser {
         ModPath: moduleName,
         PkgPath: this.getPkgPath(packagePath),
         Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse constructors
+    const constructors = cls.getConstructors();
+    for (const ctor of constructors) {
+      // Constructors don't have symbols, so we use 'constructor' as the key
+      const ctorName = 'constructor';
+      methods[ctorName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${ctorName}`
+      };
+    }
+
+    // Parse static methods
+    const staticMethods = cls.getStaticMethods();
+    for (const staticMethod of staticMethods) {
+      const methodName = staticMethod.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse getters
+    const getAccessors = cls.getGetAccessors();
+    for (const getter of getAccessors) {
+      const getterName = getter.getName() || 'anonymous';
+      methods[getterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${getterName}`
+      };
+    }
+
+    // Parse setters
+    const setAccessors = cls.getSetAccessors();
+    for (const setter of setAccessors) {
+      const setterName = setter.getName() || 'anonymous';
+      methods[setterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${setterName}`
       };
     }
 
@@ -146,6 +193,17 @@ export class TypeParser {
     // Combine implements and extends into Implements, but filter out external symbols
     const allImplements = [...implementsInterfaces, ...extendsClasses];
 
+    // Extract property type dependencies
+    const propertyTypes: Dependency[] = [];
+    const properties = cls.getProperties();
+    for (const prop of properties) {
+      const typeNode = prop.getTypeNode();
+      if (typeNode) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+        propertyTypes.push(...dependencies);
+      }
+    }
+
     return {
       ModPath: moduleName,
       PkgPath: this.getPkgPath(packagePath),
@@ -159,7 +217,7 @@ export class TypeParser {
       Content: content,
       Methods: methods,
       Implements: allImplements,
-      SubStruct: [],
+      SubStruct: propertyTypes,
       InlineStruct: []
     };
   }
@@ -210,6 +268,17 @@ export class TypeParser {
     // Combine extends interfaces and other dependencies into Implements, but filter out external symbols
     const allImplements = [...extendsInterfaces];
 
+    // Extract property type dependencies
+    const propertyTypes: Dependency[] = [];
+    const properties = iface.getProperties();
+    for (const prop of properties) {
+      const typeNode = prop.getTypeNode();
+      if (typeNode) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+        propertyTypes.push(...dependencies);
+      }
+    }
+
     return {
       ModPath: moduleName,
       PkgPath: this.getPkgPath(packagePath),
@@ -223,7 +292,7 @@ export class TypeParser {
       Content: content,
       Methods: methods,
       Implements: allImplements,
-      SubStruct: [],
+      SubStruct: propertyTypes,
       InlineStruct: []
     };
   }
@@ -461,6 +530,8 @@ export class TypeParser {
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
+
+    // Parse instance methods
     const classMethods = classExpr.getMethods();
     for (const method of classMethods) {
       const methodName = method.getName() || 'anonymous';
@@ -468,6 +539,51 @@ export class TypeParser {
         ModPath: moduleName,
         PkgPath: this.getPkgPath(packagePath),
         Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse constructors
+    const constructors = classExpr.getConstructors();
+    for (const ctor of constructors) {
+      // Constructors don't have symbols, so we use 'constructor' as the key
+      const ctorName = 'constructor';
+      methods[ctorName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${ctorName}`
+      };
+    }
+
+    // Parse static methods
+    const staticMethods = classExpr.getStaticMethods();
+    for (const staticMethod of staticMethods) {
+      const methodName = staticMethod.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse getters
+    const getAccessors = classExpr.getGetAccessors();
+    for (const getter of getAccessors) {
+      const getterName = getter.getName() || 'anonymous';
+      methods[getterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${getterName}`
+      };
+    }
+
+    // Parse setters
+    const setAccessors = classExpr.getSetAccessors();
+    for (const setter of setAccessors) {
+      const setterName = setter.getName() || 'anonymous';
+      methods[setterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${setterName}`
       };
     }
 
@@ -491,6 +607,16 @@ export class TypeParser {
       }
     }
 
+    // Extract property type dependencies
+    const propertyTypes: Dependency[] = [];
+    const properties = classExpr.getProperties();
+    for (const prop of properties) {
+      const typeNode = prop.getTypeNode();
+      if (typeNode) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+        propertyTypes.push(...dependencies);
+      }
+    }
 
     return {
       ModPath: moduleName,
@@ -505,7 +631,7 @@ export class TypeParser {
       Content: content,
       Methods: methods,
       Implements: [...implementsInterfaces, ...extendsClasses],
-      SubStruct: [],
+      SubStruct: propertyTypes,
       InlineStruct: []
     };
   }

@@ -219,6 +219,14 @@ export class VarParser {
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
       isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      // ClassExpression can be exported if assigned to an exported variable
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (varSymbol === this.defaultExportedSym && varSymbol !== undefined)) : false;
+      }
     }
 
     const isConst = false;
@@ -401,6 +409,14 @@ export class VarParser {
       const parent = parentNode.getParent();
       if (Node.isClassDeclaration(parent)) {
         isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
+      } else if (Node.isClassExpression(parent)) {
+        // ClassExpression can be exported if assigned to an exported variable
+        const grandParent = parent.getParent();
+        if (Node.isVariableDeclaration(grandParent)) {
+          const varStatement = grandParent.getVariableStatement();
+          const varSymbol = grandParent.getSymbol();
+          isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (varSymbol === this.defaultExportedSym && varSymbol !== undefined)) : false;
+        }
       }
     }
 

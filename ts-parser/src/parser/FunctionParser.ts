@@ -7,6 +7,8 @@ import {
   ArrowFunction,
   FunctionExpression,
   MethodSignature,
+  GetAccessorDeclaration,
+  SetAccessorDeclaration,
   Node,
   SyntaxKind,
   ParameterDeclaration,
@@ -96,6 +98,28 @@ export class FunctionParser {
           functions[methodObj.Name] = methodObj;
         } catch (error) {
           console.error('Error processing static method:', staticMethod, error);
+        }
+      }
+
+      // Parse getters
+      const getAccessors = cls.getGetAccessors();
+      for (const getter of getAccessors) {
+        try {
+          const getterObj = this.parseGetAccessor(getter, moduleName, packagePath, sourceFile, className);
+          functions[getterObj.Name] = getterObj;
+        } catch (error) {
+          console.error('Error processing getter:', getter, error);
+        }
+      }
+
+      // Parse setters
+      const setAccessors = cls.getSetAccessors();
+      for (const setter of setAccessors) {
+        try {
+          const setterObj = this.parseSetAccessor(setter, moduleName, packagePath, sourceFile, className);
+          functions[setterObj.Name] = setterObj;
+        } catch (error) {
+          console.error('Error processing setter:', setter, error);
         }
       }
     }
@@ -222,6 +246,15 @@ export class FunctionParser {
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
       isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      // ClassExpression can be exported if assigned to an exported variable or used in default export
+      // For now, we check if the parent's parent is an exported variable statement
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (this.defaultExportSymbol === varSymbol && varSymbol !== undefined)) : false;
+      }
     }
 
     // Parse receiver
@@ -236,6 +269,9 @@ export class FunctionParser {
 
     // Parse parameters
     const params = this.parseParameters(method.getParameters(), moduleName, packagePath, sourceFile);
+
+    // Parse return types
+    const results = this.parseReturnTypes(method, moduleName, packagePath, sourceFile);
 
     // Parse function calls
     const functionCalls = this.extractFunctionCalls(method, moduleName, packagePath, sourceFile);
@@ -260,7 +296,7 @@ export class FunctionParser {
       Signature: signature,
       Receiver: receiver,
       Params: params,
-      Results: [],
+      Results: results,
       FunctionCalls: functionCalls,
       MethodCalls: methodCalls,
       Types: types,
@@ -282,6 +318,37 @@ export class FunctionParser {
     const content = method.getFullText();
     const signature = method.getText();
 
+    // Get interface name for receiver
+    const parent = method.getParent();
+    let interfaceName = "";
+    if (Node.isInterfaceDeclaration(parent)) {
+      const interfaceSym = parent.getSymbol();
+      if (interfaceSym) {
+        interfaceName = assignSymbolName(interfaceSym);
+      } else {
+        interfaceName = parent.getName() || "anonymous_" + parent.getStart();
+      }
+    }
+
+    // Parse receiver
+    const receiver: Receiver = {
+      IsPointer: false,
+      Type: {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: interfaceName
+      }
+    };
+
+    // Parse parameters
+    const params = this.parseParameters(method.getParameters(), moduleName, packagePath, sourceFile);
+
+    // Parse return types
+    const results = this.parseReturnTypes(method, moduleName, packagePath, sourceFile);
+
+    // Extract type references from method signature (including generic type parameters)
+    const types = this.extractTypeReferences(method, moduleName, packagePath, sourceFile);
+
     return {
       ModPath: moduleName,
       PkgPath: this.getPkgPath(packagePath),
@@ -295,11 +362,12 @@ export class FunctionParser {
       IsInterfaceMethod: true,
       Content: content,
       Signature: signature,
-      Params: [],
-      Results: [],
+      Receiver: receiver,
+      Params: params,
+      Results: results,
       FunctionCalls: [],
       MethodCalls: [],
-      Types: [],
+      Types: types,
       GlobalVars: []
     };
   }
@@ -323,10 +391,32 @@ export class FunctionParser {
     if (Node.isClassDeclaration(parent)) {
       const parentSym = parent.getSymbol()
       isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      // ClassExpression can be exported if assigned to an exported variable or used in default export
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (this.defaultExportSymbol === varSymbol && varSymbol !== undefined)) : false;
+      }
     }
+
+    // Parse receiver
+    const receiver: Receiver = {
+      IsPointer: false,
+      Type: {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: className
+      }
+    };
 
     // Parse parameters
     const params = this.parseParameters(ctor.getParameters(), moduleName, packagePath, sourceFile);
+
+    // Parse function calls
+    const functionCalls = this.extractFunctionCalls(ctor, moduleName, packagePath, sourceFile);
+    const methodCalls = this.extractMethodCalls(ctor, moduleName, packagePath, sourceFile);
 
     // Extract type references and global variables from constructor body
     const types = this.extractTypeReferences(ctor, moduleName, packagePath, sourceFile);
@@ -345,10 +435,11 @@ export class FunctionParser {
       IsInterfaceMethod: false,
       Content: content,
       Signature: signature,
+      Receiver: receiver,
       Params: params,
       Results: [],
-      FunctionCalls: [],
-      MethodCalls: [],
+      FunctionCalls: functionCalls,
+      MethodCalls: methodCalls,
       Types: types,
       GlobalVars: globalVars
     };
@@ -370,6 +461,9 @@ export class FunctionParser {
 
     // Parse parameters
     const params = this.parseParameters(arrowFunc.getParameters(), moduleName, packagePath, sourceFile);
+
+    // Parse return types
+    const results = this.parseReturnTypes(arrowFunc, moduleName, packagePath, sourceFile);
 
     // Parse function calls
     const functionCalls = this.extractFunctionCalls(arrowFunc, moduleName, packagePath, sourceFile);
@@ -404,6 +498,150 @@ export class FunctionParser {
       Content: content,
       Signature: signature,
       Params: params,
+      Results: results,
+      FunctionCalls: functionCalls,
+      MethodCalls: methodCalls,
+      Types: types,
+      GlobalVars: globalVars
+    };
+  }
+
+  private parseGetAccessor(getter: GetAccessorDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile, className: string): UniFunction {
+    const symbol = getter.getSymbol();
+    let accessorName = ""
+    if (symbol) {
+      accessorName = assignSymbolName(symbol)
+    } else {
+      accessorName = "anonymous_" + getter.getStart()
+    }
+    const startLine = getter.getStartLineNumber();
+    const startOffset = getter.getStart();
+    const endOffset = getter.getEnd();
+    const content = getter.getFullText();
+    const signature = this.extractSignature(getter);
+
+    const parent = getter.getParent();
+    const parentSym = parent.getSymbol()
+    let isExported = false;
+    if (Node.isClassDeclaration(parent)) {
+      isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (this.defaultExportSymbol === varSymbol && varSymbol !== undefined)) : false;
+      }
+    }
+
+    // Parse receiver
+    const receiver: Receiver = {
+      IsPointer: false,
+      Type: {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: className
+      }
+    };
+
+    // Parse return types
+    const results = this.parseReturnTypes(getter, moduleName, packagePath, sourceFile);
+
+    // Parse function calls
+    const functionCalls = this.extractFunctionCalls(getter, moduleName, packagePath, sourceFile);
+    const methodCalls = this.extractMethodCalls(getter, moduleName, packagePath, sourceFile);
+
+    // Extract type references and global variables
+    const types = this.extractTypeReferences(getter, moduleName, packagePath, sourceFile);
+    const globalVars = this.extractGlobalVarReferences(getter, moduleName, packagePath, sourceFile);
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: accessorName,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      IsMethod: true,
+      IsInterfaceMethod: false,
+      Content: content,
+      Signature: signature,
+      Receiver: receiver,
+      Params: [],
+      Results: results,
+      FunctionCalls: functionCalls,
+      MethodCalls: methodCalls,
+      Types: types,
+      GlobalVars: globalVars
+    };
+  }
+
+  private parseSetAccessor(setter: SetAccessorDeclaration, moduleName: string, packagePath: string, sourceFile: SourceFile, className: string): UniFunction {
+    const symbol = setter.getSymbol();
+    let accessorName = ""
+    if (symbol) {
+      accessorName = assignSymbolName(symbol)
+    } else {
+      accessorName = "anonymous_" + setter.getStart()
+    }
+    const startLine = setter.getStartLineNumber();
+    const startOffset = setter.getStart();
+    const endOffset = setter.getEnd();
+    const content = setter.getFullText();
+    const signature = this.extractSignature(setter);
+
+    const parent = setter.getParent();
+    const parentSym = parent.getSymbol()
+    let isExported = false;
+    if (Node.isClassDeclaration(parent)) {
+      isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (this.defaultExportSymbol === varSymbol && varSymbol !== undefined)) : false;
+      }
+    }
+
+    // Parse receiver
+    const receiver: Receiver = {
+      IsPointer: false,
+      Type: {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: className
+      }
+    };
+
+    // Parse parameters
+    const params = this.parseParameters(setter.getParameters(), moduleName, packagePath, sourceFile);
+
+    // Parse function calls
+    const functionCalls = this.extractFunctionCalls(setter, moduleName, packagePath, sourceFile);
+    const methodCalls = this.extractMethodCalls(setter, moduleName, packagePath, sourceFile);
+
+    // Extract type references and global variables
+    const types = this.extractTypeReferences(setter, moduleName, packagePath, sourceFile);
+    const globalVars = this.extractGlobalVarReferences(setter, moduleName, packagePath, sourceFile);
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: accessorName,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      IsMethod: true,
+      IsInterfaceMethod: false,
+      Content: content,
+      Signature: signature,
+      Receiver: receiver,
+      Params: params,
       Results: [],
       FunctionCalls: functionCalls,
       MethodCalls: methodCalls,
@@ -412,21 +650,136 @@ export class FunctionParser {
     };
   }
 
-  // TODO: parse parameters
-  private parseParameters(_parameters: ParameterDeclaration[], _moduleName: string, _packagePath: string, _sourceFile: SourceFile): Dependency[] {
+  // Parse parameters and extract type dependencies
+  private parseParameters(parameters: ParameterDeclaration[], moduleName: string, packagePath: string, _sourceFile: SourceFile): Dependency[] {
     const dependencies: Dependency[] = [];
+    const visited = new Set<string>();
+
+    for (const param of parameters) {
+      const typeNode = param.getTypeNode();
+      if (!typeNode) continue;
+
+      // Extract type references from parameter type
+      const typeReferences: Node[] = [];
+
+      // Handle direct type reference
+      if (Node.isTypeReference(typeNode)) {
+        typeReferences.push(typeNode);
+      }
+
+      // Also get all descendant type references
+      typeReferences.push(...typeNode.getDescendantsOfKind(SyntaxKind.TypeReference));
+
+      for (const typeRef of typeReferences) {
+        if (!Node.isTypeReference(typeRef)) continue;
+
+        const typeName = typeRef.getTypeName();
+        let symbol: Symbol | undefined;
+
+        if (Node.isIdentifier(typeName)) {
+          symbol = typeName.getSymbol();
+        } else if (Node.isQualifiedName(typeName)) {
+          symbol = typeName.getRight().getSymbol();
+        }
+
+        if (!symbol) continue;
+
+        const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeRef);
+        if (!resolvedSymbol || resolvedSymbol.isExternal) {
+          continue;
+        }
+
+        const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+        if (visited.has(key)) {
+          continue;
+        }
+
+        const decls = resolvedRealSymbol?.getDeclarations() || [];
+        if (decls.length === 0) {
+          continue;
+        }
+
+        visited.add(key);
+        dependencies.push({
+          ModPath: resolvedSymbol.moduleName || moduleName,
+          PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+          Name: resolvedSymbol.name,
+          File: resolvedSymbol.filePath,
+          Line: resolvedSymbol.line,
+          StartOffset: resolvedSymbol.startOffset,
+          EndOffset: resolvedSymbol.endOffset
+        });
+      }
+    }
 
     return dependencies;
   }
 
-  // TODO: parse return types
-  private parseReturnTypes(_func: FunctionDeclaration | MethodSignature, _moduleName: string, _packagePath: string, _sourceFile: SourceFile): Dependency[] {
+  // Parse return types and extract type dependencies
+  private parseReturnTypes(func: FunctionDeclaration | MethodDeclaration | MethodSignature | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration, moduleName: string, packagePath: string, _sourceFile: SourceFile): Dependency[] {
     const results: Dependency[] = [];
+    const visited = new Set<string>();
+
+    const returnTypeNode = func.getReturnTypeNode();
+    if (!returnTypeNode) return results;
+
+    // Extract type references from return type
+    const typeReferences: Node[] = [];
+
+    // Handle direct type reference
+    if (Node.isTypeReference(returnTypeNode)) {
+      typeReferences.push(returnTypeNode);
+    }
+
+    // Also get all descendant type references
+    typeReferences.push(...returnTypeNode.getDescendantsOfKind(SyntaxKind.TypeReference));
+
+    for (const typeRef of typeReferences) {
+      if (!Node.isTypeReference(typeRef)) continue;
+
+      const typeName = typeRef.getTypeName();
+      let symbol: Symbol | undefined;
+
+      if (Node.isIdentifier(typeName)) {
+        symbol = typeName.getSymbol();
+      } else if (Node.isQualifiedName(typeName)) {
+        symbol = typeName.getRight().getSymbol();
+      }
+
+      if (!symbol) continue;
+
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeRef);
+      if (!resolvedSymbol || resolvedSymbol.isExternal) {
+        continue;
+      }
+
+      const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+      if (visited.has(key)) {
+        continue;
+      }
+
+      const decls = resolvedRealSymbol?.getDeclarations() || [];
+      if (decls.length === 0) {
+        continue;
+      }
+
+      visited.add(key);
+      results.push({
+        ModPath: resolvedSymbol.moduleName || moduleName,
+        PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+        Name: resolvedSymbol.name,
+        File: resolvedSymbol.filePath,
+        Line: resolvedSymbol.line,
+        StartOffset: resolvedSymbol.startOffset,
+        EndOffset: resolvedSymbol.endOffset
+      });
+    }
+
     return results;
   }
 
   private extractFunctionCalls(
-    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration,
     moduleName: string,
     packagePath: string,
     _sourceFile: SourceFile
@@ -492,7 +845,7 @@ export class FunctionParser {
   }
 
   private extractMethodCalls(
-    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration,
     moduleName: string,
     packagePath: string,
     sourceFile: SourceFile
@@ -532,7 +885,7 @@ export class FunctionParser {
   }
 
   private processNewCall(
-    callerNode: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    callerNode: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration,
     newExpr: Identifier,
     moduleName: string,
     packagePath: string,
@@ -589,7 +942,7 @@ export class FunctionParser {
   }
 
   private processMethodCall(
-    callerNode: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    callerNode: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration,
     propAccess: PropertyAccessExpression,
     moduleName: string,
     packagePath: string,
@@ -647,7 +1000,7 @@ export class FunctionParser {
 
 
   private extractTypeReferences(
-    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | MethodSignature | GetAccessorDeclaration | SetAccessorDeclaration,
     moduleName: string,
     packagePath: string,
     _sourceFile: SourceFile
@@ -807,7 +1160,7 @@ export class FunctionParser {
   }
 
   private extractGlobalVarReferences(
-    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression,
+    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration,
     moduleName: string,
     packagePath: string,
     _sourceFile: SourceFile
@@ -928,7 +1281,7 @@ export class FunctionParser {
   }
 
   private extractSignature(
-    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression
+    node: FunctionDeclaration | MethodDeclaration | ConstructorDeclaration | ArrowFunction | FunctionExpression | GetAccessorDeclaration | SetAccessorDeclaration
   ): string {
     if (Node.isArrowFunction(node)) {
       const equalsGreaterThanToken = node.getEqualsGreaterThan();

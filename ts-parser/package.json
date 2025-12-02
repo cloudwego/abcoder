@@ -1,6 +1,6 @@
 {
   "name": "abcoder-ts-parser",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "TypeScript AST parser for UNIAST specification",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

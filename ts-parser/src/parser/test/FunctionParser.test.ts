@@ -783,5 +783,403 @@ describe('FunctionParser', () => {
 
       cleanup();
     });
+
+    it('should extract function calls from constructors', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export function TestMiddleware() {
+          console.log('Test middleware');
+        }
+
+        export default class TestMiddleware2 {
+          constructor() {
+            TestMiddleware()
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // Find the constructor function
+      const constructorFunc = Object.values(functions).find(f => f.Name.includes('constructor'));
+      expect(constructorFunc).toBeDefined();
+
+      const ctor = expectToBeDefined(constructorFunc);
+
+      // Should extract TestMiddleware function call
+      expect(ctor.FunctionCalls).toBeDefined();
+      const functionCalls = expectToBeDefined(ctor.FunctionCalls);
+      expect(functionCalls.length).toBeGreaterThan(0);
+
+      const callNames = functionCalls.map(call => call.Name);
+      expect(callNames).toContain('TestMiddleware');
+
+      cleanup();
+    });
+  });
+
+  describe('parameter and return type dependencies', () => {
+    it('should extract parameter type dependencies', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserType = {
+          id: number;
+          name: string;
+        };
+
+        export type ResultType = {
+          success: boolean;
+          data: any;
+        };
+
+        export function processUser(user: UserType): ResultType {
+          return { success: true, data: user };
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const processUser = expectToBeDefined(functions['processUser']);
+
+      // Should extract UserType from parameters
+      expect(processUser.Params).toBeDefined();
+      const params = expectToBeDefined(processUser.Params);
+      expect(params.length).toBeGreaterThan(0);
+      const paramNames = params.map(p => p.Name);
+      expect(paramNames).toContain('UserType');
+
+      // Should extract ResultType from return type
+      expect(processUser.Results).toBeDefined();
+      const results = expectToBeDefined(processUser.Results);
+      expect(results.length).toBeGreaterThan(0);
+      const resultNames = results.map(r => r.Name);
+      expect(resultNames).toContain('ResultType');
+
+      cleanup();
+    });
+
+    it('should have Receiver field for constructors', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserData = {
+          id: string;
+          name: string;
+        };
+
+        export class UserService {
+          private data: UserData;
+
+          constructor(userData: UserData) {
+            this.data = userData;
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // Find the constructor
+      const constructorFunc = Object.values(functions).find(f => f.Name.includes('constructor'));
+      expect(constructorFunc).toBeDefined();
+
+      const ctor = expectToBeDefined(constructorFunc);
+
+      // Should have Receiver field
+      expect(ctor.Receiver).toBeDefined();
+      expect(ctor.Receiver?.Type.Name).toBe('UserService');
+      expect(ctor.IsMethod).toBe(true);
+
+      // Should extract UserData from parameters
+      expect(ctor.Params).toBeDefined();
+      const params = expectToBeDefined(ctor.Params);
+      const paramNames = params.map(p => p.Name);
+      expect(paramNames).toContain('UserData');
+
+      cleanup();
+    });
+
+    it('should have Receiver field for interface methods', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type RequestType = {
+          url: string;
+        };
+
+        export type ResponseType = {
+          status: number;
+        };
+
+        export interface HttpClient {
+          request(req: RequestType): ResponseType;
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const requestMethod = expectToBeDefined(functions['HttpClient.request']);
+
+      // Should have Receiver field
+      expect(requestMethod.Receiver).toBeDefined();
+      expect(requestMethod.Receiver?.Type.Name).toBe('HttpClient');
+      expect(requestMethod.IsInterfaceMethod).toBe(true);
+
+      // Should extract RequestType from parameters
+      const params = expectToBeDefined(requestMethod.Params);
+      const paramNames = params.map(p => p.Name);
+      expect(paramNames).toContain('RequestType');
+
+      // Should extract ResponseType from return type
+      const results = expectToBeDefined(requestMethod.Results);
+      const resultNames = results.map(r => r.Name);
+      expect(resultNames).toContain('ResponseType');
+
+      cleanup();
+    });
+
+    it('should extract type dependencies from interface methods', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type RequestType = {
+          url: string;
+        };
+
+        export type ResponseType = {
+          status: number;
+        };
+
+        export interface HttpClient {
+          request(req: RequestType): ResponseType;
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const requestMethod = Object.values(functions).find(f => f.Name.includes('request'));
+      expect(requestMethod).toBeDefined();
+
+      const method = expectToBeDefined(requestMethod);
+
+      // Should extract RequestType from parameters
+      const params = expectToBeDefined(method.Params);
+      const paramNames = params.map(p => p.Name);
+      expect(paramNames).toContain('RequestType');
+
+      // Should extract ResponseType from return type
+      const results = expectToBeDefined(method.Results);
+      const resultNames = results.map(r => r.Name);
+      expect(resultNames).toContain('ResponseType');
+
+      cleanup();
+    });
+
+    it('should extract type dependencies from arrow functions', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type InputType = string;
+        export type OutputType = number;
+
+        export const convert = (input: InputType): OutputType => {
+          return parseInt(input);
+        };
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const convert = expectToBeDefined(functions['convert']);
+
+      // Should extract InputType from parameters
+      const params = expectToBeDefined(convert.Params);
+      const paramNames = params.map(p => p.Name);
+      expect(paramNames).toContain('InputType');
+
+      // Should extract OutputType from return type
+      const results = expectToBeDefined(convert.Results);
+      const resultNames = results.map(r => r.Name);
+      expect(resultNames).toContain('OutputType');
+
+      cleanup();
+    });
+  });
+
+  describe('getter and setter support', () => {
+    it('should parse getters with type dependencies', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserData = {
+          id: string;
+          name: string;
+        };
+
+        export class UserService {
+          private data: UserData;
+
+          constructor(userData: UserData) {
+            this.data = userData;
+          }
+
+          get userData(): UserData {
+            return this.data;
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // Should parse the getter
+      const getter = expectToBeDefined(functions['UserService.userData']);
+      expect(getter.IsMethod).toBe(true);
+      expect(getter.Receiver).toBeDefined();
+      expect(getter.Receiver?.Type.Name).toBe('UserService');
+
+      // Should extract return type
+      expect(getter.Results).toBeDefined();
+      const results = expectToBeDefined(getter.Results);
+      const resultNames = results.map(r => r.Name);
+      expect(resultNames).toContain('UserData');
+
+      // Should extract global variable reference
+      expect(getter.GlobalVars).toBeDefined();
+
+      cleanup();
+    });
+
+    it('should parse setters with type dependencies', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserData = {
+          id: string;
+          name: string;
+        };
+
+        export class UserService {
+          private data: UserData;
+
+          set userData(value: UserData) {
+            this.data = value;
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // Should parse the setter
+      const setter = expectToBeDefined(functions['UserService.userData']);
+      expect(setter.IsMethod).toBe(true);
+      expect(setter.Receiver).toBeDefined();
+      expect(setter.Receiver?.Type.Name).toBe('UserService');
+
+      // Should extract parameter type
+      expect(setter.Params).toBeDefined();
+      const params = expectToBeDefined(setter.Params);
+      const paramNames = params.map(p => p.Name);
+      expect(paramNames).toContain('UserData');
+
+      cleanup();
+    });
+
+    it('should parse getters with function calls', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export function validateData(data: string): boolean {
+          return data.length > 0;
+        }
+
+        export class DataService {
+          private _data: string = '';
+
+          get isValid(): boolean {
+            return validateData(this._data);
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const getter = expectToBeDefined(functions['DataService.isValid']);
+
+      // Should extract function call
+      expect(getter.FunctionCalls).toBeDefined();
+      const functionCalls = expectToBeDefined(getter.FunctionCalls);
+      const callNames = functionCalls.map(c => c.Name);
+      expect(callNames).toContain('validateData');
+
+      cleanup();
+    });
+
+    it('should parse setters with method calls', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export class Logger {
+          log(message: string): void {
+            console.log(message);
+          }
+        }
+
+        export class DataService {
+          private logger: Logger;
+          private _data: string = '';
+
+          constructor() {
+            this.logger = new Logger();
+          }
+
+          set data(value: string) {
+            this._data = value;
+            this.logger.log('Data updated');
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const setter = expectToBeDefined(functions['DataService.data']);
+
+      // Should extract method call
+      expect(setter.MethodCalls).toBeDefined();
+      const methodCalls = expectToBeDefined(setter.MethodCalls);
+      const callNames = methodCalls.map(c => c.Name);
+      expect(callNames).toContain('Logger.log');
+
+      cleanup();
+    });
   });
 });

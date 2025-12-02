@@ -704,5 +704,423 @@ describe('TypeParser', () => {
 
       cleanup();
     });
+
+    it('should parse class constructors and static methods in Methods field', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export class TestClass {
+          private value: number;
+
+          constructor(initialValue: number) {
+            this.value = initialValue;
+          }
+
+          // Instance method
+          getValue(): number {
+            return this.value;
+          }
+
+          // Static method
+          static createDefault(): TestClass {
+            return new TestClass(0);
+          }
+
+          // Another static method
+          static fromString(str: string): TestClass {
+            return new TestClass(parseInt(str, 10));
+          }
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const testClass = expectToBeDefined(types['TestClass']);
+      expect(testClass.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(testClass.Methods);
+
+      // Should include instance methods
+      expect(methods['getValue']).toBeDefined();
+      expect(methods['getValue'].Name).toBe('TestClass.getValue');
+
+      // Should include constructor
+      expect(methods['constructor']).toBeDefined();
+      expect(methods['constructor'].Name).toBe('TestClass.constructor');
+
+      // Should include static methods
+      expect(methods['createDefault']).toBeDefined();
+      expect(methods['createDefault'].Name).toBe('TestClass.createDefault');
+
+      expect(methods['fromString']).toBeDefined();
+      expect(methods['fromString'].Name).toBe('TestClass.fromString');
+
+      cleanup();
+    });
+
+    it('should parse class expression with constructors and static methods', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export const ClassExpr = class MyClassExpr {
+          private name: string;
+
+          constructor(name: string) {
+            this.name = name;
+          }
+
+          getName(): string {
+            return this.name;
+          }
+
+          static create(name: string): MyClassExpr {
+            return new MyClassExpr(name);
+          }
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const classExpr = expectToBeDefined(types['MyClassExpr']);
+      expect(classExpr.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(classExpr.Methods);
+
+      // Should include instance methods
+      expect(methods['getName']).toBeDefined();
+
+      // Should include constructor
+      expect(methods['constructor']).toBeDefined();
+
+      // Should include static methods
+      expect(methods['create']).toBeDefined();
+
+      cleanup();
+    });
+  });
+
+  describe('property type dependencies', () => {
+    it('should extract property type dependencies from classes', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserRole = 'admin' | 'user';
+
+        export type UserSettings = {
+          theme: string;
+        };
+
+        export class User {
+          role: UserRole;
+          settings: UserSettings;
+          active: boolean;
+
+          constructor() {
+            this.active = true;
+          }
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const userClass = expectToBeDefined(types['User']);
+
+      // Should have property type dependencies in SubStruct
+      expect(userClass.SubStruct).toBeDefined();
+      const subStruct = expectToBeDefined(userClass.SubStruct);
+      const subStructNames = subStruct.map(dep => dep.Name);
+
+      expect(subStructNames).toContain('UserRole');
+      expect(subStructNames).toContain('UserSettings');
+
+      cleanup();
+    });
+
+    it('should extract property type dependencies from interfaces', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Address = {
+          street: string;
+          city: string;
+        };
+
+        export type PhoneNumber = string;
+
+        export interface Contact {
+          address: Address;
+          phone: PhoneNumber;
+          email: string;
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const contactInterface = expectToBeDefined(types['Contact']);
+
+      // Should have property type dependencies in SubStruct
+      expect(contactInterface.SubStruct).toBeDefined();
+      const subStruct = expectToBeDefined(contactInterface.SubStruct);
+      const subStructNames = subStruct.map(dep => dep.Name);
+
+      expect(subStructNames).toContain('Address');
+      expect(subStructNames).toContain('PhoneNumber');
+
+      cleanup();
+    });
+
+    it('should extract property type dependencies from class expressions', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type ConfigType = {
+          timeout: number;
+        };
+
+        export const MyClass = class {
+          config: ConfigType;
+
+          constructor() {
+            this.config = { timeout: 5000 };
+          }
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // Find the class expression (it may have a generated name)
+      const classType = Object.values(types).find(t => t.TypeKind === 'struct');
+      expect(classType).toBeDefined();
+
+      const myClass = expectToBeDefined(classType);
+
+      // Should have property type dependencies in SubStruct
+      expect(myClass.SubStruct).toBeDefined();
+      const subStruct = expectToBeDefined(myClass.SubStruct);
+      const subStructNames = subStruct.map(dep => dep.Name);
+
+      expect(subStructNames).toContain('ConfigType');
+
+      cleanup();
+    });
+  });
+
+  describe('getter and setter support in Methods field', () => {
+    it('should parse getters in class Methods field', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserData = {
+          id: string;
+          name: string;
+        };
+
+        export class UserService {
+          private data: UserData;
+
+          constructor(userData: UserData) {
+            this.data = userData;
+          }
+
+          get userData(): UserData {
+            return this.data;
+          }
+
+          get userId(): string {
+            return this.data.id;
+          }
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const userService = expectToBeDefined(types['UserService']);
+      expect(userService.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(userService.Methods);
+
+      // Should include getters
+      expect(methods['userData']).toBeDefined();
+      expect(methods['userData'].Name).toBe('UserService.userData');
+      expect(methods['userId']).toBeDefined();
+      expect(methods['userId'].Name).toBe('UserService.userId');
+
+      cleanup();
+    });
+
+    it('should parse setters in class Methods field', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type UserData = {
+          id: string;
+          name: string;
+        };
+
+        export class UserService {
+          private data: UserData;
+
+          set userData(value: UserData) {
+            this.data = value;
+          }
+
+          set userId(value: string) {
+            this.data.id = value;
+          }
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const userService = expectToBeDefined(types['UserService']);
+      expect(userService.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(userService.Methods);
+
+      // Should include setters
+      expect(methods['userData']).toBeDefined();
+      expect(methods['userData'].Name).toBe('UserService.userData');
+      expect(methods['userId']).toBeDefined();
+      expect(methods['userId'].Name).toBe('UserService.userId');
+
+      cleanup();
+    });
+
+    it('should parse both getter and setter with same name', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export class Counter {
+          private _count: number = 0;
+
+          get count(): number {
+            return this._count;
+          }
+
+          set count(value: number) {
+            this._count = value;
+          }
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      const counter = expectToBeDefined(types['Counter']);
+      expect(counter.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(counter.Methods);
+
+      // Should include the count accessor (getter/setter share the same name)
+      expect(methods['count']).toBeDefined();
+      expect(methods['count'].Name).toBe('Counter.count');
+
+      cleanup();
+    });
+
+    it('should parse getters in class expressions', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Config = {
+          timeout: number;
+        };
+
+        export const ConfigService = class {
+          private _config: Config;
+
+          constructor() {
+            this._config = { timeout: 5000 };
+          }
+
+          get config(): Config {
+            return this._config;
+          }
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // Find the class expression (it will have a name like '__class' or contain 'AnonymousClass')
+      const configServiceClass = Object.values(types).find(t =>
+        t.TypeKind === 'struct' && t.Methods && 'config' in t.Methods
+      );
+      expect(configServiceClass).toBeDefined();
+
+      const classType = expectToBeDefined(configServiceClass);
+      expect(classType.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(classType.Methods);
+
+      // Should include getter
+      expect(methods['config']).toBeDefined();
+
+      cleanup();
+    });
+
+    it('should parse setters in class expressions', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type Config = {
+          timeout: number;
+        };
+
+        export const ConfigService = class {
+          private _config: Config;
+
+          set config(value: Config) {
+            this._config = value;
+          }
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // Find the class expression (it will have a name like '__class' or contain 'AnonymousClass')
+      const configServiceClass = Object.values(types).find(t =>
+        t.TypeKind === 'struct' && t.Methods && 'config' in t.Methods
+      );
+      expect(configServiceClass).toBeDefined();
+
+      const classType = expectToBeDefined(configServiceClass);
+      expect(classType.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(classType.Methods);
+
+      // Should include setter
+      expect(methods['config']).toBeDefined();
+
+      cleanup();
+    });
   });
 });
