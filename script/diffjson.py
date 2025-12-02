@@ -3,6 +3,7 @@ import argparse
 from dataclasses import dataclass
 import json
 import os
+import pprint
 import re
 import sys
 from pathlib import Path
@@ -10,9 +11,10 @@ from typing import Any, Literal, Sequence
 
 from deepdiff import DeepDiff
 
-ONE_LINER_LEN = 100
+oneliner_LEN = 100
 
 Status = Literal["OK", "BAD", "FILE_ERROR"]
+path_ty = list[str | int]
 
 
 @dataclass
@@ -23,46 +25,38 @@ class DiffResult:
     json2: Any
 
     def format(self, truncate_items: int) -> str:
-        output = []
-        items_count = 0
+        return self.format_nested(truncate_items)
 
-        def add_item(text: str):
-            nonlocal items_count
-            if truncate_items == 0 or items_count < truncate_items:
-                output.append(text)
-                output.append("--------------------")
-            items_count += 1
+    def collect_flat_raw(self, truncate_items: int) -> list[tuple[path_ty, Any]]:
+        output = []
+
+        def add_item(accessor: str, value: Any) -> None:
+            if truncate_items == 0 or len(output) < truncate_items:
+                output.append((_parse_accessor(accessor), value))
 
         # Handle new items (dictionary_item_added and iterable_item_added)
         if self.diff is not None and "dictionary_item_added" in self.diff:
-            for path in self.diff["dictionary_item_added"]:
-                one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
-                add_item(f"{path}\n{format_color('green', '+ ' + one_liner)}")
+            for accessor in self.diff["dictionary_item_added"]:
+                add_item(accessor, ("new", _get_accessor(self.json2, accessor)))
 
         if self.diff is not None and "iterable_item_added" in self.diff:
-            for path, value in self.diff["iterable_item_added"].items():
-                one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
-                add_item(f"{path}\n{format_color('green', '+ ' + one_liner)}")
+            for accessor, value in self.diff["iterable_item_added"].items():
+                add_item(accessor, ("new", value))
 
         # Handle removed items (dictionary_item_removed and iterable_item_removed)
         if self.diff is not None and "dictionary_item_removed" in self.diff:
-            for path, value in self.diff["dictionary_item_removed"]:
-                one_liner = _format_value_one_liner(value)
-                add_item(f"{path}\n{format_color('red', '- ' + one_liner)}")
+            for accessor, value in self.diff["dictionary_item_removed"]:
+                add_item(accessor, ("removed", _get_accessor(self.json1, accessor)))
 
         if self.diff is not None and "iterable_item_removed" in self.diff:
-            for path, value in self.diff["iterable_item_removed"].items():
-                one_liner = _format_value_one_liner(value)
-                add_item(f"{path}\n{format_color('red', '- ' + one_liner)}")
+            for accessor, value in self.diff["iterable_item_removed"].items():
+                add_item(accessor, ("removed", value))
 
         # Handle changed values
         if self.diff is not None and "values_changed" in self.diff:
-            for path, changes in self.diff["values_changed"].items():
-                old_one_liner = _format_value_one_liner(changes["old_value"])
-                new_one_liner = _format_value_one_liner(changes["new_value"])
-                oldl = format_color("red", "- " + old_one_liner)
-                newl = format_color("green", "+ " + new_one_liner)
-                add_item(f"{path}\n{oldl}\n{newl}")
+            for accessor, changes in self.diff["values_changed"].items():
+                add_item(accessor, ("removed", changes["old_value"]))
+                add_item(accessor, ("new", changes["new_value"]))
 
         # Handle items moved (position changes in lists)
         if (
@@ -70,30 +64,63 @@ class DiffResult:
             and "values_changed" not in self.diff
             and "iterable_item_moved" in self.diff
         ):
-            for path, changes in self.diff["iterable_item_moved"].items():
-                movel = format_color("yellow", "~ Position changed in list")
-                add_item(f"{path}\n{movel}")
+            for accessor, changes in self.diff["iterable_item_moved"].items():
+                add_item(accessor, ("moved", "Moved location in list."))
 
         # Add truncation notice if needed
-        if truncate_items > 0 and items_count > truncate_items:
-            remaining = items_count - truncate_items
-            output.append(f"...({remaining} more items)")
+        if truncate_items > 0 and len(output) > truncate_items:
+            remaining = len(output) - truncate_items
+            add_item([], ("info", f"...({remaining} more items)"))
 
-        # Clean up the last separator for a tidy output
-        if output and output[-1] == "--------------------":
-            output.pop()
+        pprint.pprint(output)
+        return output
 
-        return "\n".join(output)
+    def make_nested_oneliner(flat: list[tuple[path_ty, Any]]):
+        output = {}
+        for path, value in flat:
+            color, msg = value[0], value[1]
+            _set_with_ensure_strpath(
+                output, [str(p) for p in path], (color, _format_value_oneliner(msg))
+            )
+        return output
+
+    def format_nested(self, truncate_items: int) -> str:
+        flat = self.collect_flat_raw(truncate_items)
+        nested = DiffResult.make_nested_oneliner(flat)
+        INDENT = "    "
+
+        def _dump(obj: dict, indent: int = 0, path: str = "") -> str:
+            if isinstance(obj, tuple):
+                color, msg = obj[0], obj[1]
+                color_map = {
+                    "new": "green",
+                    "removed": "red",
+                    "moved": "yellow",
+                    "info": "none",
+                }
+                color = color_map[color]
+                leader = {"green": "+ ", "red": "- "}.get(color, "  ")
+                leader += INDENT * indent
+                l1 = format_color(color, leader + str(msg))
+                l2 = format_color(color, leader + f"# {path=}")
+                return l1 + "\n" + l2
+            output = ""
+            for key, value in obj.items():
+                output += "  " + INDENT * indent + f"{key}\n"
+                output += _dump(value, indent + 1, path + f"[{key}]") + "\n"
+            return output.rstrip()
+
+        return _dump(nested)
 
 
-def _parse_accessor(accessor_string: str) -> list[str | int]:
+def _parse_accessor(accessor_string: str) -> path_ty:
     """
     Parses a field accessor string like "['key'][0]" into a list ['key', 0].
     This allows for programmatic access to nested JSON elements.
     """
     # Regex to find content within brackets, e.g., ['key'] or [0]
     parts = re.findall(r"\[([^\]]+)\]", accessor_string)
-    keys: list[str | int] = []
+    keys: path_ty = []
     for part in parts:
         try:
             # Try to convert to an integer for list indices
@@ -104,7 +131,7 @@ def _parse_accessor(accessor_string: str) -> list[str | int]:
     return keys
 
 
-def _delete_path(data: dict | list, path: list[str | int]) -> None:
+def _delete_path(data: dict | list, path: path_ty) -> None:
     """
     Deletes a value from a nested dictionary or list based on a path.
     This function modifies the data in place. If the path is invalid
@@ -141,7 +168,7 @@ def _delete_path(data: dict | list, path: list[str | int]) -> None:
         pass
 
 
-def _get_path(data: dict | list, path: list[str | int]) -> Any:
+def _get_path(data: dict | list, path: path_ty) -> Any:
     """
     Retrieves a value from a nested dictionary or list based on a path.
     Returns None if the path is invalid or doesn't exist.
@@ -167,18 +194,30 @@ def _get_accessor(data: dict | list, accessor_string: str) -> Any:
     return _get_path(data, path)
 
 
-def _format_value_one_liner(value: Any) -> str:
+def _set_with_ensure_strpath(data: dict, str_path: list[str], value: Any) -> bool:
+    try:
+        current = data
+        for key in str_path[:-1]:
+            current = current.setdefault(key, {})
+        final_key = str_path[-1]
+        current[final_key] = value
+        return True
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
+def _format_value_oneliner(value: Any) -> str:
     res = json.dumps(value)
-    if len(res) < ONE_LINER_LEN:
+    if len(res) < oneliner_LEN:
         return res
     if isinstance(value, dict):
         keys_str = ", ".join(f'"{key}": ...' for key in value.keys())
         res = f"{{ {keys_str} }}"
     elif isinstance(value, list):
         res = f"[ ({len(value)} items) ]"
-    if len(res) < ONE_LINER_LEN:
+    if len(res) < oneliner_LEN:
         return res
-    return res[:ONE_LINER_LEN] + f"...({len(res) - ONE_LINER_LEN} more chars)"
+    return res[:oneliner_LEN] + f"...({len(res) - oneliner_LEN} more chars)"
 
 
 _color_codes = {}
@@ -235,7 +274,11 @@ def compare_files(
 
     diff = DeepDiff(json1, json2, ignore_order=True)
 
-    return DiffResult("BAD", diff, json1, json2) if diff else DiffResult("OK", None, json1, json2)
+    return (
+        DiffResult("BAD", diff, json1, json2)
+        if diff
+        else DiffResult("OK", None, json1, json2)
+    )
 
 
 def compare_and_report_files(
@@ -248,12 +291,16 @@ def compare_and_report_files(
     result = compare_files(old_path, new_path, ignore_fields)
     if result.status == "FILE_ERROR":
         print_color(
-            "red", f"❌ [ERROR] reading or parsing {old_path} or {new_path}.", file=sys.stderr
+            "red",
+            f"❌ [ERROR] reading or parsing {old_path} or {new_path}.",
+            file=sys.stderr,
         )
         return 1
 
     if result.status == "BAD" and result.diff:
-        print_color("red", f"❌ [DIFF] {str(old_path):<40} <-> {new_path}", file=sys.stderr)
+        print_color(
+            "red", f"❌ [DIFF] {str(old_path):<40} <-> {new_path}", file=sys.stderr
+        )
         if verbose:
             new_output = result.format(truncate_items)
             new_output = "\n    ".join([""] + new_output.splitlines())
@@ -283,9 +330,13 @@ def get_compare_file_list_bothdir(
 
 def get_compare_file_list(path1: Path, path2: Path) -> list[tuple[Path, Path]]:
     if not path1.exists() or not path2.exists():
-        raise ValueError(f"Error: Path does not exist: {path1 if not path1.exists() else path2}")
+        raise ValueError(
+            f"Error: Path does not exist: {path1 if not path1.exists() else path2}"
+        )
     if path1.is_dir() and path2.is_dir():
-        miss_files, new_files, compare_files = get_compare_file_list_bothdir(path1, path2)
+        miss_files, new_files, compare_files = get_compare_file_list_bothdir(
+            path1, path2
+        )
         for filename in miss_files:
             print_color("red", f"❌ [MISS]  {filename}", file=sys.stderr)
         for filename in new_files:
@@ -293,7 +344,9 @@ def get_compare_file_list(path1: Path, path2: Path) -> list[tuple[Path, Path]]:
     elif path1.is_file() and path2.is_file():
         compare_files = [(path1, path2)]
     else:
-        raise ValueError("Error: Both arguments must be files or both must be directories.")
+        raise ValueError(
+            "Error: Both arguments must be files or both must be directories."
+        )
     return compare_files
 
 
@@ -301,8 +354,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Compare two JSON files or two directories of JSON files."
     )
-    parser.add_argument("path1", type=Path, help="Path to the first file or 'old' directory.")
-    parser.add_argument("path2", type=Path, help="Path to the second file or 'new' directory.")
+    parser.add_argument(
+        "path1", type=Path, help="Path to the first file or 'old' directory."
+    )
+    parser.add_argument(
+        "path2", type=Path, help="Path to the second file or 'new' directory."
+    )
     parser.add_argument(
         "-i",
         "--ignore",
