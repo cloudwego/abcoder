@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any, Literal, Sequence
 
-import IPython
 from deepdiff import DeepDiff
 
 ONE_LINER_LEN = 100
