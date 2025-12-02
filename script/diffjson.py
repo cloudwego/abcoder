@@ -23,10 +23,34 @@ class DiffResult:
     json1: Any
     json2: Any
 
+    color_map = {
+        "new": "green",
+        "removed": "red",
+        "moved": "yellow",
+        "info": "none",
+    }
+
     def format(self, truncate_items: int) -> str:
         return self.format_nested(truncate_items)
 
-    def collect_flat_raw(self, truncate_items: int) -> tuple[list[tuple[path_ty, Any]], str]:
+    def format_flat(self, truncate_items: int) -> str:
+        flat, remaining_msg = self.collect_flat_raw(truncate_items)
+        output_lines = []
+        for path, value in flat:
+            color, msg = value[0], value[1]
+            color = DiffResult.color_map[color]
+            leader = {"green": "+ ", "red": "- "}.get(color, "  ")
+            line = format_color(
+                color, leader + f"{''.join(f'[{repr(p)}]' for p in path)}: {msg}"
+            )
+            output_lines.append(line)
+        if remaining_msg:
+            output_lines.append(remaining_msg)
+        return "\n".join(output_lines)
+
+    def collect_flat_raw(
+        self, truncate_items: int
+    ) -> tuple[list[tuple[path_ty, Any]], str]:
         output: list[tuple[path_ty, Any]] = []
 
         def add_item(accessor: str, value: Any) -> None:
@@ -87,29 +111,40 @@ class DiffResult:
         flat, remaining_msg = self.collect_flat_raw(truncate_items)
         nested = DiffResult.make_nested_oneliner(flat)
         INDENT = "    "
-        def _dump(obj: dict, indent: int = 0, path: str = "") -> str:
-            if isinstance(obj, tuple):
-                color, msg = obj[0], obj[1]
-                color_map = {
-                    "new": "green",
-                    "removed": "red",
-                    "moved": "yellow",
-                    "info": "none",
-                }
-                color = color_map[color]
+
+        def isleaf(obj: Any) -> bool:
+            return isinstance(obj, list)
+
+        def _dump_leaf(obj: list, indent: int, path: str) -> str:
+            output = ""
+            for index, subobj in enumerate(obj):
+                color, msg = subobj[0], subobj[1]
+                color = DiffResult.color_map[color]
                 leader = {"green": "+ ", "red": "- "}.get(color, "  ")
                 leader += INDENT * indent
                 l1 = format_color(color, leader + str(msg))
-                l2 = format_color(color, leader + f"# {path=}")
-                return l1 + "\n" + l2
+                # l2 = format_color(color, leader + f"# {path=}")
+                output += l1  # + "\n" + l2
+                if index != len(obj) - 1:
+                    output += "\n"
+            return output
+
+        def _dump(obj: dict, indent: int = 0, path: str = "") -> str:
+            if isinstance(obj, list):
+                return _dump_leaf(obj, indent, path)
             output = ""
             for key, value in obj.items():
-                output += "  " + INDENT * indent + f"[{key}]"
+                kline = "  " + INDENT * indent + f"[{key}]"
                 v = value
-                while isinstance(v, dict) and len(v) == 1:
+                while not isleaf(v):
+                    if len(v) > 1:
+                        break
                     k, v = next(iter(v.items()))
-                    output += f"[{k}]"
-                output += "\n"
+                    kline += f"[{k}]"
+                if len(v) == 1:  # parent of only one leaf, colorize it same like leaf
+                    color = v[0][0]
+                    kline = format_color(DiffResult.color_map[color], kline)
+                output += kline + "\n"
                 output += _dump(v, indent + 1, path + f"[{key}]") + "\n"
             return output.rstrip()
 
@@ -203,7 +238,9 @@ def _set_with_ensure_strpath(data: dict, str_path: list[str], value: Any) -> boo
         for key in str_path[:-1]:
             current = current.setdefault(key, {})
         final_key = str_path[-1]
-        current[final_key] = value
+        if final_key not in current:
+            current[final_key] = []
+        current[final_key].append(value)
         return True
     except (KeyError, IndexError, TypeError):
         return False
