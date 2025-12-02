@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, Sequence
 
 import IPython
 from deepdiff import DeepDiff
@@ -20,8 +20,8 @@ Status = Literal["OK", "BAD", "FILE_ERROR"]
 class DiffResult:
     status: Status
     diff: DeepDiff | None
-    json1: any
-    json2: any
+    json1: Any
+    json2: Any
 
     def format(self, truncate_items: int) -> str:
         output = []
@@ -35,29 +35,29 @@ class DiffResult:
             items_count += 1
 
         # Handle new items (dictionary_item_added and iterable_item_added)
-        if "dictionary_item_added" in self.diff:
+        if self.diff is not None and "dictionary_item_added" in self.diff:
             for path in self.diff["dictionary_item_added"]:
                 one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
                 add_item(f"New item: {path}\n    Add: {one_liner}")
 
-        if "iterable_item_added" in self.diff:
+        if self.diff is not None and "iterable_item_added" in self.diff:
             for path, value in self.diff["iterable_item_added"].items():
                 one_liner = _format_value_one_liner(_get_accessor(self.json2, path))
                 add_item(f"New item: {path}\n    Add: {one_liner}")
 
         # Handle removed items (dictionary_item_removed and iterable_item_removed)
-        if "dictionary_item_removed" in self.diff:
+        if self.diff is not None and "dictionary_item_removed" in self.diff:
             for path, value in self.diff["dictionary_item_removed"]:
                 one_liner = _format_value_one_liner(value)
                 add_item(f"Removed item: {path}\n    Remove: {one_liner}")
 
-        if "iterable_item_removed" in self.diff:
+        if self.diff is not None and "iterable_item_removed" in self.diff:
             for path, value in self.diff["iterable_item_removed"].items():
                 one_liner = _format_value_one_liner(value)
                 add_item(f"Removed item: {path}\n    Remove: {one_liner}")
 
         # Handle changed values
-        if "values_changed" in self.diff:
+        if self.diff is not None and "values_changed" in self.diff:
             for path, changes in self.diff["values_changed"].items():
                 old_one_liner = _format_value_one_liner(changes["old_value"])
                 new_one_liner = _format_value_one_liner(changes["new_value"])
@@ -66,7 +66,11 @@ class DiffResult:
                 )
 
         # Handle items moved (position changes in lists)
-        if "values_changed" not in self.diff and "iterable_item_moved" in self.diff:
+        if (
+            self.diff is not None
+            and "values_changed" not in self.diff
+            and "iterable_item_moved" in self.diff
+        ):
             for path, changes in self.diff["iterable_item_moved"].items():
                 add_item(f"Moved item: {path}\n    Position changed in list")
 
@@ -89,7 +93,7 @@ def _parse_accessor(accessor_string: str) -> list[str | int]:
     """
     # Regex to find content within brackets, e.g., ['key'] or [0]
     parts = re.findall(r"\[([^\]]+)\]", accessor_string)
-    keys = []
+    keys: list[str | int] = []
     for part in parts:
         try:
             # Try to convert to an integer for list indices
@@ -100,7 +104,7 @@ def _parse_accessor(accessor_string: str) -> list[str | int]:
     return keys
 
 
-def _delete_path(data: dict | list, path: list[str | int]):
+def _delete_path(data: dict | list, path: list[str | int]) -> None:
     """
     Deletes a value from a nested dictionary or list based on a path.
     This function modifies the data in place. If the path is invalid
@@ -110,13 +114,18 @@ def _delete_path(data: dict | list, path: list[str | int]):
         return
 
     # Traverse to the parent of the target element to delete it
-    parent = data
+    parent: Any = data
     key_to_delete = path[-1]
     path_to_parent = path[:-1]
 
     try:
         for key in path_to_parent:
-            parent = parent[key]
+            if isinstance(parent, dict) and isinstance(key, str):
+                parent = parent[key]
+            elif isinstance(parent, list) and isinstance(key, int):
+                parent = parent[key]
+            else:
+                raise TypeError("Invalid path traversal")
 
         # Check if the final key/index exists in the parent before deleting
         if isinstance(parent, dict) and key_to_delete in parent:
@@ -132,28 +141,33 @@ def _delete_path(data: dict | list, path: list[str | int]):
         pass
 
 
-def _get_path(data: dict | list, path: list[str | int]) -> any:
+def _get_path(data: dict | list, path: list[str | int]) -> Any:
     """
     Retrieves a value from a nested dictionary or list based on a path.
     Returns None if the path is invalid or doesn't exist.
     """
-    current = data
+    current: Any = data
     try:
         for key in path:
-            current = current[key]
+            if isinstance(current, dict) and isinstance(key, str):
+                current = current[key]
+            elif isinstance(current, list) and isinstance(key, int):
+                current = current[key]
+            else:
+                raise TypeError("Invalid path traversal")
         return current
     except (KeyError, IndexError, TypeError):
         return None
 
 
-def _get_accessor(data: dict | list, accessor_string: str) -> any:
+def _get_accessor(data: dict | list, accessor_string: str) -> Any:
     if accessor_string.startswith("root"):
         accessor_string = accessor_string[4:]  # Remove 'root' prefix
     path = _parse_accessor(accessor_string)
     return _get_path(data, path)
 
 
-def _format_value_one_liner(value) -> str:
+def _format_value_one_liner(value: Any) -> str:
     res = json.dumps(value)
     if len(res) < ONE_LINER_LEN:
         return res
@@ -183,7 +197,7 @@ def compare_files(
         with open(file2_path, "r", encoding="utf-8") as f2:
             json2 = json.load(f2)
     except (FileNotFoundError, json.JSONDecodeError):
-        return "FILE_ERROR", None
+        return DiffResult("FILE_ERROR", None, {}, {})
 
     # Delete ignored fields from both JSON objects before comparison
     if ignore_fields:
@@ -207,7 +221,7 @@ def compare_and_report_files(
     ignore_fields: list[str] | None = None,
     truncate_items: int = 100,
     verbose: bool = False,
-) -> bool:
+) -> int:
     result = compare_files(old_path, new_path, ignore_fields)
     if result.status == "FILE_ERROR":
         print("Error reading or parsing a file.", file=sys.stderr)
@@ -263,7 +277,7 @@ def get_compare_file_list(path1: Path, path2: Path) -> list[tuple[Path, Path]]:
     return compare_files
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Compare two JSON files or two directories of JSON files."
     )
@@ -304,10 +318,14 @@ def main():
     ignore_fields = list(set(cli_ignore_fields + env_ignore_fields))
 
     compare_files = get_compare_file_list(args.path1, args.path2)
+    exit_code = 0
     for file1, file2 in compare_files:
-        compare_and_report_files(
+        result = compare_and_report_files(
             file1, file2, ignore_fields, args.truncate_items, args.verbose
         )
+        if result != 0:
+            exit_code = result
+    return exit_code
 
 
 if __name__ == "__main__":
