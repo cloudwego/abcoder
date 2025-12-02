@@ -3,7 +3,6 @@ import argparse
 from dataclasses import dataclass
 import json
 import os
-import pprint
 import re
 import sys
 from pathlib import Path
@@ -27,12 +26,11 @@ class DiffResult:
     def format(self, truncate_items: int) -> str:
         return self.format_nested(truncate_items)
 
-    def collect_flat_raw(self, truncate_items: int) -> list[tuple[path_ty, Any]]:
-        output = []
+    def collect_flat_raw(self, truncate_items: int) -> tuple[list[tuple[path_ty, Any]], str]:
+        output: list[tuple[path_ty, Any]] = []
 
         def add_item(accessor: str, value: Any) -> None:
-            if truncate_items == 0 or len(output) < truncate_items:
-                output.append((_parse_accessor(accessor), value))
+            output.append((_parse_accessor(accessor), value))
 
         # Handle new items (dictionary_item_added and iterable_item_added)
         if self.diff is not None and "dictionary_item_added" in self.diff:
@@ -69,14 +67,15 @@ class DiffResult:
 
         # Add truncation notice if needed
         if truncate_items > 0 and len(output) > truncate_items:
-            remaining = len(output) - truncate_items
-            add_item([], ("info", f"...({remaining} more items)"))
+            remaining_msg = f"...({len(output) - truncate_items} more items)"
+            output = output[:truncate_items]
+        else:
+            remaining_msg = ""
+        return output, remaining_msg
 
-        pprint.pprint(output)
-        return output
-
-    def make_nested_oneliner(flat: list[tuple[path_ty, Any]]):
-        output = {}
+    @staticmethod
+    def make_nested_oneliner(flat: list[tuple[path_ty, Any]]) -> dict:
+        output: dict = {}
         for path, value in flat:
             color, msg = value[0], value[1]
             _set_with_ensure_strpath(
@@ -85,10 +84,9 @@ class DiffResult:
         return output
 
     def format_nested(self, truncate_items: int) -> str:
-        flat = self.collect_flat_raw(truncate_items)
+        flat, remaining_msg = self.collect_flat_raw(truncate_items)
         nested = DiffResult.make_nested_oneliner(flat)
         INDENT = "    "
-
         def _dump(obj: dict, indent: int = 0, path: str = "") -> str:
             if isinstance(obj, tuple):
                 color, msg = obj[0], obj[1]
@@ -106,11 +104,16 @@ class DiffResult:
                 return l1 + "\n" + l2
             output = ""
             for key, value in obj.items():
-                output += "  " + INDENT * indent + f"{key}\n"
-                output += _dump(value, indent + 1, path + f"[{key}]") + "\n"
+                output += "  " + INDENT * indent + f"[{key}]"
+                v = value
+                while isinstance(v, dict) and len(v) == 1:
+                    k, v = next(iter(v.items()))
+                    output += f"[{k}]"
+                output += "\n"
+                output += _dump(v, indent + 1, path + f"[{key}]") + "\n"
             return output.rstrip()
 
-        return _dump(nested)
+        return _dump(nested) + "\n" + remaining_msg
 
 
 def _parse_accessor(accessor_string: str) -> path_ty:
@@ -303,7 +306,7 @@ def compare_and_report_files(
         )
         if verbose:
             new_output = result.format(truncate_items)
-            new_output = "\n    ".join([""] + new_output.splitlines())
+            new_output = "\n[details]    ".join([""] + new_output.splitlines() + [""])
             print(new_output, file=sys.stderr)
         return 1
     else:
