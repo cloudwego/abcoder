@@ -129,13 +129,15 @@ export class TypeParser {
     // Parse constructors
     const constructors = cls.getConstructors();
     for (const ctor of constructors) {
-      // Constructors don't have symbols, so we use 'constructor' as the key
-      const ctorName = 'constructor';
-      methods[ctorName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${ctorName}`
-      };
+      const symbol = ctor.getSymbol();
+      if (symbol) {
+        const ctorName = assignSymbolName(symbol);
+        methods[ctorName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: ctorName
+        };
+      }
     }
 
     // Parse static methods
@@ -566,13 +568,15 @@ export class TypeParser {
     // Parse constructors
     const constructors = classExpr.getConstructors();
     for (const ctor of constructors) {
-      // Constructors don't have symbols, so we use 'constructor' as the key
-      const ctorName = 'constructor';
-      methods[ctorName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${ctorName}`
-      };
+      const symbol = ctor.getSymbol();
+      if (symbol) {
+        const ctorName = assignSymbolName(symbol);
+        methods[ctorName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: ctorName
+        };
+      }
     }
 
     // Parse static methods

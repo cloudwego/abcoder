@@ -748,8 +748,8 @@ describe('TypeParser', () => {
       expect(methods['getValue'].Name).toBe('TestClass.getValue');
 
       // Should include constructor
-      expect(methods['constructor']).toBeDefined();
-      expect(methods['constructor'].Name).toBe('TestClass.constructor');
+      expect(methods['TestClass.__constructor']).toBeDefined();
+      expect(methods['TestClass.__constructor'].Name).toBe('TestClass.__constructor');
 
       // Should include static methods
       expect(methods['createDefault']).toBeDefined();
