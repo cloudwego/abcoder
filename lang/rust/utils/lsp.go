@@ -95,6 +95,13 @@ func getSymbol(cli *lsp.LSPClient, root, file, mod, name string, receiver string
 		// recursive search mod to the deepest
 		syms = dfsSyms(syms, strings.Split(mod, "::"))
 	}
+	// fix: s.Location is missing; populating it using s.Range.
+	for idx, s := range syms {
+		if s.Location.URI == "" && s.Location.Range.Start.Line == 0 && s.Location.Range.End.Line == 0 && s.Range != nil {
+			syms[idx].Location.URI = lsp.NewURI(file)
+			syms[idx].Location.Range = *s.Range
+		}
+	}
 	if receiver != "" {
 		for _, s := range syms {
 			if s.Kind == lsp.SKObject && ((caseInsensitive && (hasIdent(strings.ToLower(s.Name), strings.ToLower(receiver)))) || hasIdent(s.Name, receiver)) {
