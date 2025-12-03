@@ -171,6 +171,23 @@ export class TypeParser {
       };
     }
 
+    // Parse properties with function initializers
+    const properties = cls.getProperties();
+    for (const prop of properties) {
+      const initializer = prop.getInitializer();
+      if (initializer) {
+        // Check if initializer is an arrow function or function expression
+        if (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer)) {
+          const propName = prop.getName() || 'anonymous';
+          methods[propName] = {
+            ModPath: moduleName,
+            PkgPath: this.getPkgPath(packagePath),
+            Name: `${name}.${propName}`
+          };
+        }
+      }
+    }
+
     // Parse implemented interfaces and extended classes
     const implementsInterfaces: Dependency[] = [];
     const extendsClasses: Dependency[] = [];
@@ -193,14 +210,18 @@ export class TypeParser {
     // Combine implements and extends into Implements, but filter out external symbols
     const allImplements = [...implementsInterfaces, ...extendsClasses];
 
-    // Extract property type dependencies
+    // Extract property type dependencies (skip properties that are function initializers as they're already in methods)
     const propertyTypes: Dependency[] = [];
-    const properties = cls.getProperties();
     for (const prop of properties) {
-      const typeNode = prop.getTypeNode();
-      if (typeNode) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
-        propertyTypes.push(...dependencies);
+      const initializer = prop.getInitializer();
+      const isFunctionProp = initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer));
+
+      if (!isFunctionProp) {
+        const typeNode = prop.getTypeNode();
+        if (typeNode) {
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+          propertyTypes.push(...dependencies);
+        }
       }
     }
 
@@ -587,6 +608,23 @@ export class TypeParser {
       };
     }
 
+    // Parse properties with function initializers
+    const properties = classExpr.getProperties();
+    for (const prop of properties) {
+      const initializer = prop.getInitializer();
+      if (initializer) {
+        // Check if initializer is an arrow function or function expression
+        if (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer)) {
+          const propName = prop.getName() || 'anonymous';
+          methods[propName] = {
+            ModPath: moduleName,
+            PkgPath: this.getPkgPath(packagePath),
+            Name: `${name}.${propName}`
+          };
+        }
+      }
+    }
+
     // Parse implemented interfaces and extended classes
     const implementsInterfaces: Dependency[] = [];
     const extendsClasses: Dependency[] = [];
@@ -607,14 +645,18 @@ export class TypeParser {
       }
     }
 
-    // Extract property type dependencies
+    // Extract property type dependencies (skip properties that are function initializers as they're already in methods)
     const propertyTypes: Dependency[] = [];
-    const properties = classExpr.getProperties();
     for (const prop of properties) {
-      const typeNode = prop.getTypeNode();
-      if (typeNode) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
-        propertyTypes.push(...dependencies);
+      const initializer = prop.getInitializer();
+      const isFunctionProp = initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer));
+
+      if (!isFunctionProp) {
+        const typeNode = prop.getTypeNode();
+        if (typeNode) {
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+          propertyTypes.push(...dependencies);
+        }
       }
     }
 

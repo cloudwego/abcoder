@@ -6,7 +6,7 @@ import { createTestProject, expectToBeDefined } from './test-utils';
 describe('TypeParser', () => {
   describe('parseTypes', () => {
     it('should parse class declarations', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class SimpleClass {
           prop: string;
           
@@ -47,7 +47,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse interface declarations', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         interface SimpleInterface {
           prop: string;
           method(): void;
@@ -87,7 +87,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse type alias declarations', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         type StringAlias = string;
         type ObjectAlias = { prop: string; method(): void };
         type UnionAlias = string | number;
@@ -123,7 +123,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse enum declarations', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         enum Color {
           Red = 'red',
           Green = 'green',
@@ -162,7 +162,7 @@ describe('TypeParser', () => {
 
   describe('inheritance and implementation', () => {
     it('should parse class inheritance', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class BaseClass {
           baseProp: string;
         }
@@ -194,7 +194,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse interface inheritance', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         interface BaseInterface {
           baseProp: string;
           baseMethod(): void;
@@ -227,7 +227,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse class implementing interfaces', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         interface FirstInterface {
           firstProp: string;
           firstMethod(): void;
@@ -261,7 +261,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse complex inheritance scenarios', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class BaseClass {
           baseMethod(): void {}
         }
@@ -296,7 +296,7 @@ describe('TypeParser', () => {
 
   describe('type dependencies', () => {
     it('should extract type dependencies from type aliases', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class CustomType {}
         interface CustomInterface {}
 
@@ -349,7 +349,7 @@ describe('TypeParser', () => {
     });
 
     it('should handle primitive types correctly', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class PrimitiveTypes {
           stringProp: string;
           numberProp: number;
@@ -389,7 +389,7 @@ describe('TypeParser', () => {
 
   describe('edge cases', () => {
     it('should handle anonymous classes', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         const AnonymousClass = class {
           prop: string;
           method(): void {}
@@ -414,7 +414,7 @@ describe('TypeParser', () => {
     });
 
     it('should handle generic types', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class GenericClass<T, U> {
           first: T;
           second: U;
@@ -452,7 +452,7 @@ describe('TypeParser', () => {
 
 
     it('should handle nested types', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         class Level1 {
           level2: {
             level3: {
@@ -493,7 +493,7 @@ describe('TypeParser', () => {
     });
 
     it('should handle function types', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         type FunctionType = (param: string) => number;
         type MethodType = {
           method(param: string): number;
@@ -525,7 +525,7 @@ describe('TypeParser', () => {
 
   describe('type alias dependencies in InlineStruct', () => {
     it('should extract union type alias dependencies into InlineStruct', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type Status = 'normal' | 'abnormal';
 
         export type ServerStatus = {
@@ -560,7 +560,7 @@ describe('TypeParser', () => {
     });
 
     it('should extract complex type alias dependencies into InlineStruct', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type UserId = string;
         export type UserRole = 'admin' | 'user' | 'guest';
 
@@ -604,7 +604,7 @@ describe('TypeParser', () => {
     });
 
     it('should not include primitive types in InlineStruct', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type Config = {
           host: string;
           port: number;
@@ -631,7 +631,7 @@ describe('TypeParser', () => {
     });
 
     it('should handle nested type references in InlineStruct', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type Address = {
           street: string;
           city: string;
@@ -673,7 +673,7 @@ describe('TypeParser', () => {
     });
 
     it('should filter out self-referencing recursive types in InlineStruct', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type TreeNode = {
           value: string;
           children: TreeNode[];
@@ -706,7 +706,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse class constructors and static methods in Methods field', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export class TestClass {
           private value: number;
 
@@ -762,7 +762,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse class expression with constructors and static methods', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export const ClassExpr = class MyClassExpr {
           private name: string;
 
@@ -807,7 +807,7 @@ describe('TypeParser', () => {
 
   describe('property type dependencies', () => {
     it('should extract property type dependencies from classes', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type UserRole = 'admin' | 'user';
 
         export type UserSettings = {
@@ -846,7 +846,7 @@ describe('TypeParser', () => {
     });
 
     it('should extract property type dependencies from interfaces', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type Address = {
           street: string;
           city: string;
@@ -882,7 +882,7 @@ describe('TypeParser', () => {
     });
 
     it('should extract property type dependencies from class expressions', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type ConfigType = {
           timeout: number;
         };
@@ -922,7 +922,7 @@ describe('TypeParser', () => {
 
   describe('getter and setter support in Methods field', () => {
     it('should parse getters in class Methods field', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type UserData = {
           id: string;
           name: string;
@@ -967,7 +967,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse setters in class Methods field', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type UserData = {
           id: string;
           name: string;
@@ -1008,7 +1008,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse both getter and setter with same name', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export class Counter {
           private _count: number = 0;
 
@@ -1042,7 +1042,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse getters in class expressions', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type Config = {
           timeout: number;
         };
@@ -1085,7 +1085,7 @@ describe('TypeParser', () => {
     });
 
     it('should parse setters in class expressions', () => {
-      const { project, sourceFile, cleanup } = createTestProject(`
+      const { sourceFile, cleanup } = createTestProject(`
         export type Config = {
           timeout: number;
         };
@@ -1119,6 +1119,190 @@ describe('TypeParser', () => {
 
       // Should include setter
       expect(methods['config']).toBeDefined();
+
+      cleanup();
+    });
+  });
+
+  describe('class property function initializers', () => {
+    it('should parse arrow function properties as methods', () => {
+      const { sourceFile, cleanup } = createTestProject(`
+        class MyClass {
+          // Arrow function property
+          arrowMethod = (x: number) => {
+            return x * 2;
+          }
+
+          // Regular method for comparison
+          regularMethod(x: number) {
+            return x * 2;
+          }
+
+          // Non-function property
+          normalProp: string = 'hello';
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      expect(types['MyClass']).toBeDefined();
+      const myClass = expectToBeDefined(types['MyClass']);
+      expect(myClass.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(myClass.Methods);
+
+      // Arrow function property should be in methods
+      expect(methods['arrowMethod']).toBeDefined();
+      expect(methods['arrowMethod'].Name).toBe('MyClass.arrowMethod');
+
+      // Regular method should also be in methods
+      expect(methods['regularMethod']).toBeDefined();
+      expect(methods['regularMethod'].Name).toBe('MyClass.regularMethod');
+
+      // Normal property should not cause arrow function to appear in SubStruct
+      expect(myClass.SubStruct).toBeDefined();
+      const subStruct = expectToBeDefined(myClass.SubStruct);
+
+      // SubStruct should only contain type dependencies from non-function properties
+      // (in this case, none since 'string' is a primitive)
+      const arrowMethodInSubStruct = subStruct.find(dep => dep.Name === 'arrowMethod');
+      expect(arrowMethodInSubStruct).toBeUndefined();
+
+      cleanup();
+    });
+
+    it('should parse function expression properties as methods', () => {
+      const { sourceFile, cleanup } = createTestProject(`
+        class Calculator {
+          // Function expression property
+          add = function(a: number, b: number) {
+            return a + b;
+          }
+
+          // Named function expression
+          subtract = function sub(a: number, b: number) {
+            return a - b;
+          }
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      expect(types['Calculator']).toBeDefined();
+      const calculator = expectToBeDefined(types['Calculator']);
+      expect(calculator.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(calculator.Methods);
+
+      // Function expression properties should be in methods
+      expect(methods['add']).toBeDefined();
+      expect(methods['add'].Name).toBe('Calculator.add');
+      expect(methods['subtract']).toBeDefined();
+      expect(methods['subtract'].Name).toBe('Calculator.subtract');
+
+      cleanup();
+    });
+
+    it('should handle mixed property types correctly', () => {
+      const { sourceFile, cleanup } = createTestProject(`
+        interface Config {
+          timeout: number;
+        }
+
+        class Service {
+          // Function properties
+          handler = () => { console.log('handled'); }
+          processor = function(data: string) { return data; }
+
+          // Regular method
+          execute(): void {}
+
+          // Non-function properties with type dependencies
+          config: Config;
+          value: number = 42;
+        }
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      expect(types['Service']).toBeDefined();
+      const service = expectToBeDefined(types['Service']);
+      expect(service.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(service.Methods);
+
+      // All function-like members should be in methods
+      expect(methods['handler']).toBeDefined();
+      expect(methods['processor']).toBeDefined();
+      expect(methods['execute']).toBeDefined();
+
+      // SubStruct should contain type dependencies from non-function properties
+      expect(service.SubStruct).toBeDefined();
+      const subStruct = expectToBeDefined(service.SubStruct);
+
+      // Should have Config dependency from the config property
+      const configDep = subStruct.find(dep => dep.Name === 'Config');
+      expect(configDep).toBeDefined();
+
+      // Should not have dependencies from function properties
+      const handlerDep = subStruct.find(dep => dep.Name === 'handler');
+      expect(handlerDep).toBeUndefined();
+
+      cleanup();
+    });
+
+    it('should parse arrow function properties in class expressions', () => {
+      const { sourceFile, cleanup } = createTestProject(`
+        export const MyService = class {
+          // Arrow function in class expression
+          process = (input: string) => {
+            return input.toUpperCase();
+          }
+
+          // Regular method
+          transform(data: string): string {
+            return data;
+          }
+        };
+      `);
+
+      const parser = new TypeParser(process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const types = parser.parseTypes(sourceFile, 'parser-tests', pkgPath);
+
+      // Find the class expression
+      const serviceClass = Object.values(types).find(t =>
+        t.TypeKind === 'struct' && t.Methods && 'process' in t.Methods
+      );
+      expect(serviceClass).toBeDefined();
+
+      const classType = expectToBeDefined(serviceClass);
+      expect(classType.Methods).toBeDefined();
+
+      const methods = expectToBeDefined(classType.Methods);
+
+      // Arrow function property should be in methods
+      expect(methods['process']).toBeDefined();
+      // Regular method should also be in methods
+      expect(methods['transform']).toBeDefined();
 
       cleanup();
     });
