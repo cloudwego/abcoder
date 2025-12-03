@@ -347,12 +347,18 @@ export function assignSymbolName(symbol: Symbol): string {
   // Handle methods, properties, constructors, and functions with proper naming
   
   // Handle class/interface members with parent prefix
-  if(Node.isMethodDeclaration(firstDecl) || Node.isMethodSignature(firstDecl) || 
+  if(Node.isMethodDeclaration(firstDecl) || Node.isMethodSignature(firstDecl) ||
      Node.isPropertyDeclaration(firstDecl) || Node.isPropertySignature(firstDecl) ||
-     Node.isConstructorDeclaration(firstDecl)) {
+     Node.isConstructorDeclaration(firstDecl) || Node.isGetAccessorDeclaration(firstDecl) || Node.isSetAccessorDeclaration(firstDecl)) {
     const parent = firstDecl.getParent();
-    if(Node.isClassDeclaration(parent) || Node.isInterfaceDeclaration(parent)) {
-      const parentName = parent.getName() || 'AnonymousClass';
+    if(Node.isClassDeclaration(parent) || Node.isInterfaceDeclaration(parent) || Node.isClassExpression(parent)) {
+      const parentSym = parent.getSymbol();
+      let parentName = 'AnonymousClass';
+      if(parentSym) {
+        parentName = assignSymbolName(parentSym);
+      } else if (Node.isClassDeclaration(parent) || Node.isInterfaceDeclaration(parent)) {
+        parentName = parent.getName() || 'AnonymousClass';
+      }
       rawName = parentName + "." + rawName
     }
   }

@@ -140,7 +140,21 @@ export class VarParser {
     const typeNode = varDecl.getTypeNode();
     let type: Dependency | undefined;
     if (typeNode) {
-      const typeSymbol = typeNode.getSymbol();
+      let typeSymbol: Symbol | undefined;
+
+      // For TypeReferenceNode, get the symbol from the type name
+      if (Node.isTypeReference(typeNode)) {
+        const typeName = typeNode.getTypeName();
+        if (Node.isIdentifier(typeName)) {
+          typeSymbol = typeName.getSymbol();
+        } else if (Node.isQualifiedName(typeName)) {
+          typeSymbol = typeName.getRight().getSymbol();
+        }
+      } else {
+        // For other type nodes, try to get symbol from the type itself
+        typeSymbol = typeNode.getSymbol();
+      }
+
       if (typeSymbol) {
         const [resolvedSymbol, ] = this.symbolResolver.resolveSymbol(typeSymbol, varDecl);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
@@ -205,6 +219,14 @@ export class VarParser {
     let isExported = false;
     if (Node.isClassDeclaration(parent)) {
       isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      // ClassExpression can be exported if assigned to an exported variable
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (varSymbol === this.defaultExportedSym && varSymbol !== undefined)) : false;
+      }
     }
 
     const isConst = false;
@@ -214,7 +236,21 @@ export class VarParser {
     const typeNode = prop.getTypeNode();
     let type: Dependency | undefined;
     if (typeNode) {
-      const typeSymbol = typeNode.getSymbol();
+      let typeSymbol: Symbol | undefined;
+
+      // For TypeReferenceNode, get the symbol from the type name
+      if (Node.isTypeReference(typeNode)) {
+        const typeName = typeNode.getTypeName();
+        if (Node.isIdentifier(typeName)) {
+          typeSymbol = typeName.getSymbol();
+        } else if (Node.isQualifiedName(typeName)) {
+          typeSymbol = typeName.getRight().getSymbol();
+        }
+      } else {
+        // For other type nodes, try to get symbol from the type itself
+        typeSymbol = typeNode.getSymbol();
+      }
+
       if (typeSymbol) {
         const [resolvedSymbol, ] = this.symbolResolver.resolveSymbol(typeSymbol, prop);
         if (resolvedSymbol && !resolvedSymbol.isExternal) {
@@ -373,6 +409,14 @@ export class VarParser {
       const parent = parentNode.getParent();
       if (Node.isClassDeclaration(parent)) {
         isExported = parent.isExported() || parent.isDefaultExport() || (parent.getSymbol() === this.defaultExportedSym && this.defaultExportedSym !== undefined);
+      } else if (Node.isClassExpression(parent)) {
+        // ClassExpression can be exported if assigned to an exported variable
+        const grandParent = parent.getParent();
+        if (Node.isVariableDeclaration(grandParent)) {
+          const varStatement = grandParent.getVariableStatement();
+          const varSymbol = grandParent.getSymbol();
+          isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (varSymbol === this.defaultExportedSym && varSymbol !== undefined)) : false;
+        }
       }
     }
 

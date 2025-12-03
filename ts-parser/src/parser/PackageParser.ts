@@ -29,7 +29,7 @@ export class PackageParser {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const vars: Record<string, any> = {};
 
-    for (const sourceFile of sourceFiles) {
+    for (const sourceFile of sourceFiles) {      
       // Parse functions
       const fileFunctions = this.functionParser.parseFunctions(sourceFile, moduleName, packagePath);
       Object.assign(functions, fileFunctions);

@@ -7,7 +7,8 @@ import {
   SyntaxKind,
   TypeNode,
   ClassExpression,
-  Symbol
+  Symbol,
+  Node
 } from 'ts-morph';
 import { Type as UniType, Dependency } from '../types/uniast';
 import { assignSymbolName, SymbolResolver } from '../utils/symbol-resolver';
@@ -104,9 +105,17 @@ export class TypeParser {
     const content = cls.getFullText();
     const isExported = cls.isExported() || cls.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of cls.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
+
+    // Parse instance methods
     const classMethods = cls.getMethods();
     for (const method of classMethods) {
       const methodName = method.getName() || 'anonymous';
@@ -114,6 +123,51 @@ export class TypeParser {
         ModPath: moduleName,
         PkgPath: this.getPkgPath(packagePath),
         Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse constructors
+    const constructors = cls.getConstructors();
+    for (const ctor of constructors) {
+      // Constructors don't have symbols, so we use 'constructor' as the key
+      const ctorName = 'constructor';
+      methods[ctorName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${ctorName}`
+      };
+    }
+
+    // Parse static methods
+    const staticMethods = cls.getStaticMethods();
+    for (const staticMethod of staticMethods) {
+      const methodName = staticMethod.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse getters
+    const getAccessors = cls.getGetAccessors();
+    for (const getter of getAccessors) {
+      const getterName = getter.getName() || 'anonymous';
+      methods[getterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${getterName}`
+      };
+    }
+
+    // Parse setters
+    const setAccessors = cls.getSetAccessors();
+    for (const setter of setAccessors) {
+      const setterName = setter.getName() || 'anonymous';
+      methods[setterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${setterName}`
       };
     }
 
@@ -127,7 +181,7 @@ export class TypeParser {
       const typeNodes = clause.getTypeNodes();
 
       for (const typeNode of typeNodes) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
         if (clauseType === SyntaxKind.ImplementsKeyword) {
           implementsInterfaces.push(...dependencies);
         } else if (clauseType === SyntaxKind.ExtendsKeyword) {
@@ -138,6 +192,17 @@ export class TypeParser {
 
     // Combine implements and extends into Implements, but filter out external symbols
     const allImplements = [...implementsInterfaces, ...extendsClasses];
+
+    // Extract property type dependencies
+    const propertyTypes: Dependency[] = [];
+    const properties = cls.getProperties();
+    for (const prop of properties) {
+      const typeNode = prop.getTypeNode();
+      if (typeNode) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+        propertyTypes.push(...dependencies);
+      }
+    }
 
     return {
       ModPath: moduleName,
@@ -152,7 +217,7 @@ export class TypeParser {
       Content: content,
       Methods: methods,
       Implements: allImplements,
-      SubStruct: [],
+      SubStruct: propertyTypes,
       InlineStruct: []
     };
   }
@@ -168,6 +233,12 @@ export class TypeParser {
     const endOffset = iface.getEnd();
     const content = iface.getFullText();
     const isExported = iface.isExported() || iface.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
+
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of iface.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
 
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,13 +260,24 @@ export class TypeParser {
       if (clause.getToken() === SyntaxKind.ExtendsKeyword) {
         const typeNodes = clause.getTypeNodes();
         for (const typeNode of typeNodes) {
-          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
           extendsInterfaces.push(...dependencies);
         }
       }
     }
     // Combine extends interfaces and other dependencies into Implements, but filter out external symbols
     const allImplements = [...extendsInterfaces];
+
+    // Extract property type dependencies
+    const propertyTypes: Dependency[] = [];
+    const properties = iface.getProperties();
+    for (const prop of properties) {
+      const typeNode = prop.getTypeNode();
+      if (typeNode) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+        propertyTypes.push(...dependencies);
+      }
+    }
 
     return {
       ModPath: moduleName,
@@ -210,7 +292,7 @@ export class TypeParser {
       Content: content,
       Methods: methods,
       Implements: allImplements,
-      SubStruct: [],
+      SubStruct: propertyTypes,
       InlineStruct: []
     };
   }
@@ -228,11 +310,17 @@ export class TypeParser {
     const content = typeAlias.getFullText();
     const isExported = typeAlias.isExported() || typeAlias.isDefaultExport() || (sym === this.defaultExported && sym !== undefined);
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of typeAlias.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Extract type dependencies from the type alias
     const typeDependencies: Dependency[] = [];
     const typeNode = typeAlias.getTypeNode();
     if (typeNode) {
-      const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+      const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
       typeDependencies.push(...dependencies);
     }
 
@@ -248,9 +336,9 @@ export class TypeParser {
       TypeKind: 'typedef',
       Content: content,
       Methods: {},
-      Implements: typeDependencies,
+      Implements: [],
       SubStruct: [],
-      InlineStruct: []
+      InlineStruct: typeDependencies
     };
   }
 
@@ -289,23 +377,89 @@ export class TypeParser {
    * This handles union types, intersection types, generics, arrays, etc.
    * Uses SymbolResolver for consistent dependency resolution, similar to extractTypeReferences
    */
-  private extractTypeDependencies(typeNode: TypeNode, moduleName: string, packagePath: string): Dependency[] {
+  private extractTypeDependencies(typeNode: TypeNode, moduleName: string, packagePath: string, typeParamNames?: Set<string>): Dependency[] {
     const dependencies: Dependency[] = [];
     const visited = new Set<string>();
 
-    // Extract from identifiers and find their definitions
-    const types = this.dependencyUtils.extractAtomicTypeReferences(typeNode);
+    // Collect all type reference nodes (including the root typeNode itself if it's a TypeReference)
+    const typeReferences: TypeNode[] = [];
 
-    for (const t of types) {
-      const symbol = t.getSymbol();
-      if (!symbol) {
-        continue;
+    // Handle ExpressionWithTypeArguments (used in extends/implements clauses)
+    if (Node.isExpressionWithTypeArguments(typeNode)) {
+      const expression = typeNode.getExpression();
+      let symbol: Symbol | undefined;
+
+      if (Node.isIdentifier(expression)) {
+        symbol = expression.getSymbol();
+      } else if (Node.isPropertyAccessExpression(expression)) {
+        symbol = expression.getSymbol();
       }
-      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
-      // if symbol is not external, add it to dependencies
+
+      if (symbol) {
+        const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeNode);
+        if (resolvedSymbol && !resolvedSymbol.isExternal) {
+          // Skip if this is a type parameter
+          if (typeParamNames && typeParamNames.has(resolvedSymbol.name)) {
+            // Skip this type parameter
+          } else {
+            const decls = resolvedRealSymbol?.getDeclarations() || [];
+            if (decls.length > 0) {
+              const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+
+              // Check if this is a self-reference: the type reference is within its own definition
+              const isSelfRef = typeNode.getAncestors().some(ancestor => ancestor === decls[0]);
+
+              if (!visited.has(key) && !isSelfRef) {
+                visited.add(key);
+                dependencies.push({
+                  ModPath: resolvedSymbol.moduleName || moduleName,
+                  PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+                  Name: resolvedSymbol.name,
+                  File: resolvedSymbol.filePath,
+                  Line: resolvedSymbol.line,
+                  StartOffset: resolvedSymbol.startOffset,
+                  EndOffset: resolvedSymbol.endOffset
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Handle TypeReference nodes
+    if (Node.isTypeReference(typeNode)) {
+      typeReferences.push(typeNode);
+    }
+
+    // Also get all descendant type references
+    typeReferences.push(...typeNode.getDescendantsOfKind(SyntaxKind.TypeReference));
+
+    // Process each type reference
+    for (const typeRef of typeReferences) {
+      if (!Node.isTypeReference(typeRef)) continue;
+
+      const typeName = typeRef.getTypeName();
+      let symbol: Symbol | undefined;
+
+      if (Node.isIdentifier(typeName)) {
+        symbol = typeName.getSymbol();
+      } else if (Node.isQualifiedName(typeName)) {
+        symbol = typeName.getRight().getSymbol();
+      }
+
+      if (!symbol) continue;
+
+      const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(symbol, typeRef);
       if (!resolvedSymbol || resolvedSymbol.isExternal) {
         continue;
       }
+
+      // Skip if this is a type parameter
+      if (typeParamNames && typeParamNames.has(resolvedSymbol.name)) {
+        continue;
+      }
+
       const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
       if (visited.has(key)) {
         continue;
@@ -316,8 +470,11 @@ export class TypeParser {
         continue;
       }
 
-      const defStartOffset = decls[0].getStart();
-      const defEndOffset = decls[0].getEnd();
+      // Check if this is a self-reference: the type reference is within its own definition
+      // If typeRef's ancestors include decls[0], it's a self-reference
+      const isSelfRef = typeRef.getAncestors().some(ancestor => ancestor === decls[0]);
+
+      if (isSelfRef) continue;
 
       visited.add(key);
       const dep: Dependency = {
@@ -329,12 +486,7 @@ export class TypeParser {
         StartOffset: resolvedSymbol.startOffset,
         EndOffset: resolvedSymbol.endOffset
       };
-      if (
-        dep.ModPath === moduleName &&
-        dep.PkgPath === packagePath &&
-        defStartOffset <= resolvedSymbol.startOffset &&
-        resolvedSymbol.endOffset <= defEndOffset
-      ) continue;
+
       dependencies.push(dep);
     }
 
@@ -369,9 +521,17 @@ export class TypeParser {
     const endOffset = classExpr.getEnd();
     const content = classExpr.getFullText();
 
+    // Collect type parameter names
+    const typeParamNames = new Set<string>();
+    for (const typeParam of classExpr.getTypeParameters()) {
+      typeParamNames.add(typeParam.getName());
+    }
+
     // Parse methods
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods: Record<string, any> = {};
+
+    // Parse instance methods
     const classMethods = classExpr.getMethods();
     for (const method of classMethods) {
       const methodName = method.getName() || 'anonymous';
@@ -379,6 +539,51 @@ export class TypeParser {
         ModPath: moduleName,
         PkgPath: this.getPkgPath(packagePath),
         Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse constructors
+    const constructors = classExpr.getConstructors();
+    for (const ctor of constructors) {
+      // Constructors don't have symbols, so we use 'constructor' as the key
+      const ctorName = 'constructor';
+      methods[ctorName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${ctorName}`
+      };
+    }
+
+    // Parse static methods
+    const staticMethods = classExpr.getStaticMethods();
+    for (const staticMethod of staticMethods) {
+      const methodName = staticMethod.getName() || 'anonymous';
+      methods[methodName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${methodName}`
+      };
+    }
+
+    // Parse getters
+    const getAccessors = classExpr.getGetAccessors();
+    for (const getter of getAccessors) {
+      const getterName = getter.getName() || 'anonymous';
+      methods[getterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${getterName}`
+      };
+    }
+
+    // Parse setters
+    const setAccessors = classExpr.getSetAccessors();
+    for (const setter of setAccessors) {
+      const setterName = setter.getName() || 'anonymous';
+      methods[setterName] = {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: `${name}.${setterName}`
       };
     }
 
@@ -392,7 +597,7 @@ export class TypeParser {
       const typeNodes = clause.getTypeNodes();
 
       for (const typeNode of typeNodes) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath);
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
 
         if (clauseType === SyntaxKind.ImplementsKeyword) {
           implementsInterfaces.push(...dependencies);
@@ -402,6 +607,16 @@ export class TypeParser {
       }
     }
 
+    // Extract property type dependencies
+    const propertyTypes: Dependency[] = [];
+    const properties = classExpr.getProperties();
+    for (const prop of properties) {
+      const typeNode = prop.getTypeNode();
+      if (typeNode) {
+        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+        propertyTypes.push(...dependencies);
+      }
+    }
 
     return {
       ModPath: moduleName,
@@ -416,7 +631,7 @@ export class TypeParser {
       Content: content,
       Methods: methods,
       Implements: [...implementsInterfaces, ...extendsClasses],
-      SubStruct: [],
+      SubStruct: propertyTypes,
       InlineStruct: []
     };
   }
