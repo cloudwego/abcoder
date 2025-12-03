@@ -40,8 +40,8 @@ describe('TypeParser', () => {
       expect(types['SimpleClass'].TypeKind).toBe('struct');
       expect(types['ExportedClass'].Exported).toBe(true);
       expect(types['SimpleClass'].Methods).toBeDefined();
-      expect(expectToBeDefined(types['SimpleClass'].Methods)['method']).toBeDefined();
-      expect(expectToBeDefined(types['ExportedClass'].Methods)['publicMethod']).toBeDefined();
+      expect(expectToBeDefined(types['SimpleClass'].Methods)['SimpleClass.method']).toBeDefined();
+      expect(expectToBeDefined(types['ExportedClass'].Methods)['ExportedClass.publicMethod']).toBeDefined();
       
       cleanup();
     });
@@ -79,9 +79,9 @@ describe('TypeParser', () => {
       expect(types['SimpleInterface'].TypeKind).toBe('interface');
       expect(types['ExportedInterface'].Exported).toBe(true);
       expect(types['SimpleInterface'].Methods).toBeDefined();
-      expect(expectToBeDefined(types['SimpleInterface'].Methods)['method']).toBeDefined();
+      expect(expectToBeDefined(types['SimpleInterface'].Methods)['SimpleInterface.method']).toBeDefined();
       expect(types['ExportedInterface'].Methods).toBeDefined();
-      expect(expectToBeDefined(types['ExportedInterface'].Methods)['methodWithParams']).toBeDefined();
+      expect(expectToBeDefined(types['ExportedInterface'].Methods)['ExportedInterface.methodWithParams']).toBeDefined();
       
       cleanup();
     });
@@ -744,19 +744,19 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(testClass.Methods);
 
       // Should include instance methods
-      expect(methods['getValue']).toBeDefined();
-      expect(methods['getValue'].Name).toBe('TestClass.getValue');
+      expect(methods['TestClass.getValue']).toBeDefined();
+      expect(methods['TestClass.getValue'].Name).toBe('TestClass.getValue');
 
       // Should include constructor
       expect(methods['TestClass.__constructor']).toBeDefined();
       expect(methods['TestClass.__constructor'].Name).toBe('TestClass.__constructor');
 
       // Should include static methods
-      expect(methods['createDefault']).toBeDefined();
-      expect(methods['createDefault'].Name).toBe('TestClass.createDefault');
+      expect(methods['TestClass.createDefault']).toBeDefined();
+      expect(methods['TestClass.createDefault'].Name).toBe('TestClass.createDefault');
 
-      expect(methods['fromString']).toBeDefined();
-      expect(methods['fromString'].Name).toBe('TestClass.fromString');
+      expect(methods['TestClass.fromString']).toBeDefined();
+      expect(methods['TestClass.fromString'].Name).toBe('TestClass.fromString');
 
       cleanup();
     });
@@ -793,13 +793,13 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(classExpr.Methods);
 
       // Should include instance methods
-      expect(methods['getName']).toBeDefined();
+      expect(methods['MyClassExpr.getName']).toBeDefined();
 
       // Should include constructor
-      expect(methods['constructor']).toBeDefined();
+      expect(methods['MyClassExpr.__constructor']).toBeDefined();
 
       // Should include static methods
-      expect(methods['create']).toBeDefined();
+      expect(methods['MyClassExpr.create']).toBeDefined();
 
       cleanup();
     });
@@ -958,10 +958,10 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(userService.Methods);
 
       // Should include getters
-      expect(methods['userData']).toBeDefined();
-      expect(methods['userData'].Name).toBe('UserService.userData');
-      expect(methods['userId']).toBeDefined();
-      expect(methods['userId'].Name).toBe('UserService.userId');
+      expect(methods['UserService.userData']).toBeDefined();
+      expect(methods['UserService.userData'].Name).toBe('UserService.userData');
+      expect(methods['UserService.userId']).toBeDefined();
+      expect(methods['UserService.userId'].Name).toBe('UserService.userId');
 
       cleanup();
     });
@@ -999,10 +999,10 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(userService.Methods);
 
       // Should include setters
-      expect(methods['userData']).toBeDefined();
-      expect(methods['userData'].Name).toBe('UserService.userData');
-      expect(methods['userId']).toBeDefined();
-      expect(methods['userId'].Name).toBe('UserService.userId');
+      expect(methods['UserService.userData']).toBeDefined();
+      expect(methods['UserService.userData'].Name).toBe('UserService.userData');
+      expect(methods['UserService.userId']).toBeDefined();
+      expect(methods['UserService.userId'].Name).toBe('UserService.userId');
 
       cleanup();
     });
@@ -1035,8 +1035,8 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(counter.Methods);
 
       // Should include the count accessor (getter/setter share the same name)
-      expect(methods['count']).toBeDefined();
-      expect(methods['count'].Name).toBe('Counter.count');
+      expect(methods['Counter.count']).toBeDefined();
+      expect(methods['Counter.count'].Name).toBe('Counter.count');
 
       cleanup();
     });
@@ -1069,7 +1069,7 @@ describe('TypeParser', () => {
 
       // Find the class expression (it will have a name like '__class' or contain 'AnonymousClass')
       const configServiceClass = Object.values(types).find(t =>
-        t.TypeKind === 'struct' && t.Methods && 'config' in t.Methods
+        t.TypeKind === 'struct' && t.Methods && Object.keys(t.Methods).some(k => k.includes('config'))
       );
       expect(configServiceClass).toBeDefined();
 
@@ -1078,8 +1078,9 @@ describe('TypeParser', () => {
 
       const methods = expectToBeDefined(classType.Methods);
 
-      // Should include getter
-      expect(methods['config']).toBeDefined();
+      // Should include getter (find by searching for config in method name)
+      const configMethod = Object.keys(methods).find(k => k.endsWith('.config'));
+      expect(configMethod).toBeDefined();
 
       cleanup();
     });
@@ -1108,7 +1109,7 @@ describe('TypeParser', () => {
 
       // Find the class expression (it will have a name like '__class' or contain 'AnonymousClass')
       const configServiceClass = Object.values(types).find(t =>
-        t.TypeKind === 'struct' && t.Methods && 'config' in t.Methods
+        t.TypeKind === 'struct' && t.Methods && Object.keys(t.Methods).some(k => k.includes('config'))
       );
       expect(configServiceClass).toBeDefined();
 
@@ -1117,8 +1118,9 @@ describe('TypeParser', () => {
 
       const methods = expectToBeDefined(classType.Methods);
 
-      // Should include setter
-      expect(methods['config']).toBeDefined();
+      // Should include setter (find by searching for config in method name)
+      const configMethod = Object.keys(methods).find(k => k.endsWith('.config'));
+      expect(configMethod).toBeDefined();
 
       cleanup();
     });
@@ -1157,12 +1159,12 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(myClass.Methods);
 
       // Arrow function property should be in methods
-      expect(methods['arrowMethod']).toBeDefined();
-      expect(methods['arrowMethod'].Name).toBe('MyClass.arrowMethod');
+      expect(methods['MyClass.arrowMethod']).toBeDefined();
+      expect(methods['MyClass.arrowMethod'].Name).toBe('MyClass.arrowMethod');
 
       // Regular method should also be in methods
-      expect(methods['regularMethod']).toBeDefined();
-      expect(methods['regularMethod'].Name).toBe('MyClass.regularMethod');
+      expect(methods['MyClass.regularMethod']).toBeDefined();
+      expect(methods['MyClass.regularMethod'].Name).toBe('MyClass.regularMethod');
 
       // Normal property should not cause arrow function to appear in SubStruct
       expect(myClass.SubStruct).toBeDefined();
@@ -1205,10 +1207,10 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(calculator.Methods);
 
       // Function expression properties should be in methods
-      expect(methods['add']).toBeDefined();
-      expect(methods['add'].Name).toBe('Calculator.add');
-      expect(methods['subtract']).toBeDefined();
-      expect(methods['subtract'].Name).toBe('Calculator.subtract');
+      expect(methods['Calculator.add']).toBeDefined();
+      expect(methods['Calculator.add'].Name).toBe('Calculator.add');
+      expect(methods['Calculator.subtract']).toBeDefined();
+      expect(methods['Calculator.subtract'].Name).toBe('Calculator.subtract');
 
       cleanup();
     });
@@ -1247,9 +1249,9 @@ describe('TypeParser', () => {
       const methods = expectToBeDefined(service.Methods);
 
       // All function-like members should be in methods
-      expect(methods['handler']).toBeDefined();
-      expect(methods['processor']).toBeDefined();
-      expect(methods['execute']).toBeDefined();
+      expect(methods['Service.handler']).toBeDefined();
+      expect(methods['Service.processor']).toBeDefined();
+      expect(methods['Service.execute']).toBeDefined();
 
       // SubStruct should contain type dependencies from non-function properties
       expect(service.SubStruct).toBeDefined();
@@ -1290,7 +1292,7 @@ describe('TypeParser', () => {
 
       // Find the class expression
       const serviceClass = Object.values(types).find(t =>
-        t.TypeKind === 'struct' && t.Methods && 'process' in t.Methods
+        t.TypeKind === 'struct' && t.Methods && Object.keys(t.Methods).some(k => k.includes('process'))
       );
       expect(serviceClass).toBeDefined();
 
@@ -1299,10 +1301,12 @@ describe('TypeParser', () => {
 
       const methods = expectToBeDefined(classType.Methods);
 
-      // Arrow function property should be in methods
-      expect(methods['process']).toBeDefined();
+      // Arrow function property should be in methods (find by searching for process in method name)
+      const processMethod = Object.keys(methods).find(k => k.endsWith('.process'));
+      expect(processMethod).toBeDefined();
       // Regular method should also be in methods
-      expect(methods['transform']).toBeDefined();
+      const transformMethod = Object.keys(methods).find(k => k.endsWith('.transform'));
+      expect(transformMethod).toBeDefined();
 
       cleanup();
     });
