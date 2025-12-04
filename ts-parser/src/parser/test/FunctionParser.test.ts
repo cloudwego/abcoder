@@ -1182,4 +1182,271 @@ describe('FunctionParser', () => {
       cleanup();
     });
   });
+
+  describe('property functions', () => {
+    it('should parse class properties with arrow function initializers', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type InputType = string;
+        export type OutputType = number;
+
+        export class Calculator {
+          // Property with arrow function
+          add = (a: number, b: number): number => {
+            return a + b;
+          };
+
+          // Property with function expression
+          subtract = function(a: number, b: number): number {
+            return a - b;
+          };
+
+          // Property with arrow function using types
+          convert = (input: InputType): OutputType => {
+            return parseInt(input);
+          };
+
+          // Regular method for comparison
+          multiply(a: number, b: number): number {
+            return a * b;
+          }
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // Should parse arrow function property
+      expect(functions['Calculator.add']).toBeDefined();
+      const add = expectToBeDefined(functions['Calculator.add']);
+      expect(add.IsMethod).toBe(true);
+      expect(add.Receiver).toBeDefined();
+      expect(add.Receiver?.Type.Name).toBe('Calculator');
+
+      // Should parse function expression property
+      expect(functions['Calculator.subtract']).toBeDefined();
+      const subtract = expectToBeDefined(functions['Calculator.subtract']);
+      expect(subtract.IsMethod).toBe(true);
+      expect(subtract.Receiver?.Type.Name).toBe('Calculator');
+
+      // Should parse arrow function with type dependencies
+      expect(functions['Calculator.convert']).toBeDefined();
+      const convert = expectToBeDefined(functions['Calculator.convert']);
+      expect(convert.IsMethod).toBe(true);
+
+      // Should extract parameter type dependencies
+      expect(convert.Params).toBeDefined();
+      const paramNames = expectToBeDefined(convert.Params).map(p => p.Name);
+      expect(paramNames).toContain('InputType');
+
+      // Should extract return type dependencies
+      expect(convert.Results).toBeDefined();
+      const resultNames = expectToBeDefined(convert.Results).map(r => r.Name);
+      expect(resultNames).toContain('OutputType');
+
+      // Should also parse regular method
+      expect(functions['Calculator.multiply']).toBeDefined();
+
+      cleanup();
+    });
+
+    it('should parse property functions with function calls', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export function helperFunc(x: number): number {
+          return x * 2;
+        }
+
+        export class Service {
+          process = (value: number): number => {
+            return helperFunc(value);
+          };
+
+          calculate = (a: number, b: number): number => {
+            const result = helperFunc(a) + helperFunc(b);
+            return result;
+          };
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const processFunc = expectToBeDefined(functions['Service.process']);
+      expect(processFunc.FunctionCalls).toBeDefined();
+      const processCallNames = expectToBeDefined(processFunc.FunctionCalls).map(c => c.Name);
+      expect(processCallNames).toContain('helperFunc');
+
+      const calculate = expectToBeDefined(functions['Service.calculate']);
+      expect(calculate.FunctionCalls).toBeDefined();
+      const calculateCallNames = expectToBeDefined(calculate.FunctionCalls).map(c => c.Name);
+      expect(calculateCallNames).toContain('helperFunc');
+
+      cleanup();
+    });
+
+    it('should parse property functions with method calls', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export class Logger {
+          log(message: string): void {
+            console.log(message);
+          }
+        }
+
+        export class Service {
+          private logger: Logger;
+
+          constructor() {
+            this.logger = new Logger();
+          }
+
+          process = (data: string): void => {
+            this.logger.log('Processing: ' + data);
+          };
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const processFunc = expectToBeDefined(functions['Service.process']);
+      expect(processFunc.MethodCalls).toBeDefined();
+      const methodCallNames = expectToBeDefined(processFunc.MethodCalls).map(c => c.Name);
+      expect(methodCallNames).toContain('Logger.log');
+
+      cleanup();
+    });
+
+
+    it('should parse property functions with global variable references', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export const CONFIG = {
+          multiplier: 2
+        };
+
+        export class Calculator {
+          compute = (value: number): number => {
+            return value * CONFIG.multiplier;
+          };
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const compute = expectToBeDefined(functions['Calculator.compute']);
+      expect(compute.GlobalVars).toBeDefined();
+      const globalVarNames = expectToBeDefined(compute.GlobalVars).map(gv => gv.Name);
+      expect(globalVarNames).toContain('CONFIG');
+
+      cleanup();
+    });
+
+    it('should have correct export status for property functions', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        class PrivateClass {
+          regularMethod() { return 'regular'; }
+          method = () => 'private';
+        }
+
+        export class PublicClass {
+          regularMethod() { return 'regular'; }
+          method = () => 'public';
+        }
+
+        export default class DefaultClass {
+          regularMethod() { return 'regular'; }
+          method = () => 'default';
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      // Check property functions - find by partial name since exported ones get mangled
+      const privateMethod = expectToBeDefined(functions['PrivateClass.method']);
+      expect(privateMethod.Exported).toBe(false);
+
+      const publicMethod = Object.values(functions).find((f: any) =>
+        f.Name.startsWith('PublicClass.method') && f.Name.includes('_test.ts_')
+      );
+      expect(publicMethod).toBeDefined();
+      expect((publicMethod as any).Exported).toBe(true);
+
+      const defaultMethod = Object.values(functions).find((f: any) =>
+        f.Name.startsWith('DefaultClass.method') && f.Name.includes('_test.ts_')
+      );
+      expect(defaultMethod).toBeDefined();
+      expect((defaultMethod as any).Exported).toBe(true);
+
+      // Also verify regular methods are parsed
+      expect(functions['PrivateClass.regularMethod']).toBeDefined();
+
+      const publicRegular = Object.values(functions).find((f: any) =>
+        f.Name.startsWith('PublicClass.regularMethod')
+      );
+      expect(publicRegular).toBeDefined();
+
+      const defaultRegular = Object.values(functions).find((f: any) =>
+        f.Name.startsWith('DefaultClass.regularMethod')
+      );
+      expect(defaultRegular).toBeDefined();
+
+      cleanup();
+    });
+
+    it('should extract type references from property function bodies', () => {
+      const { project, sourceFile, cleanup } = createTestProject(`
+        export type CustomType = {
+          value: number;
+        };
+
+        export class Service {
+          process = (input: number): CustomType => {
+            const result: CustomType = { value: input * 2 };
+            return result;
+          };
+        }
+      `);
+
+      const parser = new FunctionParser(project, process.cwd());
+      let pkgPathAbsFile: string = sourceFile.getFilePath();
+      pkgPathAbsFile = pkgPathAbsFile.split('/').slice(0, -1).join('/');
+      const pkgPath = path.relative(process.cwd(), pkgPathAbsFile);
+
+      const functions = parser.parseFunctions(sourceFile, 'parser-tests', pkgPath);
+
+      const processFunc = expectToBeDefined(functions['Service.process']);
+
+      // Should extract CustomType from return type
+      expect(processFunc.Results).toBeDefined();
+      const resultNames = expectToBeDefined(processFunc.Results).map(r => r.Name);
+      expect(resultNames).toContain('CustomType');
+
+      // Should also have CustomType in Types array
+      expect(processFunc.Types).toBeDefined();
+      const typeNames = expectToBeDefined(processFunc.Types).map(t => t.Name);
+      expect(typeNames).toContain('CustomType');
+
+      cleanup();
+    });
+  });
 });
