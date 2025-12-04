@@ -151,6 +151,9 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			ti := ctx.GetTypeInfo(*val)
 			v.Type = &ti.Id
 			v.IsPointer = ti.IsPointer
+			for _, dep := range ti.Deps {
+				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(vspec.Type)))
+			}
 		} else {
 			v.Type = typ
 		}
@@ -179,6 +182,7 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 								continue
 							}
 							id := NewIdentity(mod, path, sel.Sel.Name)
+							v.Dependencies = InsertDependency(v.Dependencies, NewDependency(id, ctx.FileLine(*val)))
 							// refer val's define
 							if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
 								fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
