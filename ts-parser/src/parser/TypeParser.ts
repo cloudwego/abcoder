@@ -118,57 +118,91 @@ export class TypeParser {
     // Parse instance methods
     const classMethods = cls.getMethods();
     for (const method of classMethods) {
-      const methodName = method.getName() || 'anonymous';
-      methods[methodName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${methodName}`
-      };
+      const symbol = method.getSymbol();
+      if (symbol) {
+        const methodName = assignSymbolName(symbol);
+        methods[methodName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: methodName
+        };
+      }
     }
 
     // Parse constructors
     const constructors = cls.getConstructors();
     for (const ctor of constructors) {
-      // Constructors don't have symbols, so we use 'constructor' as the key
-      const ctorName = 'constructor';
-      methods[ctorName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${ctorName}`
-      };
+      const symbol = ctor.getSymbol();
+      if (symbol) {
+        const ctorName = assignSymbolName(symbol);
+        methods[ctorName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: ctorName
+        };
+      }
     }
 
     // Parse static methods
     const staticMethods = cls.getStaticMethods();
     for (const staticMethod of staticMethods) {
-      const methodName = staticMethod.getName() || 'anonymous';
-      methods[methodName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${methodName}`
-      };
+      const symbol = staticMethod.getSymbol();
+      if (symbol) {
+        const methodName = assignSymbolName(symbol);
+        methods[methodName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: methodName
+        };
+      }
     }
 
     // Parse getters
     const getAccessors = cls.getGetAccessors();
     for (const getter of getAccessors) {
-      const getterName = getter.getName() || 'anonymous';
-      methods[getterName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${getterName}`
-      };
+      const symbol = getter.getSymbol();
+      if (symbol) {
+        const getterName = assignSymbolName(symbol);
+        methods[getterName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: getterName
+        };
+      }
     }
 
     // Parse setters
     const setAccessors = cls.getSetAccessors();
     for (const setter of setAccessors) {
-      const setterName = setter.getName() || 'anonymous';
-      methods[setterName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${setterName}`
-      };
+      const symbol = setter.getSymbol();
+      if (symbol) {
+        const setterName = assignSymbolName(symbol);
+        methods[setterName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: setterName
+        };
+      }
+    }
+
+    // Parse properties with function initializers
+    const properties = cls.getProperties();
+    for (const prop of properties) {
+      const initializer = prop.getInitializer();
+      if (initializer) {
+        // Check if initializer is an arrow function or function expression
+        if (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer)) {
+          const symbol = prop.getSymbol();
+          if (symbol) {
+            const propName = assignSymbolName(symbol);
+            methods[propName] = {
+              ModPath: moduleName,
+              PkgPath: this.getPkgPath(packagePath),
+              Name: propName
+            };
+          }
+        }
+      }
     }
 
     // Parse implemented interfaces and extended classes
@@ -193,14 +227,18 @@ export class TypeParser {
     // Combine implements and extends into Implements, but filter out external symbols
     const allImplements = [...implementsInterfaces, ...extendsClasses];
 
-    // Extract property type dependencies
+    // Extract property type dependencies (skip properties that are function initializers as they're already in methods)
     const propertyTypes: Dependency[] = [];
-    const properties = cls.getProperties();
     for (const prop of properties) {
-      const typeNode = prop.getTypeNode();
-      if (typeNode) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
-        propertyTypes.push(...dependencies);
+      const initializer = prop.getInitializer();
+      const isFunctionProp = initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer));
+
+      if (!isFunctionProp) {
+        const typeNode = prop.getTypeNode();
+        if (typeNode) {
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+          propertyTypes.push(...dependencies);
+        }
       }
     }
 
@@ -245,12 +283,15 @@ export class TypeParser {
     const methods: Record<string, any> = {};
     const interfaceMethods = iface.getMethods();
     for (const method of interfaceMethods) {
-      const methodName = method.getName() || 'anonymous';
-      methods[methodName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${methodName}`
-      };
+      const symbol = method.getSymbol();
+      if (symbol) {
+        const methodName = assignSymbolName(symbol);
+        methods[methodName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: methodName
+        };
+      }
     }
 
     // Parse extended interfaces
@@ -534,57 +575,91 @@ export class TypeParser {
     // Parse instance methods
     const classMethods = classExpr.getMethods();
     for (const method of classMethods) {
-      const methodName = method.getName() || 'anonymous';
-      methods[methodName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${methodName}`
-      };
+      const symbol = method.getSymbol();
+      if (symbol) {
+        const methodName = assignSymbolName(symbol);
+        methods[methodName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: methodName
+        };
+      }
     }
 
     // Parse constructors
     const constructors = classExpr.getConstructors();
     for (const ctor of constructors) {
-      // Constructors don't have symbols, so we use 'constructor' as the key
-      const ctorName = 'constructor';
-      methods[ctorName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${ctorName}`
-      };
+      const symbol = ctor.getSymbol();
+      if (symbol) {
+        const ctorName = assignSymbolName(symbol);
+        methods[ctorName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: ctorName
+        };
+      }
     }
 
     // Parse static methods
     const staticMethods = classExpr.getStaticMethods();
     for (const staticMethod of staticMethods) {
-      const methodName = staticMethod.getName() || 'anonymous';
-      methods[methodName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${methodName}`
-      };
+      const symbol = staticMethod.getSymbol();
+      if (symbol) {
+        const methodName = assignSymbolName(symbol);
+        methods[methodName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: methodName
+        };
+      }
     }
 
     // Parse getters
     const getAccessors = classExpr.getGetAccessors();
     for (const getter of getAccessors) {
-      const getterName = getter.getName() || 'anonymous';
-      methods[getterName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${getterName}`
-      };
+      const symbol = getter.getSymbol();
+      if (symbol) {
+        const getterName = assignSymbolName(symbol);
+        methods[getterName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: getterName
+        };
+      }
     }
 
     // Parse setters
     const setAccessors = classExpr.getSetAccessors();
     for (const setter of setAccessors) {
-      const setterName = setter.getName() || 'anonymous';
-      methods[setterName] = {
-        ModPath: moduleName,
-        PkgPath: this.getPkgPath(packagePath),
-        Name: `${name}.${setterName}`
-      };
+      const symbol = setter.getSymbol();
+      if (symbol) {
+        const setterName = assignSymbolName(symbol);
+        methods[setterName] = {
+          ModPath: moduleName,
+          PkgPath: this.getPkgPath(packagePath),
+          Name: setterName
+        };
+      }
+    }
+
+    // Parse properties with function initializers
+    const properties = classExpr.getProperties();
+    for (const prop of properties) {
+      const initializer = prop.getInitializer();
+      if (initializer) {
+        // Check if initializer is an arrow function or function expression
+        if (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer)) {
+          const symbol = prop.getSymbol();
+          if (symbol) {
+            const propName = assignSymbolName(symbol);
+            methods[propName] = {
+              ModPath: moduleName,
+              PkgPath: this.getPkgPath(packagePath),
+              Name: propName
+            };
+          }
+        }
+      }
     }
 
     // Parse implemented interfaces and extended classes
@@ -607,14 +682,18 @@ export class TypeParser {
       }
     }
 
-    // Extract property type dependencies
+    // Extract property type dependencies (skip properties that are function initializers as they're already in methods)
     const propertyTypes: Dependency[] = [];
-    const properties = classExpr.getProperties();
     for (const prop of properties) {
-      const typeNode = prop.getTypeNode();
-      if (typeNode) {
-        const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
-        propertyTypes.push(...dependencies);
+      const initializer = prop.getInitializer();
+      const isFunctionProp = initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer));
+
+      if (!isFunctionProp) {
+        const typeNode = prop.getTypeNode();
+        if (typeNode) {
+          const dependencies = this.extractTypeDependencies(typeNode, moduleName, packagePath, typeParamNames);
+          propertyTypes.push(...dependencies);
+        }
       }
     }
 
