@@ -99,10 +99,12 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
 		}
-		name, _, err := getModuleName(path)
+
+		name, err := getModuleName(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get module name: %w", err)
 		}
+
 		rel, err := filepath.Rel(p.homePageDir, filepath.Dir(path))
 		if err != nil {
 			return fmt.Errorf("module path %v is not in the repo", path)
@@ -152,6 +154,10 @@ func getDeps(dir string) (map[string]string, error) {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+	}
+
+	if hasNoDeps(filepath.Join(dir, "go.mod")) {
+		return map[string]string{}, nil
 	}
 
 	cmd = exec.Command("go", "list", "-json", "all")

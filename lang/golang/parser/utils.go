@@ -15,14 +15,11 @@
 package parser
 
 import (
-	"bufio"
-	"bytes"
 	"container/list"
 	"fmt"
 	"go/ast"
 	"go/build"
 	"go/types"
-	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -32,6 +29,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 	. "github.com/cloudwego/abcoder/lang/uniast"
+	"golang.org/x/mod/modfile"
 )
 
 func shouldIgnoreDir(path string) bool {
@@ -152,33 +150,27 @@ func getPackageAlias(importPath string) string {
 	return alias
 }
 
-func getModuleName(modFilePath string) (string, []byte, error) {
-	file, err := os.Open(modFilePath)
+func hasNoDeps(modFilePath string) bool {
+	content, err := os.ReadFile(modFilePath)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to open file: %v", err)
-	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to read file: %v", err)
-	}
-	scanner := bufio.NewScanner(bytes.NewBuffer(data))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "module") {
-			// Assuming 'module' keyword is followed by module name
-			parts := strings.Split(line, " ")
-			if len(parts) > 1 {
-				return parts[1], data, nil
-			}
-		}
+		return false
 	}
 
-	if err := scanner.Err(); err != nil {
-		return "", data, fmt.Errorf("failed to scan file: %v", err)
+	modf, err := modfile.Parse(modFilePath, content, nil)
+	if err != nil {
+		return false
 	}
 
-	return "", data, nil
+	return len(modf.Require) == 0
+}
+
+func getModuleName(modFilePath string) (string, error) {
+	content, err := os.ReadFile(modFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return modfile.ModulePath(content), nil
 }
 
 func isGoBuiltins(name string) bool {
