@@ -32,6 +32,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 	. "github.com/cloudwego/abcoder/lang/uniast"
+	"golang.org/x/mod/modfile"
 )
 
 func shouldIgnoreDir(path string) bool {
@@ -150,6 +151,15 @@ func getPackageAlias(importPath string) string {
 	}
 
 	return alias
+}
+
+func hasNoDeps(modFilePath string) bool {
+	mod, err := modfile.Parse(modFilePath, nil, nil)
+	if err != nil {
+		return false
+	}
+
+	return len(mod.Require) == 0
 }
 
 func getModuleName(modFilePath string) (string, []byte, error) {
