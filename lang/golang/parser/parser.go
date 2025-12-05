@@ -102,7 +102,7 @@ func (p *GoParser) collectGoMods(startDir string) error {
 
 		name, err := getModuleName(path)
 		if err != nil {
-			return fmt.Errorf("failed to get module name: %s", err.Error())
+			return fmt.Errorf("failed to get module name: %w", err)
 		}
 
 		rel, err := filepath.Rel(p.homePageDir, filepath.Dir(path))

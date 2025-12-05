@@ -167,7 +167,7 @@ func hasNoDeps(modFilePath string) bool {
 func getModuleName(modFilePath string) (string, error) {
 	content, err := os.ReadFile(modFilePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file: %s", err.Error())
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
 	return modfile.ModulePath(content), nil
