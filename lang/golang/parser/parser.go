@@ -99,10 +99,12 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
 		}
-		name, _, err := getModuleName(path)
+
+		name, err := getModuleName(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get module name: %s", err.Error())
 		}
+
 		rel, err := filepath.Rel(p.homePageDir, filepath.Dir(path))
 		if err != nil {
 			return fmt.Errorf("module path %v is not in the repo", path)
