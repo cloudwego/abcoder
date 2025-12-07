@@ -195,6 +195,8 @@ export function processPackagesWithCluster(
       if (workerInfo?.currentBatch) {
         console.error(`Worker ${workerPid} (ID: ${workerId}) exited unexpectedly while processing batch. Re-queueing.`);
         packagesToProcessQueue.unshift(workerInfo.currentBatch);
+        // Add an error to the errors array for this unexpected exit
+        errors.push(new Error(`Worker ${workerPid} (ID: ${workerId}) exited unexpectedly while processing batch`));
       }
 
       // Try to launch new workers if there are batches and capacity

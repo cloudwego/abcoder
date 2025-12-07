@@ -43,10 +43,13 @@ export function handleWorkerProcess(): void {
       } catch (error) {
         console.error(`Worker ${process.pid} error processing package ${pkg.name || pkg.path}:`, error);
         
+        // Ensure error is an instance of Error
+        const processedError = error instanceof Error ? error : new Error(String(error));
+        
         // Add failed result
         workerResults.push({
           success: false,
-          error: error as Error,
+          error: processedError,
           packageInfo: {
             name: pkg.name || pkg.path,
             path: pkg.path,

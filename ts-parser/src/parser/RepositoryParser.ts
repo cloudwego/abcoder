@@ -161,8 +161,12 @@ export class RepositoryParser {
       const result = await processPackagesWithCluster(packages, this.projectRoot, options);
 
       if (!result.success) {
+        const errorMessages = result.errors.map((e, index) => {
+          const message = e.message || 'Unknown error';
+          return `Error ${index + 1}: ${message}`;
+        }).join(', ');
         throw new Error(
-          `Cluster processing failed: ${result.errors.map(e => e.message).join(', ')}`
+          `Cluster processing failed: ${errorMessages}`
         );
       }
 
