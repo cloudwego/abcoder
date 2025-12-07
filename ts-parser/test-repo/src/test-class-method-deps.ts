@@ -10,6 +10,10 @@ export function validateUser(user: UserData): boolean {
 export class UserService {
   private data: UserData;
 
+  variableAsMethod = (user: UserData) => {
+    return validateUser(user);
+  }
+
   constructor(userData: UserData) {
     this.data = userData;
   }

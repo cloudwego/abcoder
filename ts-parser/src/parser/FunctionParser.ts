@@ -9,6 +9,7 @@ import {
   MethodSignature,
   GetAccessorDeclaration,
   SetAccessorDeclaration,
+  PropertyDeclaration,
   Node,
   SyntaxKind,
   ParameterDeclaration,
@@ -122,7 +123,22 @@ export class FunctionParser {
           console.error('Error processing setter:', setter, error);
         }
       }
+
+      // Parse properties with function initializers (arrow functions or function expressions)
+      const properties = cls.getProperties();
+      for (const prop of properties) {
+        const initializer = prop.getInitializer();
+        if (initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))) {
+          try {
+            const propObj = this.parsePropertyFunction(prop, initializer, moduleName, packagePath, sourceFile, className);
+            functions[propObj.Name] = propObj;
+          } catch (error) {
+            console.error('Error processing property function:', prop, error);
+          }
+        }
+      }
     }
+
 
     // Parse arrow functions assigned to variables
     const variableDeclarations = sourceFile.getVariableDeclarations();
@@ -643,6 +659,88 @@ export class FunctionParser {
       Receiver: receiver,
       Params: params,
       Results: [],
+      FunctionCalls: functionCalls,
+      MethodCalls: methodCalls,
+      Types: types,
+      GlobalVars: globalVars
+    };
+  }
+
+  private parsePropertyFunction(
+    prop: PropertyDeclaration,
+    funcExpr: ArrowFunction | FunctionExpression,
+    moduleName: string,
+    packagePath: string,
+    sourceFile: SourceFile,
+    className: string
+  ): UniFunction {
+    const symbol = prop.getSymbol();
+    let propName = "";
+    if (symbol) {
+      propName = assignSymbolName(symbol);
+    } else {
+      propName = "anonymous_" + prop.getStart();
+    }
+    const startLine = prop.getStartLineNumber();
+    const startOffset = prop.getStart();
+    const endOffset = prop.getEnd();
+    const content = prop.getFullText();
+    const signature = this.extractSignature(funcExpr);
+
+    const parent = prop.getParent();
+    const parentSym = parent.getSymbol();
+    let isExported = false;
+    if (Node.isClassDeclaration(parent)) {
+      isExported = parent.isExported() || parent.isDefaultExport() || (this.defaultExportSymbol === parentSym && parentSym !== undefined);
+    } else if (Node.isClassExpression(parent)) {
+      const grandParent = parent.getParent();
+      if (Node.isVariableDeclaration(grandParent)) {
+        const varStatement = grandParent.getVariableStatement();
+        const varSymbol = grandParent.getSymbol();
+        isExported = varStatement ? (varStatement.isExported() || varStatement.isDefaultExport() || (this.defaultExportSymbol === varSymbol && varSymbol !== undefined)) : false;
+      }
+    }
+
+    // Parse receiver
+    const receiver: Receiver = {
+      IsPointer: false,
+      Type: {
+        ModPath: moduleName,
+        PkgPath: this.getPkgPath(packagePath),
+        Name: className
+      }
+    };
+
+    // Parse parameters
+    const params = this.parseParameters(funcExpr.getParameters(), moduleName, packagePath, sourceFile);
+
+    // Parse return types
+    const results = this.parseReturnTypes(funcExpr, moduleName, packagePath, sourceFile);
+
+    // Parse function calls
+    const functionCalls = this.extractFunctionCalls(funcExpr, moduleName, packagePath, sourceFile);
+    const methodCalls = this.extractMethodCalls(funcExpr, moduleName, packagePath, sourceFile);
+
+    // Extract type references and global variables
+    const types = this.extractTypeReferences(funcExpr, moduleName, packagePath, sourceFile);
+    const globalVars = this.extractGlobalVarReferences(funcExpr, moduleName, packagePath, sourceFile);
+
+    return {
+      ModPath: moduleName,
+      PkgPath: this.getPkgPath(packagePath),
+      Name: propName,
+      File: this.getRelativePath(sourceFile.getFilePath()),
+      Line: startLine,
+      StartOffset: startOffset,
+      EndOffset: endOffset,
+      Exported: isExported,
+      IsMethod: true,
+      IsInterfaceMethod: false,
+      Content: content,
+      Signature: signature,
+      Receiver: receiver,
+      Params: params,
+      Results: results,
       FunctionCalls: functionCalls,
       MethodCalls: methodCalls,
       Types: types,
