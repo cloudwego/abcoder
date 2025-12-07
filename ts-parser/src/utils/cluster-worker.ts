@@ -30,10 +30,10 @@ export function handleWorkerProcess(): void {
     const processor = new PackageProcessor(projectRoot);
     const workerResults: PackageProcessingResult[] = [];
     
-    for (const pkg of packages) {
-      try {
-        const result = await processor.processPackage(pkg, options);
-        workerResults.push(result);
+  for (const pkg of packages) {
+    try {
+      const result = await processor.processPackage(pkg, options);
+      workerResults.push(result);
         
         if (result.success) {
           console.log(`Worker ${process.pid} finished processing package ${pkg.name || pkg.path}`);
@@ -57,16 +57,27 @@ export function handleWorkerProcess(): void {
             size: 0,
           },
         });
-      }
     }
+  }
 
-    if (process.send) {
-      const response: WorkerResult = {
-        results: workerResults,
-        workerId: process.pid || 0,
-      };
-      process.send(response);
-    }
+  if (process.send) {
+    const serializedResults = workerResults.map(r => ({
+      ...r,
+      error: r.error
+        ? {
+            message: (r.error as Error).message,
+            stack: (r.error as Error).stack,
+            name: (r.error as Error).name,
+          }
+        : undefined,
+    }));
+
+    const response: WorkerResult = {
+      results: serializedResults as unknown as PackageProcessingResult[],
+      workerId: process.pid || 0,
+    };
+    process.send(response);
+  }
     
     console.log(`Worker ${process.pid} finished current batch, awaiting next task or shutdown signal.`);
   });

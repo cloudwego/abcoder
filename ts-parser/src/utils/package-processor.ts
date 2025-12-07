@@ -19,7 +19,7 @@ export interface PackageProcessingResult {
   module?: Module;
   repository?: Repository;
   outputPath?: string;
-  error?: Error;
+  error?: Error | { message?: string; stack?: string; name?: string };
   packageInfo: {
     name: string;
     path: string;

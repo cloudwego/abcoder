@@ -169,7 +169,31 @@ export function processPackagesWithCluster(
         for (const result of message.results) {
           results.push(result);
           if (!result.success && result.error) {
-            errors.push(result.error);
+            const err: unknown = result.error as unknown;
+            let normalizedError: Error | null = null;
+
+            if (err instanceof Error) {
+              normalizedError = err;
+            } else if (typeof err === 'object' && err !== null) {
+              const maybe = err as { message?: string; stack?: string; name?: string };
+              const pkgName = (result as any).packageInfo?.name || (result as any).packageInfo?.path;
+              const msg = (maybe.message && String(maybe.message)) || `Worker error${pkgName ? ` in ${pkgName}` : ''}`;
+              normalizedError = new Error(msg);
+              if (maybe.stack) {
+                (normalizedError as any).stack = maybe.stack;
+              }
+              if (maybe.name) {
+                (normalizedError as any).name = maybe.name;
+              }
+            } else if (typeof err === 'string') {
+              normalizedError = new Error(err);
+            }
+
+            if (normalizedError) {
+              errors.push(normalizedError);
+            } else {
+              errors.push(new Error('Unknown worker error'));
+            }
           }
         }
       }
