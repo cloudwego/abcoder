@@ -111,11 +111,11 @@ export class ModuleParser {
     const importDeclarations = sourceFile.getImportDeclarations();
     for (const importDecl of importDeclarations) {
       const originalPath = importDecl.getModuleSpecifierValue();
-      const resolvedPath = importDecl.getModuleSpecifierSourceFile()?.getFilePath();
-      if (resolvedPath) {
-        const relativePath = path.relative(this.projectRoot, resolvedPath);
+      const resolvedPathMaybe = importDecl.getModuleSpecifierSourceFile()?.getFilePath();
+      if (typeof resolvedPathMaybe === 'string') {
+        const relativePath = path.relative(this.projectRoot, resolvedPathMaybe as string);
 
-        if(uniquePaths.has(relativePath)) {
+        if (uniquePaths.has(relativePath)) {
           continue;
         }
         uniquePaths.add(relativePath);
@@ -128,11 +128,25 @@ export class ModuleParser {
     // Export declarations (re-exports)
     const exportDeclarations = sourceFile.getExportDeclarations();
     for (const exportDecl of exportDeclarations) {
-      const originalPath = exportDecl.getModuleSpecifierValue();
+      // Some export declarations do not have a module specifier (e.g., `export { A, B }`) – guard before accessing
+      if (!exportDecl.hasModuleSpecifier()) {
+        continue;
+      }
+
+      let originalPath = '';
+      try {
+        const maybe = exportDecl.getModuleSpecifierValue();
+        originalPath = (maybe ?? '');
+      } catch {
+        // ts-morph throws if module specifier is not a string literal; skip safely
+        continue;
+      }
+
       if (originalPath) {
-        const resolvedPath = exportDecl.getModuleSpecifierSourceFile()?.getFilePath();
-        if (resolvedPath) {
-          const relativePath = path.relative(this.projectRoot, resolvedPath);
+        const sourceFileObj = exportDecl.getModuleSpecifierSourceFile();
+        const resolvedPathMaybe = sourceFileObj ? sourceFileObj.getFilePath() : undefined;
+        if (typeof resolvedPathMaybe === 'string') {
+          const relativePath = path.relative(this.projectRoot, resolvedPathMaybe as string);
           imports.push({ Path: relativePath });
         } else {
           imports.push({ Path: "external:" + originalPath });
