@@ -128,29 +128,20 @@ export class ModuleParser {
     // Export declarations (re-exports)
     const exportDeclarations = sourceFile.getExportDeclarations();
     for (const exportDecl of exportDeclarations) {
-      // Some export declarations do not have a module specifier (e.g., `export { A, B }`) – guard before accessing
-      if (!exportDecl.hasModuleSpecifier()) {
-        continue;
-      }
+      // Guard: only handle re-export forms that have a module specifier
+      const specNode = exportDecl.getModuleSpecifier();
+      if (!specNode) continue;
 
-      let originalPath = '';
-      try {
-        const maybe = exportDecl.getModuleSpecifierValue();
-        originalPath = (maybe ?? '');
-      } catch {
-        // ts-morph throws if module specifier is not a string literal; skip safely
-        continue;
-      }
+      const originalPath = specNode.getLiteralText?.() ?? specNode.getText?.() ?? '';
+      if (!originalPath) continue;
 
-      if (originalPath) {
-        const sourceFileObj = exportDecl.getModuleSpecifierSourceFile();
-        const resolvedPathMaybe = sourceFileObj ? sourceFileObj.getFilePath() : undefined;
-        if (typeof resolvedPathMaybe === 'string') {
-          const relativePath = path.relative(this.projectRoot, resolvedPathMaybe as string);
-          imports.push({ Path: relativePath });
-        } else {
-          imports.push({ Path: "external:" + originalPath });
-        }
+      const sourceFileObj = exportDecl.getModuleSpecifierSourceFile();
+      const resolvedPathMaybe = sourceFileObj ? sourceFileObj.getFilePath() : undefined;
+      if (typeof resolvedPathMaybe === 'string') {
+        const relativePath = path.relative(this.projectRoot, resolvedPathMaybe as string);
+        imports.push({ Path: relativePath });
+      } else {
+        imports.push({ Path: "external:" + originalPath });
       }
     }
     return imports;
