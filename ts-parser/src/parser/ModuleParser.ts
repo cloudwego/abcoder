@@ -103,43 +103,73 @@ export class ModuleParser {
 
   private extractImports(sourceFile: SourceFile, _modulePath: string): Array<{ Path: string }> {
     const imports: Array<{ Path: string }> = [];
-    
-    // Track unique import paths to avoid duplicates
     const uniquePaths = new Set<string>();
-    
-    // Import declarations
-    const importDeclarations = sourceFile.getImportDeclarations();
-    for (const importDecl of importDeclarations) {
-      const originalPath = importDecl.getModuleSpecifierValue();
-      const resolvedPath = importDecl.getModuleSpecifierSourceFile()?.getFilePath();
-      if (resolvedPath) {
-        const relativePath = path.relative(this.projectRoot, resolvedPath);
 
-        if(uniquePaths.has(relativePath)) {
-          continue;
+    // Safely process import declarations
+    try {
+      const importDeclarations = sourceFile.getImportDeclarations();
+      for (const importDecl of importDeclarations) {
+        try {
+          const originalPath = importDecl.getModuleSpecifierValue();
+          if (!originalPath) continue;
+
+          const resolvedPathMaybe = importDecl.getModuleSpecifierSourceFile()?.getFilePath();
+          if (typeof resolvedPathMaybe === 'string') {
+            const relativePath = path.relative(this.projectRoot, resolvedPathMaybe);
+            if (!uniquePaths.has(relativePath)) {
+              uniquePaths.add(relativePath);
+              imports.push({ Path: relativePath });
+            }
+          } else {
+            const externalPath = `external:${originalPath}`;
+            if (!uniquePaths.has(externalPath)) {
+              uniquePaths.add(externalPath);
+              imports.push({ Path: externalPath });
+            }
+          }
+        } catch (error) {
+          console.warn(`[Worker ${process.pid}] Skipping problematic import in ${sourceFile.getFilePath()}:`, error);
         }
-        uniquePaths.add(relativePath);
-        imports.push({ Path: relativePath });
-      } else {
-        imports.push({ Path: "external:" + originalPath });
       }
+    } catch (error) {
+      console.error(`[Worker ${process.pid}] Failed to process import declarations in ${sourceFile.getFilePath()}:`, error);
     }
-    
-    // Export declarations (re-exports)
-    const exportDeclarations = sourceFile.getExportDeclarations();
-    for (const exportDecl of exportDeclarations) {
-      const originalPath = exportDecl.getModuleSpecifierValue();
-      if (originalPath) {
-        const resolvedPath = exportDecl.getModuleSpecifierSourceFile()?.getFilePath();
-        if (resolvedPath) {
-          const relativePath = path.relative(this.projectRoot, resolvedPath);
-          imports.push({ Path: relativePath });
-        } else {
-          imports.push({ Path: "external:" + originalPath });
+
+    // Safely process export declarations
+    try {
+      const exportDeclarations = sourceFile.getExportDeclarations();
+      for (const exportDecl of exportDeclarations) {
+        try {
+          const specNode = exportDecl.getModuleSpecifier();
+          if (!specNode) continue;
+
+          const originalPath = specNode.getLiteralText?.() ?? specNode.getText?.() ?? '';
+          if (!originalPath) continue;
+
+          const sourceFileObj = exportDecl.getModuleSpecifierSourceFile();
+          const resolvedPathMaybe = sourceFileObj ? sourceFileObj.getFilePath() : undefined;
+
+          if (typeof resolvedPathMaybe === 'string') {
+            const relativePath = path.relative(this.projectRoot, resolvedPathMaybe);
+            if (!uniquePaths.has(relativePath)) {
+              uniquePaths.add(relativePath);
+              imports.push({ Path: relativePath });
+            }
+          } else {
+            const externalPath = `external:${originalPath}`;
+            if (!uniquePaths.has(externalPath)) {
+              uniquePaths.add(externalPath);
+              imports.push({ Path: externalPath });
+            }
+          }
+        } catch (error) {
+          console.warn(`[Worker ${process.pid}] Skipping problematic export in ${sourceFile.getFilePath()}:`, error);
         }
       }
+    } catch (error) {
+      console.error(`[Worker ${process.pid}] Failed to process export declarations in ${sourceFile.getFilePath()}:`, error);
     }
+
     return imports;
   }
-
 }
