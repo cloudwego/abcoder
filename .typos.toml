@@ -1,0 +1,2 @@
+[files]
+extend-exclude = ["testdata/**", "testrepo/**", "sentry/**"]
