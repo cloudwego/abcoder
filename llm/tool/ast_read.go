@@ -398,7 +398,9 @@ func (t *ASTReadTools) GetFileStructure(_ context.Context, req GetFileStructReq)
 	log.Debug("get file structure, req: %v", abutil.MarshalJSONIndentNoError(req))
 	resp, err := t.getFileStructure(context.Background(), req, true)
 	if err != nil {
-		resp.Error = err.Error()
+		return &GetFileStructResp{
+			Error: err.Error(),
+		}, nil
 	}
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
 	return resp, nil
