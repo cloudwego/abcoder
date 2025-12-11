@@ -162,7 +162,7 @@ func getDeps(dir string) (map[string]string, error) {
 
 	cmd = exec.Command("go", "list", "-json", "all")
 	cmd.Dir = dir
-	output, err = cmd.CombinedOutput()
+	output, err = cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s", err, string(output))
 	}
@@ -175,7 +175,7 @@ func getDeps(dir string) (map[string]string, error) {
 			if err.Error() == "EOF" {
 				break
 			}
-			return nil, fmt.Errorf("failed to decode json: %v", err)
+			return nil, fmt.Errorf("failed to decode json: %w, output: %s", err, string(output))
 		}
 		module := mod.Module
 		// golang internal package, ignore it.
