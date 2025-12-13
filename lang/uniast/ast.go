@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 type Language string
@@ -196,6 +198,7 @@ type Module struct {
 	Packages     map[PkgPath]*Package // pkage import path => Package
 	Dependencies map[string]string    `json:",omitempty"`              // module name => module_path@version
 	Files        map[string]*File     `json:",omitempty"`              // relative path => file info
+	LoadErrors   []packages.Error     `json:"load_errors,omitempty"`   // packages.Load error
 	CompressData *string              `json:"compress_data,omitempty"` // module compress info
 }
 
