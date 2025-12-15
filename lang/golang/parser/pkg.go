@@ -58,6 +58,9 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 		} else {
 			match, path := matchMod(importPath, mod.Dependencies)
 			if match == "" {
+				if !strings.HasPrefix(importPath, mod.Name) {
+					fmt.Fprintf(os.Stderr, "package %s not found mod", importPath)
+				}
 				projectImports[importAlias] = importPath
 			} else {
 				thirdPartyImports[importAlias] = [2]string{path, importPath}
