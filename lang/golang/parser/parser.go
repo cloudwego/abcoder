@@ -155,7 +155,7 @@ func getDeps(dir string) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s", err, string(output))
 	}
-	// 忽略开头的内容直到 {
+	// ignore content until first open
 	index := strings.Index(string(output), "{")
 	if index == -1 {
 		return nil, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
