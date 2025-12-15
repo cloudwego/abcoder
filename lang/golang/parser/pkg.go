@@ -36,6 +36,11 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	ret := &importInfo{}
 	for _, imp := range impts {
 		importPath, _ := strconv.Unquote(imp.Path.Value) // remove the quotes
+		// skip CGO import path
+		if importPath == "C" {
+			continue
+		}
+
 		importAlias := ""
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
@@ -54,7 +59,7 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 			match, path := matchMod(importPath, mod.Dependencies)
 			if match == "" {
 				if !strings.HasPrefix(importPath, mod.Name) {
-					return nil, fmt.Errorf("package %s not found mod", importPath)
+					fmt.Fprintf(os.Stderr, "package %s not found mod", importPath)
 				}
 				projectImports[importAlias] = importPath
 			} else {
@@ -192,18 +197,22 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		if pp, ok := mod.Packages[pkg.ID]; ok && pp != nil {
 			continue
 		}
-	next_file:
 		for idx, file := range pkg.Syntax {
 			if idx >= len(pkg.GoFiles) {
 				fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
 				continue
 			}
 			filePath := pkg.GoFiles[idx]
+			var skip bool
 			for _, exclude := range p.exclues {
 				if exclude.MatchString(filePath) {
 					fmt.Fprintf(os.Stderr, "skip file %s\n", filePath)
-					continue next_file
+					skip = true
+					break
 				}
+			}
+			if skip {
+				continue
 			}
 			bs := p.getFileBytes(filePath)
 			ctx := &fileContext{
@@ -252,6 +261,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				delete(mod.Packages, obj.PkgPath)
 			}
 		}
+		mod.LoadErrors = append(mod.LoadErrors, pkg.Errors...)
 	}
 	return
 }

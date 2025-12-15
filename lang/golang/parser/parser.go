@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/uniast"
 )
 
@@ -148,25 +149,21 @@ type dep struct {
 }
 
 func getDeps(dir string) (map[string]string, error) {
-	// run go mod tidy first to ensure all dependencies are resolved
-	cmd := exec.Command("go", "mod", "tidy")
+	cmd := exec.Command("go", "list", "-e", "-json", "all")
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
-	}
-
-	if hasNoDeps(filepath.Join(dir, "go.mod")) {
-		return map[string]string{}, nil
-	}
-
-	cmd = exec.Command("go", "list", "-json", "all")
-	cmd.Dir = dir
-	output, err = cmd.Output()
-	if err != nil {
 		return nil, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s", err, string(output))
 	}
-
+	// ignore content until first open
+	index := strings.Index(string(output), "{")
+	if index == -1 {
+		return nil, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
+	}
+	if index > 0 {
+		log.Info("go list skip prefix, output: %s", string(output[:index]))
+		output = output[index:]
+	}
 	deps := make(map[string]string)
 	decoder := json.NewDecoder(bytes.NewReader(output))
 	for {
@@ -175,7 +172,7 @@ func getDeps(dir string) (map[string]string, error) {
 			if err.Error() == "EOF" {
 				break
 			}
-			return nil, fmt.Errorf("failed to decode json: %w, output: %s", err, string(output))
+			return nil, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
 		}
 		module := mod.Module
 		// golang internal package, ignore it.
