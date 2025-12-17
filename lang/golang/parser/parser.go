@@ -96,6 +96,8 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 }
 
 func (p *GoParser) collectGoMods(startDir string) error {
+	hasGoWork := false
+	deps := map[string]string{}
 	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
@@ -113,7 +115,7 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 
-		deps, err := getDeps(filepath.Dir(path))
+		deps, hasGoWork, err = getDeps(filepath.Dir(path), hasGoWork)
 		if err != nil {
 			return err
 		}
@@ -148,28 +150,34 @@ type dep struct {
 	} `json:"Module"`
 }
 
-func getDeps(dir string) (map[string]string, error) {
+func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, err error) {
 	// run go mod tidy first to ensure all dependencies are resolved
 	cmd := exec.Command("go", "mod", "tidy", "-e")
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+		return nil, hasGoWork, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
 	}
 	if hasNoDeps(filepath.Join(dir, "go.mod")) {
-		return map[string]string{}, nil
+		return map[string]string{}, hasGoWork, nil
 	}
 	// -mod=mod to use go mod when go mod is inconsistent with go vendor
-	cmd = exec.Command("go", "list", "-e", "-json", "-mod=mod", "all")
+	// if go.work exist, it's no need to set -mod=mod
+	if _, err = os.Stat(filepath.Join(dir, "go.work")); err == nil || goWork {
+		hasGoWork = true
+		cmd = exec.Command("go", "list", "-e", "-json", "all")
+	} else {
+		cmd = exec.Command("go", "list", "-e", "-json", "-mod=mod", "all")
+	}
 	cmd.Dir = dir
 	output, err = cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s", err, string(output))
+		return nil, hasGoWork, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
 	}
 	// ignore content until first open
 	index := strings.Index(string(output), "{")
 	if index == -1 {
-		return nil, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
+		return nil, hasGoWork, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
 	}
 	if index > 0 {
 		log.Info("go list skip prefix, output: %s", string(output[:index]))
@@ -183,7 +191,7 @@ func getDeps(dir string) (map[string]string, error) {
 			if err.Error() == "EOF" {
 				break
 			}
-			return nil, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
+			return nil, hasGoWork, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
 		}
 		module := mod.Module
 		// golang internal package, ignore it.
@@ -207,7 +215,7 @@ func getDeps(dir string) (map[string]string, error) {
 		}
 	}
 
-	return deps, nil
+	return deps, hasGoWork, nil
 }
 
 // ParseRepo parse the entiry repo from homePageDir recursively until end
