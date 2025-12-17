@@ -107,8 +107,14 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			// igore anonymous var
 			continue
 		}
-		if vspec.Values != nil {
-			val = &vspec.Values[i]
+		val = nil
+		if len(vspec.Values) > 0 {
+			// In this case:	_, b, _, _ = runtime.Caller(0), vspec.Values only has one element
+			if len(vspec.Values) == 1 && i > 0 {
+				val = &vspec.Values[0]
+			} else if i < len(vspec.Values) {
+				val = &vspec.Values[i]
+			}
 		}
 		v = p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
@@ -141,6 +147,29 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(vspec.Type)))
 			}
 		} else if val != nil {
+			// Handle function call returning multiple values. For example: _, b, _, _ = runtime.Caller(0)
+			// If no these logic, the type of b is (pc uintptr, file string, line int, ok bool)
+			if _, ok := (*val).(*ast.CallExpr); ok {
+				// Get function signature type
+				if tinfo, ok := ctx.pkgTypeInfo.Types[*val]; ok {
+					if results, ok := tinfo.Type.(*types.Tuple); ok {
+						// Ensure index is valid
+						if i < results.Len() {
+							// Get the specific result type for this index
+							resultType := results.At(i).Type()
+							// Get type info for this specific result type
+							ti := ctx.getTypeinfo(resultType)
+							v.Type = &ti.Id
+							v.IsPointer = ti.IsPointer
+							for _, dep := range ti.Deps {
+								v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(*val)))
+							}
+							continue
+						}
+					}
+				}
+			}
+			// Fallback to original behavior if not a function call or index invalid
 			ti := ctx.GetTypeInfo(*val)
 			v.Type = &ti.Id
 			v.IsPointer = ti.IsPointer
