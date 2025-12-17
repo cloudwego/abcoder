@@ -149,9 +149,20 @@ type dep struct {
 }
 
 func getDeps(dir string) (map[string]string, error) {
-	cmd := exec.Command("go", "list", "-e", "-json", "all")
+	// run go mod tidy first to ensure all dependencies are resolved
+	cmd := exec.Command("go", "mod", "tidy", "-e")
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+	}
+	if hasNoDeps(filepath.Join(dir, "go.mod")) {
+		return map[string]string{}, nil
+	}
+	// -mod=mod to use go mod when go mod is inconsistent with go vendor
+	cmd = exec.Command("go", "list", "-e", "-json", "-mod=mod", "all")
+	cmd.Dir = dir
+	output, err = cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s", err, string(output))
 	}
