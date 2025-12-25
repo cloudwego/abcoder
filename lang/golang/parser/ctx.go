@@ -86,7 +86,15 @@ func (p *GoParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	if pkg == nil {
 		return fmt.Errorf("cannot find package %s", id.PkgPath)
 	}
-	for _, fpath := range pkg.GoFiles {
+
+	var files []string
+	if len(p.cgoPkgs) > 0 {
+		files = pkg.CompiledGoFiles
+	} else {
+		files = pkg.GoFiles
+	}
+
+	for _, fpath := range files {
 		bs := p.getFileBytes(fpath)
 		file, err := parser.ParseFile(pkg.Fset, fpath, bs, parser.ParseComments)
 		if err != nil {
