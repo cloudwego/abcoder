@@ -172,24 +172,44 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s\n", mod.Name, dir, pkgPath)
 	fset := token.NewFileSet()
 	loadCount++
-	// slow-path: load packages in the dir, including sub pakcages
-	opts := packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
+
+	baseOpts := packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
+	if p.opts.ReferCodeDepth != 0 {
+		baseOpts |= packages.NeedDeps
+	}
+	if p.opts.NeedTest {
+		baseOpts |= packages.NeedForTest
+	}
+
 	cfg := &packages.Config{
-		Mode: opts,
+		Mode: baseOpts,
 		Fset: fset,
 		Dir:  dir,
 	}
-	if p.opts.ReferCodeDepth != 0 {
-		opts |= packages.NeedDeps
-	}
+
 	if p.opts.NeedTest {
-		opts |= packages.NeedForTest
 		cfg.Tests = true
 	}
+
 	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
 		return fmt.Errorf("load path '%s' failed: %v", dir, err)
 	}
+
+	hasCGO := false
+	if len(p.cgoPkgs) > 0 {
+		hasCGO = true
+	}
+	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s, hasCGO: %v\n", mod.Name, dir, pkgPath, hasCGO)
+	if hasCGO {
+		baseOpts |= packages.NeedCompiledGoFiles
+		cfg.Mode = baseOpts
+		pkgs, err = packages.Load(cfg, pkgPath)
+		if err != nil {
+			return fmt.Errorf("load path '%s' with CGO failed: %v", dir, err)
+		}
+	}
+
 	for _, pkg := range pkgs {
 		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
 			continue
@@ -198,11 +218,18 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			continue
 		}
 		for idx, file := range pkg.Syntax {
-			if idx >= len(pkg.GoFiles) {
-				fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
-				continue
+			var filePath string
+			if hasCGO {
+				// Cgo file path is tmp file path, like:  /Users/bytedance/Library/Caches/go-build/61/6150fdadd44b9dca151737e261abf95697ba13b799e8dbdd464c0c27b443792a-d.
+				// We should get it through CompiledGoFiles
+				if idx >= len(pkg.CompiledGoFiles) {
+					fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
+					continue
+				}
+				filePath = pkg.CompiledGoFiles[idx]
+			} else {
+				filePath = fset.Position(file.Pos()).Filename
 			}
-			filePath := pkg.GoFiles[idx]
 			var skip bool
 			for _, exclude := range p.exclues {
 				if exclude.MatchString(filePath) {

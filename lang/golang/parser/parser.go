@@ -47,6 +47,7 @@ type GoParser struct {
 	types       map[types.Type]Identity
 	files       map[string][]byte
 	exclues     []*regexp.Regexp
+	cgoPkgs     map[string]bool // CGO packages
 }
 
 type moduleInfo struct {
@@ -98,6 +99,7 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 func (p *GoParser) collectGoMods(startDir string) error {
 	hasGoWork := false
 	deps := map[string]string{}
+	var cgoPkgs map[string]bool
 	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
@@ -115,9 +117,17 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 
-		deps, hasGoWork, err = getDeps(filepath.Dir(path), hasGoWork)
+		deps, hasGoWork, cgoPkgs, err = getDeps(filepath.Dir(path), hasGoWork)
 		if err != nil {
 			return err
+		}
+		if p.cgoPkgs == nil {
+			p.cgoPkgs = make(map[string]bool)
+		}
+		for pkgPath := range cgoPkgs {
+			if strings.HasPrefix(pkgPath, name) {
+				p.cgoPkgs[pkgPath] = true
+			}
 		}
 		for k, v := range deps {
 			p.repo.Modules[name].Dependencies[k] = v
@@ -148,18 +158,29 @@ type dep struct {
 		Dir      string   `json:"Dir"`
 		GoMod    string   `json:"GoMod"`
 	} `json:"Module"`
+	CgoFiles []string `json:"CgoFiles"`
 }
 
-func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, err error) {
+func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, cgoPkgs map[string]bool, err error) {
+	cgoPkgs = make(map[string]bool)
 	// run go mod tidy first to ensure all dependencies are resolved
 	cmd := exec.Command("go", "mod", "tidy", "-e")
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GONOSUMDB=*")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, hasGoWork, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+		fmt.Fprintf(os.Stderr, "failed to execute 'go mod tidy', err: %v, output: %s, remove go.sum file reexecute\n", err, string(output))
+		os.Remove(filepath.Join(dir, "go.sum"))
+		cmd = exec.Command("go", "mod", "tidy", "-e")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GOSUMDB=off")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+		}
 	}
 	if hasNoDeps(filepath.Join(dir, "go.mod")) {
-		return map[string]string{}, hasGoWork, nil
+		return map[string]string{}, hasGoWork, cgoPkgs, nil
 	}
 	// -mod=mod to use go mod when go mod is inconsistent with go vendor
 	// if go.work exist, it's no need to set -mod=mod
@@ -170,14 +191,15 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, err 
 		cmd = exec.Command("go", "list", "-e", "-json", "-mod=mod", "all")
 	}
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOSUMDB=off")
 	output, err = cmd.CombinedOutput()
 	if err != nil {
-		return nil, hasGoWork, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
+		return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
 	}
 	// ignore content until first open
 	index := strings.Index(string(output), "{")
 	if index == -1 {
-		return nil, hasGoWork, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
+		return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
 	}
 	if index > 0 {
 		log.Info("go list skip prefix, output: %s", string(output[:index]))
@@ -191,12 +213,15 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, err 
 			if err.Error() == "EOF" {
 				break
 			}
-			return nil, hasGoWork, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
+			return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
 		}
 		module := mod.Module
 		// golang internal package, ignore it.
 		if module.Path == "" {
 			continue
+		}
+		if len(mod.CgoFiles) > 0 {
+			cgoPkgs[module.Path] = true
 		}
 		if module.Replace != nil {
 			deps[module.Path] = module.Replace.Path + "@" + module.Replace.Version
@@ -214,8 +239,7 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, err 
 			}
 		}
 	}
-
-	return deps, hasGoWork, nil
+	return deps, hasGoWork, cgoPkgs, nil
 }
 
 // ParseRepo parse the entiry repo from homePageDir recursively until end
