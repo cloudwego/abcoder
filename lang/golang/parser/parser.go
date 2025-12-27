@@ -223,8 +223,15 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, cgoP
 		if len(mod.CgoFiles) > 0 {
 			cgoPkgs[module.Path] = true
 		}
+
 		if module.Replace != nil {
-			deps[module.Path] = module.Replace.Path + "@" + module.Replace.Version
+			if strings.HasPrefix(module.Replace.Path, "./") ||
+				strings.HasPrefix(module.Replace.Path, "../") ||
+				strings.HasPrefix(module.Replace.Path, "/") {
+				// local replace
+				deps[module.Path] = module.Path
+
+			}
 		} else {
 			if module.Version != "" {
 				deps[module.Path] = module.Path + "@" + module.Version
