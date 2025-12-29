@@ -67,7 +67,7 @@ class DiffResult:
 
         # Handle removed items (dictionary_item_removed and iterable_item_removed)
         if self.diff is not None and "dictionary_item_removed" in self.diff:
-            for accessor, value in self.diff["dictionary_item_removed"]:
+            for accessor in self.diff["dictionary_item_removed"]:
                 add_item(accessor, ("removed", _get_accessor(self.json1, accessor)))
 
         if self.diff is not None and "iterable_item_removed" in self.diff:
