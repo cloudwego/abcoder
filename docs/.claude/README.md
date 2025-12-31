@@ -17,9 +17,7 @@ Claude Code 的 AST 驱动开发配置，通过 MCP 工具、钩子和斜杠命�
 │   ├── schd.md        # /schd - 设计实现方案
 │   └── recheck.md     # /recheck - 技术方案核对
 └── tmpls/             # 文档模板
-    ├── CODE_TASK.md   # 编码任务模板
-    ├── MethodDoc.md   # 方法文档模板
-    └── APIDoc.md      # API 文档模板
+    └── CODE_TASK.md   # 编码任务模板
 ```
 
 ## 核心理念
