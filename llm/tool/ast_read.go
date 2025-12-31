@@ -33,15 +33,15 @@ import (
 
 const (
 	ToolListRepos           = "list_repos"
-	DescListRepos           = "list all repositories"
+	DescListRepos           = "[DISCOVERY] level1/4: List all repositories. No parameters required. Always the first step in any analysis workflow."
 	ToolGetRepoStructure    = "get_repo_structure"
-	DescGetRepoStructure    = "get the repository structure, including package list and file list"
+	DescGetRepoStructure    = "[STRUCTURE] level2/4: Get repository structure. Input: repo_name from list_repos output. Output: modules with packages and files."
 	ToolGetPackageStructure = "get_package_structure"
-	DescGetPackageStructure = "get the package (NameSpace) structure, including file list and node-id list"
+	DescGetPackageStructure = "[STRUCTURE] level3/4: Get package structure with node_ids. Input: repo_name, mod_path, pkg_path from get_repo_structure output. Output: files with node_ids."
 	ToolGetFileStructure    = "get_file_structure"
-	DescGetFileStructure    = "get the file structure, including node (id,signature,type) list"
+	DescGetFileStructure    = "[STRUCTURE] level3/4: Get file structure with node list. Input: repo_name, file_path from get_repo_structure output. Output: nodes with signatures."
 	ToolGetASTNode          = "get_ast_node"
-	DescGetASTNode          = "precisely get the codes, type, location of a specific ast node, as well as the identities of related (Dependend/Reference/Implement/Inherit/Group) nodes"
+	DescGetASTNode          = "[ANALYSIS] level4/4: Get detailed AST node info. Input: repo_name, node_ids from previous calls. Output: codes, dependencies, references, implementations."
 	// ToolWriteASTNode        = "write_ast_node"
 )
 
@@ -165,8 +165,7 @@ func (t *ASTReadTools) GetTool(name string) Tool {
 	return t.tools[name]
 }
 
-type ListReposReq struct {
-}
+type ListReposReq struct{}
 
 type ListReposResp struct {
 	RepoNames []string `json:"repo_names" jsonschema:"description=the names of the repositories"`
@@ -182,7 +181,7 @@ func (t *ASTReadTools) ListRepos(ctx context.Context, req ListReposReq) (*ListRe
 }
 
 type GetRepoStructReq struct {
-	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository"`
+	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
 }
 
 type GetRepoStructResp struct {
@@ -223,9 +222,9 @@ type NodeStruct struct {
 }
 
 type NodeID struct {
-	ModPath uniast.ModPath `json:"mod_path" jsonschema:"description=the mod path of the node"`
-	PkgPath uniast.PkgPath `json:"pkg_path" jsonschema:"description=the package path of the node"`
-	Name    string         `json:"name" jsonschema:"description=the name of the node"`
+	ModPath uniast.ModPath `json:"mod_path" jsonschema:"description=module path of the node (from get_repo_structure)"`
+	PkgPath uniast.PkgPath `json:"pkg_path" jsonschema:"description=package path of the node (from get_repo_structure)"`
+	Name    string         `json:"name" jsonschema:"description=name of the node (from get_package_structure or get_file_structure)"`
 }
 
 func NewNodeID(id uniast.Identity) NodeID {
@@ -257,13 +256,13 @@ func (t *ASTReadTools) getRepoAST(repoName string) (*uniast.Repository, error) {
 		if len(candis) == 1 {
 			repo, ok = t.repos.Load(candis[0])
 			if !ok {
-				return nil, fmt.Errorf("repo '%s' not found", candis[0])
+				return nil, fmt.Errorf("repo '%s' not found. Use `list_repos` to get valid repo_name", candis[0])
 			}
 			return repo.(*uniast.Repository), nil
 		} else if len(candis) > 1 {
 			return nil, fmt.Errorf("repo '%s' is ambiguous, maybe you want one of %v", repoName, candis)
 		} else {
-			return nil, fmt.Errorf("repo '%s' not found", repoName)
+			return nil, fmt.Errorf("repo '%s' not found. Use `list_repos` to get valid repo_name", repoName)
 		}
 	}
 	return repo.(*uniast.Repository), nil
@@ -306,9 +305,9 @@ func (t *ASTReadTools) GetRepoStructure(_ context.Context, req GetRepoStructReq)
 }
 
 type GetPackageStructReq struct {
-	RepoName string         `json:"repo_name" jsonschema:"description=the name of the repository"`
-	ModPath  uniast.ModPath `json:"mod_path" jsonschema:"description=the module path"`
-	PkgPath  uniast.PkgPath `json:"package_path" jsonschema:"description=the package path"`
+	RepoName string         `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+	ModPath  uniast.ModPath `json:"mod_path" jsonschema:"description=the module path (output of get_repo_structure tool)"`
+	PkgPath  uniast.PkgPath `json:"package_path" jsonschema:"description=the package path (output of get_repo_structure tool)"`
 }
 
 type GetPackageStructResp struct {
@@ -384,8 +383,8 @@ func (t *ASTReadTools) GetPackageStructure(ctx context.Context, req GetPackageSt
 }
 
 type GetFileStructReq struct {
-	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository"`
-	FilePath string `json:"file_paths" jsonschema:"description=the file paths"`
+	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+	FilePath string `json:"file_path" jsonschema:"description=relative file path (output of get_repo_structure tool, e.g., 'src/main.go')"`
 }
 
 type GetFileStructResp struct {
@@ -415,7 +414,7 @@ func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq,
 	resp := new(GetFileStructResp)
 	file, mod := repo.GetFile(req.FilePath)
 	if file == nil {
-		return nil, fmt.Errorf("file '%s' not found", req.FilePath)
+		return nil, fmt.Errorf("file '%s' not found. Use 'get_repo_structure' to get valid file paths", req.FilePath)
 	}
 
 	nodes := repo.GetFileNodes(req.FilePath)
@@ -445,8 +444,8 @@ func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq,
 }
 
 type GetASTNodeReq struct {
-	RepoName string   `json:"repo_name" jsonschema:"description=the name of the repository"`
-	NodeIDs  []NodeID `json:"node_ids" jsonschema:"description=the identities of the ast node"`
+	RepoName string   `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+	NodeIDs  []NodeID `json:"node_ids" jsonschema:"description=the identities of the ast node (output of get_package_structure or get_file_structure tool)"`
 }
 
 type GetASTNodeResp struct {
@@ -509,7 +508,7 @@ func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*Get
 	}
 
 	if len(resp.Nodes) == 0 {
-		resp.Error = "node not found, maybe you should check the pkg_path or node_name?"
+		resp.Error = "node not found. Use `get_package_structure` to list all valid nodes. If it cannot be confirmed, call `get_file_structure` for detailed node information"
 	}
 
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
