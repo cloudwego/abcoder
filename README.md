@@ -79,10 +79,105 @@ see [UniAST Specification](docs/uniast-zh.md)
 
     
 ## Tips:
-    
+
 - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
-    
+
 - Try to use [the recommened prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
+
+
+## Claude Code Integration
+
+ABCoder provides deep integration with [Claude Code](https://claude.ai/code) through the AST-Driven Coding workflow, enabling hallucination-free code analysis and precise execution.
+
+### Setup
+
+1. **Install ABCoder Claude Configuration**
+
+   Copy [`docs/.claude/`](docs/.claude/) to your home directory or project root:
+
+   ```bash
+   cp -r docs/.claude ~/
+   ```
+
+2. **Configure ABCoder MCP Server**
+
+   Configure in Claude Code's `~/.claude.json` (the hook uses `abcoder parse go/ts . -o ~/.asts/repo.json` for the default AST folder):
+
+   ```json
+   {
+       "mcpServers": {
+           "abcoder": {
+               "command": "abcoder",
+               "args": ["mcp", "~/.asts"]
+           }
+       }
+   }
+   ```
+
+3. **Configure Hooks**
+
+   Claude Code will automatically read hooks from [`~/.claude/settings.json`](docs/.claude/settings.json) to enable:
+   - Auto-detect language and generate AST before calling `mcp__abcoder` tools
+   - Display ABCoder workflow SOP to Claude after `list_repos`
+   - Remind to call `get_ast_node` recursively
+
+### AST-Driven Coding Workflow
+
+[`.claude/hooks`](docs/.claude/hooks) provide a 4-layer analysis chain from repository to node details:
+
+```
+list_repos → get_repo_structure → get_package_structure → get_file_structure → get_ast_node
+     │              │                      │                       │                    │
+     └── repo_name  └── mod/pkg list       └── file list           └── node list        └── dependencies/references
+```
+
+### Claude Code Slash Commands
+
+[`.claude/commands`](docs/.claude/commands) provide three custom slash commands to streamline development:
+
+| Command | Function | Description |
+|---------|----------|-------------|
+| [`/schd`](docs/.claude/commands/schd.md) | Design implementation | Analyze codebase using ABCoder, design technical solution |
+| [`/task <name>`](docs/.claude/commands/task.md) | Create coding task | Generate standardized CODE_TASK document |
+| [`/recheck <task>`](docs/.claude/commands/recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
+
+### Workflow
+
+```
+User Request
+    │
+    ▼
+/schd ──────────────→ Design Solution (ABCoder Analysis)
+    │                     │
+    ▼                     ▼
+/task ────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
+    │                     │
+    ▼                     ▼
+/recheck ─────→ Verify Solution (ABCoder Validation. After `/task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/recheck` to analyze external ast_node and technical detail with ABCoder)
+    │                     │
+    ▼                     ▼
+coding-executor ─→ Execute Implementation
+```
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| [`CLAUDE.md`](docs/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
+| [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
+| [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
+| [`commands/`](docs/.claude/commands/) | Slash command definitions (task/schd/recheck) |
+| [`tmpls/CODE_TASK.md`](docs/.claude/tmpls/CODE_TASK.md) | Coding task template |
+
+### Dependencies
+
+- Claude Code CLI
+- abcoder MCP server (provides `mcp__abcoder` tools)
+- sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, optional)
+
+> For detailed configuration, see [docs/.claude/README.md](docs/.claude/README.md)
+
+> Watch the demo video [here](https://github.com/cloudwego/abcoder/pull/141)
 
 
 ## Use ABCoder as an Agent (WIP)
