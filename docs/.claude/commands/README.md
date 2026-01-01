@@ -110,5 +110,5 @@ coding-executor ─→ 执行实现
 │   ├── schd.md
 │   └── recheck.md
 └── tmpls/
-    ├── CODE_TASK.md
+    └── CODE_TASK.md
 ```

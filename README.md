@@ -147,7 +147,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 User Request
     │
     ▼
-/schd ──────────────→ Design Solution (ABCoder Analysis)
+/schd ────────→ Design Solution (ABCoder Analysis)
     │                     │
     ▼                     ▼
 /task ────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
@@ -156,7 +156,7 @@ User Request
 /recheck ─────→ Verify Solution (ABCoder Validation. After `/task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/recheck` to analyze external ast_node and technical detail with ABCoder)
     │                     │
     ▼                     ▼
-coding-executor ─→ Execute Implementation
+sub-agent ────→ Execute Implementation
 ```
 
 ### Configuration Files

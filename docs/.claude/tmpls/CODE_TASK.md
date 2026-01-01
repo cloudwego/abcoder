@@ -16,10 +16,11 @@
 2. [ ] 创建ComfortInfo数据源的客户端
    - file: clients/comfort_client.go
    - action: create
-   - 涉及`go-redis`的`newClient` Method
-``
-mcp__abcoder__get_ast_node "repo_name" '[{"mod_path":"node/mod/path","pkg_path":"node/pkg/path","name":"node_name"}]'
-``
+   - 涉及`go-redis`的`NewClient` Method（`redis.go:1035`）
+   - 使用 `mcp__abcoder__get_ast_node` 获取函数定义和依赖：
+   ``
+   mcp__abcoder__get_ast_node "github.com/redis/go-redis" '[{"mod_path":"github.com/redis/go-redis/v9","pkg_path":"github.com/redis/go-redis/v9","name":"NewClient"}]'
+   ``
 
 3. [ ] 在FlightService中增加调用comfort_client的逻辑
    - file: services/flight_service.go
@@ -71,9 +72,6 @@ curl -X POST 'localhost:4379/mcp' \
 [INFO] FlightDetailsResponse: xxx
 ```
 
-```
-
-```
 ## 注意事项
 IMPORTANT: 保持格式简单，让 Claude Code 专注于执行
 - action 可选: create/modify/delete
