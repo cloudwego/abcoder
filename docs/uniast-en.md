@@ -148,7 +148,7 @@ An independent code compilation unit, corresponding to ModPath in Identity, cont
 - Dependencies: Dictionary of third-party dependency modules for module building {ModName}: {ModPath}
 
 
-- Packages: Contains subpackages, {PkgPath}: {Pacakge AST} dictionary
+- Packages: Contains subpackages, {PkgPath}: {Package AST} dictionary
 
 
 - Files: Module file information, where the key is the **path relative to the repo**. It is recommended to include all repository files here to facilitate writer rewriting
@@ -632,7 +632,7 @@ const (
     FUNC
     // Struct、TypeAlias、Enum...
     TYPE
-    // Global Varable or Global Const
+    // Global Variable or Global Const
     VAR
 )
 ```

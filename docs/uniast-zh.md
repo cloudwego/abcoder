@@ -149,7 +149,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 - Dependencies: 模块构建的第三方依赖模块字典 {ModName}: {ModPath}
 
 
-- Packages: 包含的子包，{PkgPath}: {Pacakge AST} 字典
+- Packages: 包含的子包，{PkgPath}: {Package AST} 字典
 
 
 - Files: 模块文件信息，key 为**相对 repo 的路径。**这里建议包括仓库所有文件，方便 writer 回写
@@ -633,7 +633,7 @@ const (
     FUNC
     // Struct、TypeAlias、Enum...
     TYPE
-    // Global Varable or Global Const
+    // Global Variable or Global Const
     VAR
 )
 ```

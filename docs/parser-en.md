@@ -38,7 +38,7 @@ type LanguageSpec interface {
     WorkSpace(root string) (map[string]string, error)
 
     // give an absolute file path and returns its module name and package path
-    // external path should alse be supported
+    // external path should also be supported
     // FIXEM: some language (like rust) may have sub-mods inside a file, but we still consider it as a unity mod here
     NameSpace(path string) (string, string, error)
 

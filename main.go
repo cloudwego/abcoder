@@ -151,7 +151,7 @@ func main() {
 	case "write":
 		_, uri := parseArgsAndFlags(flags, false, flagHelp, flagVerbose)
 		if uri == "" {
-			log.Error("Arguement Path is required\n")
+			log.Error("Argument Path is required\n")
 			os.Exit(1)
 		}
 
@@ -175,7 +175,7 @@ func main() {
 	case "mcp":
 		_, uri := parseArgsAndFlags(flags, false, flagHelp, flagVerbose)
 		if uri == "" {
-			log.Error("Arguement Path is required\n")
+			log.Error("Argument Path is required\n")
 			os.Exit(1)
 		}
 
@@ -195,7 +195,7 @@ func main() {
 	case "agent":
 		_, uri := parseArgsAndFlags(flags, false, flagHelp, flagVerbose)
 		if uri == "" {
-			log.Error("Arguement Path is required\n")
+			log.Error("Argument Path is required\n")
 			os.Exit(1)
 		}
 
@@ -236,7 +236,7 @@ func parseArgsAndFlags(flags *flag.FlagSet, needLang bool, flagHelp *bool, flagV
 			os.Exit(1)
 		}
 		if len(os.Args) < 4 {
-			fmt.Fprintf(os.Stderr, "arguement Path is required\n")
+			fmt.Fprintf(os.Stderr, "argument Path is required\n")
 			os.Exit(1)
 		}
 		uri = os.Args[3]
