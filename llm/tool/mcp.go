@@ -28,7 +28,7 @@ import (
 
 type MCPConfig struct {
 	Type   MCPType
-	Comand string
+	Command string
 	Args   []string
 	Envs   []string
 	SSEURL string
@@ -50,10 +50,10 @@ func NewMCPClient(opts MCPConfig) (*MCPClient, error) {
 	var err error
 	switch opts.Type {
 	case MCPTypeStdio:
-		if opts.Comand == "" {
-			return nil, errors.New("comand is empty")
+		if opts.Command == "" {
+			return nil, errors.New("command is empty")
 		}
-		cli, err = client.NewStdioMCPClient(opts.Comand, opts.Envs, opts.Args...)
+		cli, err = client.NewStdioMCPClient(opts.Command, opts.Envs, opts.Args...)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +112,7 @@ func GetSequentialThinkingTools(ctx context.Context) ([]Tool, error) {
 	sync.OnceFunc(func() {
 		cli, err := NewMCPClient(MCPConfig{
 			Type:   MCPTypeStdio,
-			Comand: "npx",
+			Command: "npx",
 			Args: []string{
 				"-y",
 				"@modelcontextprotocol/server-sequential-thinking",
@@ -136,7 +136,7 @@ func GetGitTools(ctx context.Context) ([]Tool, error) {
 	sync.OnceFunc(func() {
 		cli, err := NewMCPClient(MCPConfig{
 			Type:   MCPTypeStdio,
-			Comand: "uvx",
+			Command: "uvx",
 			Args: []string{
 				"mcp-server-git",
 			},
