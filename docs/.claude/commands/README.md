@@ -4,7 +4,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 ## 命令说明
 
-### /task - 创建编码任务
+### /abcoder:task - 创建编码任务
 
 创建 CODE_TASK 文档，规范化编码需求描述。
 
@@ -17,8 +17,8 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 **使用示例**:
 ```
-/task Feature_Auth     → 创建 ./task/1231/Feature_Auth__CODE_TASK.md
-/task Bugfix-Api       → 创建 ./task/1231/Bugfix_Api__CODE_TASK.md
+/abcoder:task Feature_Auth     → 创建 ./task/1231/Feature_Auth__CODE_TASK.md
+/abcoder:task Bugfix-Api       → 创建 ./task/1231/Bugfix_Api__CODE_TASK.md
 ```
 
 **CODE_TASK 格式要求**:
@@ -30,7 +30,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 ---
 
-### /schd - 设计实现方案
+### /abcoder:schd - 设计实现方案
 
 使用 mcp__abcoder 分析代码库，设计技术实现方案。
 
@@ -49,7 +49,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 ---
 
-### /recheck - 技术方案核对
+### /abcoder:recheck - 技术方案核对
 
 批判性检查 CODE_TASK 的技术可行性。
 
@@ -89,16 +89,16 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 用户需求
     │
     ▼
-/schd ──────────────→ 设计方案（abcoder分析）
-    │                     │
-    ▼                     ▼
-/task ────────→ CODE_TASK（含技术规格）
-    │                     │
-    ▼                     ▼
-/recheck ─────→ 方案核对（abcoder验证）
-    │                     │
-    ▼                     ▼
-coding-executor ─→ 执行实现
+/abcoder:schd ──────────────→ 设计方案（abcoder分析）
+    │                            │
+    ▼                            ▼
+/abcoder:task ────────→ CODE_TASK（含技术规格）
+    │                            │
+    ▼                            ▼
+/abcoder:recheck ─────→ 方案核对（abcoder验证）
+    │                            │
+    ▼                            ▼
+coding-executor ──────→ 执行实现
 ```
 
 ## 文件位置
@@ -106,9 +106,9 @@ coding-executor ─→ 执行实现
 ```
 ~/.claude/
 ├── commands/
-│   ├── task.md
-│   ├── schd.md
-│   └── recheck.md
+│   ├── abcoder:task.md
+│   ├── abcoder:schd.md
+│   └── abcoder:recheck.md
 └── tmpls/
     └── CODE_TASK.md
 ```

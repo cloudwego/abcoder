@@ -137,9 +137,9 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 
 | Command | Function | Description |
 |---------|----------|-------------|
-| [`/schd`](docs/.claude/commands/schd.md) | Design implementation | Analyze codebase using ABCoder, design technical solution |
-| [`/task <name>`](docs/.claude/commands/task.md) | Create coding task | Generate standardized CODE_TASK document |
-| [`/recheck <task>`](docs/.claude/commands/recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
+| [`/abcoder:schd`](docs/.claude/commands/abcoder:schd.md) | Design implementation | Analyze codebase using ABCoder, design technical solution |
+| [`/abcoder:task <name>`](docs/.claude/commands/abcoder:task.md) | Create coding task | Generate standardized CODE_TASK document |
+| [`/abcoder:recheck <task>`](docs/.claude/commands/abcoder:recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
 
 ### Workflow
 
@@ -147,16 +147,16 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 User Request
     │
     ▼
-/schd ────────→ Design Solution (ABCoder Analysis)
-    │                     │
-    ▼                     ▼
-/task ────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
-    │                     │
-    ▼                     ▼
-/recheck ─────→ Verify Solution (ABCoder Validation. After `/task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/recheck` to analyze external ast_node and technical detail with ABCoder)
-    │                     │
-    ▼                     ▼
-sub-agent ────→ Execute Implementation
+/abcoder:schd ──────────→ Design Solution (ABCoder Analysis)
+    │                          │
+    ▼                          ▼
+/abcoder:task ─────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
+    │                          │
+    ▼                          ▼
+/abcoder:recheck ────→ Verify Solution (ABCoder Validation. After `/abcoder:task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/abcoder:recheck` to analyze external ast_node and technical detail with ABCoder)
+    │                          │
+    ▼                          ▼
+sub-agent ─────────→ Execute Implementation
 ```
 
 ### Configuration Files
@@ -166,7 +166,7 @@ sub-agent ────→ Execute Implementation
 | [`CLAUDE.md`](docs/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
 | [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
 | [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
-| [`commands/`](docs/.claude/commands/) | Slash command definitions (task/schd/recheck) |
+| [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schd/abcoder:recheck) |
 | [`tmpls/CODE_TASK.md`](docs/.claude/tmpls/CODE_TASK.md) | Coding task template |
 
 ### Dependencies

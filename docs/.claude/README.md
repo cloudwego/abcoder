@@ -13,9 +13,9 @@ Claude Code 的 AST 驱动开发配置，通过 MCP 工具、钩子和斜杠命�
 │   ├── prompt.sh      # 显示工作流程 SOP
 │   └── reminder.sh    # 提醒递归调用 get_ast_node
 ├── commands/          # 斜杠命令定义
-│   ├── task.md        # /task - 创建编码任务
-│   ├── schd.md        # /schd - 设计实现方案
-│   └── recheck.md     # /recheck - 技术方案核对
+│   ├── abcoder:task.md        # /abcoder:task - 创建编码任务
+│   ├── abcoder:schd.md        # /abcoder:schd - 设计实现方案
+│   └── abcoder:recheck.md     # /abcoder:recheck - 技术方案核对
 └── tmpls/             # 文档模板
     └── CODE_TASK.md   # 编码任务模板
 ```
@@ -63,7 +63,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 
 ## 斜杠命令
 
-### /task <名称>
+### /abcoder:task <名称>
 
 创建 CODE_TASK 文档，生成 `./task/{{MMDD}}/{{NAME}}__CODE_TASK.md`
 
@@ -73,7 +73,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 - 涉及 curl: 提供完整命令和响应结构
 - 提供具体验证方法
 
-### /schd
+### /abcoder:schd
 
 使用 mcp__abcoder 设计实现方案
 
@@ -82,7 +82,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 - 优先最小改动
 - 禁止编写代码、禁止使用 agent
 
-### /recheck <任务>
+### /abcoder:recheck <任务>
 
 批判性检查 CODE_TASK 技术可行性
 
@@ -97,16 +97,16 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 用户需求
     │
     ▼
-/schd ──────────────→ 设计方案（abcoder分析）
-    │                     │
-    ▼                     ▼
-/task ────────→ CODE_TASK（含技术规格）
-    │                     │
-    ▼                     ▼
-/recheck ─────→ 方案核对（abcoder验证）
-    │                     │
-    ▼                     ▼
-coding-executor ─→ 执行实现
+/abcoder:schd ──────────────→ 设计方案（abcoder分析）
+    │                            │
+    ▼                            ▼
+/abcoder:task ────────→ CODE_TASK（含技术规格）
+    │                            │
+    ▼                            ▼
+/abcoder:recheck ─────→ 方案核对（abcoder验证）
+    │                            │
+    ▼                            ▼
+coding-executor ──────→ 执行实现
 ```
 
 ## 安装
