@@ -48,6 +48,7 @@ type GoParser struct {
 	files       map[string][]byte
 	exclues     []*regexp.Regexp
 	cgoPkgs     map[string]bool // CGO packages
+	workDirs    map[string]bool // directories that are in go.work scope
 }
 
 type moduleInfo struct {
@@ -97,10 +98,33 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 }
 
 func (p *GoParser) collectGoMods(startDir string) error {
-	hasGoWork := false
+	var workFiles []string
+	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || !strings.HasSuffix(path, "go.work") {
+			return nil
+		}
+		workFiles = append(workFiles, path)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	p.workDirs = make(map[string]bool)
+	for _, workPath := range workFiles {
+		wf, err := parseGoWork(workPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to parse go.work file %s: %v\n", workPath, err)
+			continue
+		}
+		for _, useDir := range wf.UseDirs {
+			p.workDirs[useDir] = true
+		}
+	}
+	fmt.Printf("go work effective dirs: %v\n", p.workDirs)
 	deps := map[string]string{}
 	var cgoPkgs map[string]bool
-	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
+	err = filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
 		}
@@ -117,7 +141,7 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 
-		deps, hasGoWork, cgoPkgs, err = getDeps(filepath.Dir(path), hasGoWork)
+		deps, cgoPkgs, err = getDeps(filepath.Dir(path), p.workDirs)
 		if err != nil {
 			return err
 		}
@@ -161,31 +185,40 @@ type dep struct {
 	CgoFiles []string `json:"CgoFiles"`
 }
 
-func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, cgoPkgs map[string]bool, err error) {
+func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs map[string]bool, err error) {
 	cgoPkgs = make(map[string]bool)
-	// run go mod tidy first to ensure all dependencies are resolved
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, cgoPkgs, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	inWorkSpace := false
+	for workDir := range workDirs {
+		if absDir == workDir || strings.HasPrefix(absDir, workDir+string(filepath.Separator)) {
+			inWorkSpace = true
+			break
+		}
+	}
+
 	cmd := exec.Command("go", "mod", "tidy", "-e")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GONOSUMDB=*")
+	cmd.Env = append(os.Environ(), "GONOSUMDB=*", "GOTOOLCHAIN=local")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to execute 'go mod tidy', err: %v, output: %s, remove go.sum file reexecute\n", err, string(output))
 		os.Remove(filepath.Join(dir, "go.sum"))
 		cmd = exec.Command("go", "mod", "tidy", "-e")
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GOSUMDB=off")
+		cmd.Env = append(os.Environ(), "GOSUMDB=off", "GOTOOLCHAIN=local")
 		output, err = cmd.CombinedOutput()
 		if err != nil {
-			return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
+			return nil, cgoPkgs, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
 		}
 	}
 	if hasNoDeps(filepath.Join(dir, "go.mod")) {
-		return map[string]string{}, hasGoWork, cgoPkgs, nil
+		return map[string]string{}, cgoPkgs, nil
 	}
-	// -mod=mod to use go mod when go mod is inconsistent with go vendor
-	// if go.work exist, it's no need to set -mod=mod
-	if _, err = os.Stat(filepath.Join(dir, "go.work")); err == nil || goWork {
-		hasGoWork = true
+	if inWorkSpace {
 		cmd = exec.Command("go", "list", "-e", "-json", "all")
 	} else {
 		cmd = exec.Command("go", "list", "-e", "-json", "-mod=mod", "all")
@@ -194,12 +227,12 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, cgoP
 	cmd.Env = append(os.Environ(), "GOSUMDB=off")
 	output, err = cmd.CombinedOutput()
 	if err != nil {
-		return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
+		return nil, cgoPkgs, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
 	}
 	// ignore content until first open
 	index := strings.Index(string(output), "{")
 	if index == -1 {
-		return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
+		return nil, cgoPkgs, fmt.Errorf("failed to find '{' in output, output: %s", string(output))
 	}
 	if index > 0 {
 		log.Info("go list skip prefix, output: %s", string(output[:index]))
@@ -213,7 +246,7 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, cgoP
 			if err.Error() == "EOF" {
 				break
 			}
-			return nil, hasGoWork, cgoPkgs, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
+			return nil, cgoPkgs, fmt.Errorf("failed to decode json: %v, output: %s", err, string(output))
 		}
 		module := mod.Module
 		// golang internal package, ignore it.
@@ -239,7 +272,7 @@ func getDeps(dir string, goWork bool) (a map[string]string, hasGoWork bool, cgoP
 			}
 		}
 	}
-	return deps, hasGoWork, cgoPkgs, nil
+	return deps, cgoPkgs, nil
 }
 
 // ParseRepo parse the entiry repo from homePageDir recursively until end
@@ -263,6 +296,7 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 	// run go mod tidy before parse
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	buf := bytes.NewBuffer(nil)
 	cmd.Stderr = buf
 	cmd.Stdout = buf
