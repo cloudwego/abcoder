@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -318,4 +319,58 @@ func getCommitHash(dir string) (string, error) {
 		return "", fmt.Errorf("failed to get commit hash: %v", err)
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+type workFile struct {
+	Dir      string
+	UseDirs  []string
+	Replaces []workReplace
+}
+
+type workReplace struct {
+	OldPath string
+	NewPath string
+}
+
+func parseGoWork(workFilePath string) (*workFile, error) {
+	content, err := os.ReadFile(workFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read go.work file: %w", err)
+	}
+
+	wf, err := modfile.ParseWork(workFilePath, content, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse go.work file: %w", err)
+	}
+
+	workDir := filepath.Dir(workFilePath)
+	result := &workFile{
+		Dir:      workDir,
+		UseDirs:  make([]string, 0, len(wf.Use)),
+		Replaces: make([]workReplace, 0, len(wf.Replace)),
+	}
+
+	for _, use := range wf.Use {
+		if use.Path == "" {
+			continue
+		}
+		usePath := use.Path
+		if !filepath.IsAbs(usePath) {
+			usePath = filepath.Join(workDir, usePath)
+		}
+		absPath, err := filepath.Abs(usePath)
+		if err != nil {
+			continue
+		}
+		result.UseDirs = append(result.UseDirs, absPath)
+	}
+
+	for _, rep := range wf.Replace {
+		result.Replaces = append(result.Replaces, workReplace{
+			OldPath: rep.Old.Path,
+			NewPath: rep.New.Path,
+		})
+	}
+
+	return result, nil
 }

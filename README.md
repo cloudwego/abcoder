@@ -81,8 +81,8 @@ see [UniAST Specification](docs/uniast-zh.md)
 ## Tips:
 
 - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
-
-- Try to use [the recommened prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
+    
+- Try to use [the recommended prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
 
 
 ## Claude Code Integration

@@ -29,7 +29,7 @@
 - CheckRepo()：检查用户仓库情况，根据各语言规范额处理工具链等问题，并返回默认打开的第一个文件（用于触发 LSP server），以及等候 sever 初始化完成的时间（根据仓库大小来决定）
 - **LanguageSpec interface**: 核心模块，用于处理非 LSP 通用的语法信息、比如判断一个 token 是否是标准库的符号、函数签名解析等：
 
-### LaunguageSpec
+### LanguageSpec
 
 用于在 LSP 符号收集过程中转换为 UniAST 所需信息，并且这些信息非 LSP 通用定义
 
@@ -40,7 +40,7 @@ type LanguageSpec interface {
     WorkSpace(root string) (map[string]string, error)
 
     // give an absolute file path and returns its module name and package path
-    // external path should alse be supported
+    // external path should also be supported
     // FIXEM: some language (like rust) may have sub-mods inside a file, but we still consider it as a unity mod here
     NameSpace(path string) (string, string, error)
 
