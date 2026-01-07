@@ -100,6 +100,10 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 func (p *GoParser) collectGoMods(startDir string) error {
 	var workFiles []string
 	err := filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
+		// skip vendor
+		if info.IsDir() && info.Name() == "vendor" {
+			return filepath.SkipDir
+		}
 		if err != nil || !strings.HasSuffix(path, "go.work") {
 			return nil
 		}
@@ -125,6 +129,9 @@ func (p *GoParser) collectGoMods(startDir string) error {
 	deps := map[string]string{}
 	var cgoPkgs map[string]bool
 	err = filepath.Walk(startDir, func(path string, info fs.FileInfo, err error) error {
+		if info.IsDir() && info.Name() == "vendor" {
+			return filepath.SkipDir
+		}
 		if err != nil || !strings.HasSuffix(path, "go.mod") {
 			return nil
 		}
