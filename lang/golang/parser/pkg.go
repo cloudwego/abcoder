@@ -229,6 +229,10 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				filePath = pkg.CompiledGoFiles[idx]
 			} else {
 				filePath = fset.Position(file.Pos()).Filename
+				if filePath == "" {
+					fmt.Fprintf(os.Stderr, "filename is empty, pkg: %s\n", pkg.ID)
+					continue
+				}
 			}
 			var skip bool
 			for _, exclude := range p.exclues {
