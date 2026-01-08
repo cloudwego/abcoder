@@ -121,7 +121,7 @@ func (p *GoParser) getFileBytes(path string) []byte {
 	}
 	bs, err := os.ReadFile(path)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("read file %s failed: %v", path, err))
 	}
 	p.files[path] = bs
 	return bs
