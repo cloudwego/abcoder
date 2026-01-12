@@ -2,7 +2,7 @@
   "permissions": {
     "allow": [
       "Edit(\\.md)",
-      "Read(~/.claude/**)",
+      "Read(.claude/**)",
       "mcp__abcoder",
       "mcp__sequential-thinking"
     ]
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/abcoder/parse.sh"
+            "command": ".claude/hooks/abcoder/parse.sh"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/abcoder/prompt.sh"
+            "command": ".claude/hooks/abcoder/prompt.sh"
           }
         ]
       },
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/abcoder/reminder.sh"
+            "command": ".claude/hooks/abcoder/reminder.sh"
           }
         ]
       }
