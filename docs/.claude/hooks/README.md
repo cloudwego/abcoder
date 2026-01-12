@@ -67,7 +67,7 @@ Claude Code 钩子系统，用于自动化 ABCoder 代码分析工作流。
 ## 安装位置
 
 ```
-~/.claude/hooks/abcoder/
+{{CLAUDE_HOME_PATH}}/.claude/hooks/abcoder/
 ├── parse.sh
 ├── prompt.sh
 ├── reminder.sh

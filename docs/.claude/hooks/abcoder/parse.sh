@@ -72,7 +72,7 @@ abc() {
     mkdir -p ~/.asts/
 
     # 执行实际命令
-    abcoder parse "${lang}" "${repo_path}" -o "/Users/bytedance/.asts/${repo_name}.json"
+    abcoder parse "${lang}" "${repo_path}" -o "~/.asts/${repo_name}.json"
   else
     # 如果不是预期的 parse 命令格式，直接将参数传递给原始 abcoder 命令
     abcoder "$@"

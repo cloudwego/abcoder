@@ -91,35 +91,23 @@ ABCoder provides deep integration with [Claude Code](https://claude.ai/code) thr
 
 ### Setup
 
-1. **Install ABCoder Claude Configuration**
+Use the `init-spec` command to automatically configure Claude Code integration:
 
-   Copy [`docs/.claude/`](docs/.claude/) to your home directory or project root:
+```bash
+# Install ABCoder
+go install github.com/cloudwego/abcoder@latest
 
-   ```bash
-   cp -r docs/.claude ~/
-   ```
+# Run init-spec in your project directory (optional: specify target path)
+cd /path/to/your/project
+abcoder init-spec
+```
 
-2. **Configure ABCoder MCP Server**
-
-   Configure in Claude Code's `~/.claude.json` (the hook uses `abcoder parse go/ts . -o ~/.asts/repo.json` for the default AST folder):
-
-   ```json
-   {
-       "mcpServers": {
-           "abcoder": {
-               "command": "abcoder",
-               "args": ["mcp", "~/.asts"]
-           }
-       }
-   }
-   ```
-
-3. **Configure Hooks**
-
-   Claude Code will automatically read hooks from [`~/.claude/settings.json`](docs/.claude/settings.json) to enable:
-   - Auto-detect language and generate AST before calling `mcp__abcoder` tools
-   - Display ABCoder workflow SOP to Claude after `list_repos`
-   - Remind to call `get_ast_node` recursively
+The `init-spec` command will:
+1. Copy `.claude` directory to your project root
+2. Configure MCP servers in `~/.claude.json`:
+   - `abcoder`: for code analysis using AST
+   - `sequential-thinking`: for complex problem decomposition
+3. Replace all `{{CLAUDE_HOME_PATH}}` placeholders with actual project paths
 
 ### AST-Driven Coding Workflow
 
@@ -167,13 +155,13 @@ sub-agent ─────────→ Execute Implementation
 | [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
 | [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
 | [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schd/abcoder:recheck) |
-| [`tmpls/CODE_TASK.md`](docs/.claude/tmpls/CODE_TASK.md) | Coding task template |
+| [`tmpls/ABCODER_CODE_TASK.md`](docs/.claude/tmpls/ABCODER_CODE_TASK.md) | Coding task template |
 
 ### Dependencies
 
 - Claude Code CLI
 - abcoder MCP server (provides `mcp__abcoder` tools)
-- sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, optional)
+- sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, automatically configured by init-spec)
 
 > For detailed configuration, see [docs/.claude/README.md](docs/.claude/README.md)
 

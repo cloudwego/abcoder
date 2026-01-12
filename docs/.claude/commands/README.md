@@ -10,7 +10,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 **执行流程**:
 1. 创建 `./task/{{MMDD}}/` 目录
-2. 读取模板 `~/.claude/tmpls/CODE_TASK.md`
+2. 读取模板 `{{CLAUDE_HOME_PATH}}/.claude/tmpls/CODE_TASK.md`
 3. 根据任务上下文填充模板，生成 `./task/{{MMDD}}/{{NAME}}__CODE_TASK.md`
 4. 列出外部依赖包（如有）
 5. 提示创建成功
@@ -104,7 +104,7 @@ coding-executor ──────→ 执行实现
 ## 文件位置
 
 ```
-~/.claude/
+{{CLAUDE_HOME_PATH}}/.claude/
 ├── commands/
 │   ├── abcoder:task.md
 │   ├── abcoder:schd.md

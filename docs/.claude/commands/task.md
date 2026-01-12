@@ -3,7 +3,7 @@
 请帮我创建一个CODE_TASK。
 
 1. `d=$(date +%m%d) && mkdir -p "./task/$d/" && echo "目录 ./task/$d/ 已创建"` 创建 `./task/{{MMDD}}/` 目录
-2. 读取模板文件 `~/.claude/tmpls/CODE_TASK.md`
+2. 读取模板文件 `{{CLAUDE_HOME_PATH}}/.claude/tmpls/ABCODER_CODE_TASK.md`
 3. 根据任务上下文，按照格式和要求填充模板，创建新文件 `./task/{{MMDD}}/{{NAME}}__CODE_TASK.md`
 4. 告知用户这个`CODE_TASK`是否包含外部依赖；如果包含，请清晰列出完整的外部依赖包名称
 5. 提示用户文件已创建成功，停止操作
