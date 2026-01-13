@@ -7,12 +7,12 @@
 set -euo pipefail
 
 # 验证文件存在
-SOP_FILE="{{CLAUDE_HOME_PATH}}/.claude/hooks/abcoder/abcoder-workflow.md"
+SOP_FILE="/Users/bytedance/github/github.com/cloudwego/abcoder2/.claude/hooks/abcoder/abcoder-workflow.md"
 # echo "DEBUG: Checking file: $SOP_FILE" >&2
 
 if [[ ! -f "$SOP_FILE" ]]; then
   # echo "DEBUG: File not found" >&2
-  echo '{"decision": "block", "reason": "SOP file not found", "hookSpecificOutput": {"hookEventName": "PostToolUse"}}'
+  echo '{"ok": false, "reason": "SOP file not found", "hookSpecificOutput": {"hookEventName": "PostToolUse"}}'
   exit 0
 fi
 
@@ -22,7 +22,7 @@ fi
 SOP_CONTENT=$(cat "$SOP_FILE" | jq -Rs . 2>/dev/null)
 if [[ $? -ne 0 ]]; then
   # echo "DEBUG: jq failed" >&2
-  echo '{"decision": "block", "reason": "Failed to process SOP content", "hookSpecificOutput": {"hookEventName": "PostToolUse"}}'
+  echo '{"ok": false, "reason": "Failed to process SOP content", "hookSpecificOutput": {"hookEventName": "PostToolUse"}}'
   exit 0
 fi
 
@@ -31,10 +31,10 @@ fi
 # 输出 JSON
 cat <<EOF
 {
-  "decision": "block",
-  "reason": $SOP_CONTENT,
+  "continue": true,
   "hookSpecificOutput": {
-    "hookEventName": "PostToolUse"
+    "hookEventName": "PostToolUse",
+    "additionalContext": $SOP_CONTENT
   }
 }
 EOF

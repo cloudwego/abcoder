@@ -113,6 +113,7 @@ if [[ "$project_lang" != "unknown" ]]; then
     local file_age_seconds=$(($(date +%s) - $(stat -f %m "$ast_output_file" 2>/dev/null || stat -c %Y "$ast_output_file" 2>/dev/null)))
     if [[ $file_age_seconds -lt 60 ]]; then
       jq -n --arg lang "$project_lang" --arg repo "$project_identifier" --arg age "$file_age_seconds" '{
+        "continue": true,
         "systemMessage": ("abcoder AST 缓存命中（语言：" + $lang + "，仓库：" + $repo + "）。文件更新于 " + $file_age_seconds + " 秒前，跳过 parse 操作。")
       }'
       exit 0
@@ -122,6 +123,7 @@ if [[ "$project_lang" != "unknown" ]]; then
   # 使用检测到的语言执行 parse 命令，并输出到 AST 目录
   if abcoder parse "$project_lang" . -o "$ast_output_file" >"$output_file" 2>"$error_file"; then
     jq -n --arg lang "$project_lang" --arg repo "$project_identifier" '{
+      "continue": true,
       "systemMessage": ("abcoder parse 已成功完成（语言：" + $lang + "，仓库：" + $repo + "）。AST文件已生成，可以继续分析代码。")
     }'
   else

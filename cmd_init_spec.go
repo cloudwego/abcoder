@@ -162,7 +162,7 @@ func copyEmbeddedDir(srcPath string, destDir string, projectRootDir string) erro
 		}
 
 		// Track md and json files for placeholder replacement
-		if strings.HasSuffix(relPath, ".md") || strings.HasSuffix(relPath, ".json") {
+		if strings.HasSuffix(relPath, ".md") || strings.HasSuffix(relPath, ".json") || strings.HasSuffix(relPath, "prompt.sh") {
 			mdFilesToReplace = append(mdFilesToReplace, destPath)
 		}
 
