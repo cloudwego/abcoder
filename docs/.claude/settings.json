@@ -10,7 +10,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__abcoder__get_repo_structure|mcp__abcoder__get_file_structure|mcp__abcoder__get_package_structure|mcp__abcoder__get_ast_node",
+        "matcher": "mcp__abcoder__list_repos|mcp__abcoder__get_repo_structure|mcp__abcoder__get_file_structure|mcp__abcoder__get_package_structure|mcp__abcoder__get_ast_node",
         "hooks": [
           {
             "type": "command",

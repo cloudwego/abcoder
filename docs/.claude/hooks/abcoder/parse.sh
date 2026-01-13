@@ -92,68 +92,50 @@ cwd=$(echo "$input" | jq -r '.cwd // ""')
 # 复用现有的 get_basename 函数
 current_base_name=$(get_basename "$cwd")
 
-# 检测项目信息（语言和仓库标识）
+# 检测项目信息（语言和仓库标识符）
 project_info=$(detect_project_info "$cwd")
 project_lang=$(echo "$project_info" | cut -d'|' -f1)
 project_identifier=$(echo "$project_info" | cut -d'|' -f2)
 
-# echo "Detected project language: $project_lang" >> "$LOG_FILE"
-# echo "Detected project identifier: $project_identifier" >> "$LOG_FILE"
-
-if [ "$repo_name" = "$cwd" ] || [ "$current_base_name" = "$repo_name" ] || [ "$project_identifier" = "$repo_name" ]; then
-  # echo "Path or identifier matched, executing abc parse..." >> "$LOG_FILE"
-
-  # 检查是否检测到目标语言
-  if [[ "$project_lang" == "unknown" ]]; then
-    jq -n '{
-      "decision": "block",
-      "reason": "未检测到支持的语言（仅支持 Go 和 TypeScript）",
-      "hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "additionalContext": "请确保项目是 Go 或 TypeScript 类型"
-      }
-    }'
-    exit 0
-  fi
-
+# 优化判断逻辑：只要检测到有效项目，就执行 parse
+if [[ "$project_lang" != "unknown" ]]; then
   # 捕获标准输出和错误输出
   output_file=$(mktemp)
   error_file=$(mktemp)
 
-  # 修改：使用检测到的语言执行 parse 命令（替换原有的固定 ts）
-  if abcoder parse "$project_lang" . >"$output_file" 2>"$error_file"; then
-    # echo "abc parse succeeded" >> "$LOG_FILE"
-    # cat "$output_file" >> "$LOG_FILE"
+  # 使用检测到的语言执行 parse 命令
+  # 确保输出目录存在
+  mkdir -p ~/.asts/
+  ast_output_file=~/.asts/$(echo "$project_identifier" | sed 's|/|_|g').json
 
-    jq -n --arg lang "$project_lang" '{
-          "systemMessage": "abcoder parse 已成功完成（语言：\($lang)）。AST文件已生成，可以继续分析代码。"
-        }'
+  # 使用检测到的语言执行 parse 命令，并输出到 AST 目录
+  if abcoder parse "$project_lang" . -o "$ast_output_file" >"$output_file" 2>"$error_file"; then
+    jq -n --arg lang "$project_lang" --arg repo "$project_identifier" '{
+      "systemMessage": ("abcoder parse 已成功完成（语言：" + $lang + "，仓库：" + $repo + "）。AST文件已生成，可以继续分析代码。")
+    }'
   else
     exit_code=$?
-    # echo "abc parse FAILED with exit code $exit_code" >> "$LOG_FILE"
-    # echo "STDOUT:" >> "$LOG_FILE"
-    # cat "$output_file" >> "$LOG_FILE"
-    # echo "STDERR:" >> "$LOG_FILE"
-    # cat "$error_file" >> "$LOG_FILE"
-
     # 读取错误信息
     error_msg=$(cat "$error_file" | tail -20)
 
-    jq -n --arg code "$exit_code" --arg err "$error_msg" --arg lang "$project_lang" '{
+    jq -n --arg code "$exit_code" --arg err "$error_msg" --arg lang "$project_lang" --arg repo "$project_identifier" '{
           "decision": "block",
-          "reason": ("abcoder parse 失败（语言：\($lang)，退出码: " + $code + "）。错误信息：\n" + $err + "\n\n可能的原因：\n1. 项目配置文件有问题（Go: go.mod；TS: tsconfig.json）\n2. 缺少依赖包\n3. 代码语法错误\n\n建议：\n- Go 项目：运行 'go mod tidy' 和 'go build' 检查\n- TS 项目：运行 'npm install' 和 'tsc --noEmit' 检查"),
+          "reason": ("abcoder parse 失败（语言：" + $lang + "，仓库：" + $repo + "，退出码: " + $code + "）。错误信息：\n" + $err + "\n\n可能的原因：\n1. 项目配置文件有问题（Go: go.mod；TS: tsconfig.json）\n2. 缺少依赖包\n3. 代码语法错误\n\n建议：\n- Go 项目：运行 'go mod tidy' 和 'go build' 检查\n- TS 项目：运行 'npm install' 和 'tsc --noEmit' 检查"),
           "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "additionalContext": ("解析失败，需要修复后重试")
+            "additionalContext": "解析失败，需要修复后重试"
           }
         }'
   fi
 
   # 清理临时文件
-  trash "$output_file" "$error_file"
+  trash "$output_file" "$error_file" 2>/dev/null || rm -f "$output_file" "$error_file"
 else
-  # echo "Path did not match" >> "$LOG_FILE"
-  echo '{}'
+  # 当前目录不是支持的项目，返回空对象
+  jq -n '{
+    "decision": "block",
+    "reason": "当前目录未检测到支持的语言（仅支持 Go 和 TypeScript），请确保项目是 Go 或 TypeScript 类型"
+  }'
 fi
 
 exit 0
