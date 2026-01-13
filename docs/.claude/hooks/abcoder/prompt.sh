@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # 验证文件存在
-SOP_FILE=".claude/hooks/abcoder/abcoder-workflow.md"
+SOP_FILE="{{CLAUDE_HOME_PATH}}/.claude/hooks/abcoder/abcoder-workflow.md"
 # echo "DEBUG: Checking file: $SOP_FILE" >&2
 
 if [[ ! -f "$SOP_FILE" ]]; then

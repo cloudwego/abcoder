@@ -20,8 +20,9 @@
 
 2. **代码定位** (repo→package→node→ast node relationship):
    - 2.1 **定位package**: 基于 `get_repo_structure` 返回的package list选择目标package
-   - 2.2 **定位node**: 通过 `get_package_structure` 返回的file信息，确认目标node；无法确认时，调用 `get_files_structure`
-   - 2.3 **确认ast node relationship**: 递归调用 `get_ast_node` 获取node详细（dependencies, references, inheritance, implementation, grouping）
+   - 2.2 **定位文件**: 通过 `get_package_structure` 返回的file信息，确认目标文件
+   - 2.3 **定位节点**: 通过 `get_files_structure` 返回的node信息，确认目标节点
+   - 2.4 **确认node详情**: 递归调用 `get_ast_node` 获取node详细（dependencies, references, inheritance, implementation, grouping）
 
 3. **自我反思**:
    - 理解完整的code calling-chain、contextual-relationship
