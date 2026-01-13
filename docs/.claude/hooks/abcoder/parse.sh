@@ -110,11 +110,11 @@ if [[ "$project_lang" != "unknown" ]]; then
 
   # 检查 AST 文件是否存在且更新时间小于 1 分钟（缓存优化）
   if [[ -f "$ast_output_file" ]]; then
-    local file_age_seconds=$(($(date +%s) - $(stat -f %m "$ast_output_file" 2>/dev/null || stat -c %Y "$ast_output_file" 2>/dev/null)))
+    file_age_seconds=$(($(date +%s) - $(stat -f %m "$ast_output_file" 2>/dev/null || stat -c %Y "$ast_output_file" 2>/dev/null)))
     if [[ $file_age_seconds -lt 60 ]]; then
       jq -n --arg lang "$project_lang" --arg repo "$project_identifier" --arg age "$file_age_seconds" '{
         "continue": true,
-        "systemMessage": ("abcoder AST 缓存命中（语言：" + $lang + "，仓库：" + $repo + "）。文件更新于 " + $file_age_seconds + " 秒前，跳过 parse 操作。")
+        "systemMessage": ("abcoder AST 缓存命中（语言：" + $lang + "，仓库：" + $repo + "）。文件更新于 " + $age + " 秒前（小于1分钟更新阈值），跳过 parse 操作。")
       }'
       exit 0
     fi
