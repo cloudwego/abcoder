@@ -125,7 +125,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 
 | Command | Function | Description |
 |---------|----------|-------------|
-| [`/abcoder:schd`](docs/.claude/commands/abcoder:schd.md) | Design implementation | Analyze codebase using ABCoder, design technical solution |
+| [`/abcoder:schedule` <task_desc>](docs/.claude/commands/abcoder:schedule.md) | Design implementation | Analyze codebase using ABCoder, design technical solution |
 | [`/abcoder:task <name>`](docs/.claude/commands/abcoder:task.md) | Create coding task | Generate standardized CODE_TASK document |
 | [`/abcoder:recheck <task>`](docs/.claude/commands/abcoder:recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
 
@@ -135,7 +135,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 User Request
     │
     ▼
-/abcoder:schd ──────────→ Design Solution (ABCoder Analysis)
+/abcoder:schedule ──────────→ Design Solution (ABCoder Analysis)
     │                          │
     ▼                          ▼
 /abcoder:task ─────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
@@ -144,7 +144,7 @@ User Request
 /abcoder:recheck ────→ Verify Solution (ABCoder Validation. After `/abcoder:task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/abcoder:recheck` to analyze external ast_node and technical detail with ABCoder)
     │                          │
     ▼                          ▼
-sub-agent ─────────→ Execute Implementation
+Start coding(sub-agent) ─────────→ Execute Implementation
 ```
 
 ### Configuration Files
@@ -154,7 +154,7 @@ sub-agent ─────────→ Execute Implementation
 | [`CLAUDE.md`](docs/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
 | [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
 | [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
-| [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schd/abcoder:recheck) |
+| [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schedule/abcoder:recheck) |
 | [`tmpls/ABCODER_CODE_TASK.md`](docs/.claude/tmpls/ABCODER_CODE_TASK.md) | Coding task template |
 
 ### Dependencies

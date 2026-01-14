@@ -30,7 +30,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 ---
 
-### /abcoder:schd - 设计实现方案
+### /abcoder:schedule - 设计实现方案
 
 使用 mcp__abcoder 分析代码库，设计技术实现方案。
 
@@ -89,7 +89,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 用户需求
     │
     ▼
-/abcoder:schd ──────────────→ 设计方案（abcoder分析）
+/abcoder:schedule ──────────────→ 设计方案（abcoder分析）
     │                            │
     ▼                            ▼
 /abcoder:task ────────→ CODE_TASK（含技术规格）
@@ -107,7 +107,7 @@ coding-executor ──────→ 执行实现
 {{CLAUDE_HOME_PATH}}/.claude/
 ├── commands/
 │   ├── abcoder:task.md
-│   ├── abcoder:schd.md
+│   ├── abcoder:schedule.md
 │   └── abcoder:recheck.md
 └── tmpls/
     └── ABCODER_CODE_TASK.md

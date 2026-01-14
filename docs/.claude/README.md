@@ -14,7 +14,7 @@ Claude Code 的 AST 驱动开发配置，通过 MCP 工具、钩子和斜杠命�
 │   └── reminder.sh    # 提醒递归调用 get_ast_node
 ├── commands/          # 斜杠命令定义
 │   ├── abcoder:task.md        # /abcoder:task - 创建编码任务
-│   ├── abcoder:schd.md        # /abcoder:schd - 设计实现方案
+│   ├── abcoder:schedule.md        # /abcoder:schedule - 设计实现方案
 │   └── abcoder:recheck.md     # /abcoder:recheck - 技术方案核对
 └── tmpls/             # 文档模板
     └── CODE_TASK.md   # 编码任务模板
@@ -73,7 +73,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 - 涉及 curl: 提供完整命令和响应结构
 - 提供具体验证方法
 
-### /abcoder:schd
+### /abcoder:schedule
 
 使用 mcp__abcoder 设计实现方案
 
@@ -97,7 +97,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 用户需求
     │
     ▼
-/abcoder:schd ──────────────→ 设计方案（abcoder分析）
+/abcoder:schedule ──────────────→ 设计方案（abcoder分析）
     │                            │
     ▼                            ▼
 /abcoder:task ────────→ CODE_TASK（含技术规格）

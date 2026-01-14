@@ -137,8 +137,8 @@ func copyEmbeddedDir(srcPath string, destDir string, projectRootDir string) erro
 			switch baseName {
 			case "recheck.md":
 				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:recheck.md")
-			case "schd.md":
-				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:schd.md")
+			case "schedule.md":
+				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:schedule.md")
 			case "task.md":
 				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:task.md")
 			}
@@ -264,7 +264,7 @@ Next steps:
   2. Restart Claude Code to apply the configuration
 
   3. Use ABCoder tools in Claude Code:
-     - /abcoder:schd - Analyze codebase and design solution
+     - /abcoder:schedule - Analyze codebase and design solution
      - /abcoder:task - Create coding task
      - /abcoder:recheck - Verify solution
 
