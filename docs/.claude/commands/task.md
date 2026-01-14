@@ -1,4 +1,4 @@
-# 系统指令：创建CODE_TASK
+# 系统指令：基于当前上下文创建一个 SPEC 驱动的 CODE_TASK（输入：任务名称）
 
 请帮我创建一个CODE_TASK。
 

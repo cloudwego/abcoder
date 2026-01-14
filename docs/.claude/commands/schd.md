@@ -1,4 +1,4 @@
-# 系统指令：Schedule
+# 系统指令：规划一个任务（输入：任务描述）
 
 使用`mcp__abcoder`分析相关仓库（下钻到`mcp__abcoder__get_ast_node`查看细节），帮助用户设计实现方案。
 

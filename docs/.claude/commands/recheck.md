@@ -1,4 +1,5 @@
-# 系统指令: ReCheck
+# 系统指令: 核对任务实现方案（二次对齐）
+
 
 理解任务 {1}，并使用`mcp__abcoder`核对技术细节（下钻到`mcp__abcoder__get_ast_node`粒度）；
 
