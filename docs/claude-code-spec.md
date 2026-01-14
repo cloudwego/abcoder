@@ -63,7 +63,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 
 ## 斜杠命令
 
-### /abcoder:task <名称>
+### /abcoder:task <任务名称>
 
 创建 CODE_TASK 文档，生成 `./task/{{MMDD}}/{{NAME}}__CODE_TASK.md`
 
@@ -73,7 +73,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 - 涉及 curl: 提供完整命令和响应结构
 - 提供具体验证方法
 
-### /abcoder:schedule
+### /abcoder:schedule <任务描述>
 
 使用 mcp__abcoder 设计实现方案
 
@@ -82,7 +82,7 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 - 优先最小改动
 - 禁止编写代码、禁止使用 agent
 
-### /abcoder:recheck <任务>
+### /abcoder:recheck <任务名称>
 
 批判性检查 CODE_TASK 技术可行性
 
