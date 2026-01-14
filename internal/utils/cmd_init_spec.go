@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package utils
 
 import (
 	"embed"
@@ -28,7 +28,7 @@ import (
 	"github.com/cloudwego/abcoder/llm/log"
 )
 
-//go:embed docs/.claude
+//go:embed assets/.claude
 var claudeFS embed.FS
 
 // claudeConfig represents the Claude Code configuration structure
@@ -42,7 +42,7 @@ type mcpServerConfig struct {
 }
 
 // runInitSpec implements the init-spec command
-func runInitSpec(targetDir string) error {
+func RunInitSpec(targetDir string) error {
 	if targetDir == "" {
 		// Default to current directory if not specified
 		cwd, err := os.Getwd()
@@ -58,9 +58,9 @@ func runInitSpec(targetDir string) error {
 		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	// 1. Copy docs/.claude to targetDir/.claude
+	// 1. Copy assets/.claude to targetDir/.claude
 	claudeDestDir := filepath.Join(targetDirAbs, ".claude")
-	if err := copyEmbeddedDir("docs/.claude", claudeDestDir, targetDirAbs); err != nil {
+	if err := copyEmbeddedDir("assets/.claude", claudeDestDir, targetDirAbs); err != nil {
 		return fmt.Errorf("failed to copy .claude directory: %w", err)
 	}
 	log.Info("Copied .claude directory to %s", claudeDestDir)

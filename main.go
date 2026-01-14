@@ -39,6 +39,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	interutils "github.com/cloudwego/abcoder/internal/utils"
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -214,7 +215,7 @@ func main() {
 			uri = os.Args[2]
 		}
 
-		if err := runInitSpec(uri); err != nil {
+		if err := interutils.RunInitSpec(uri); err != nil {
 			log.Error("Failed to init-spec: %v\n", err)
 			os.Exit(1)
 		}

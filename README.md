@@ -87,7 +87,7 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 ## Claude Code Integration
 
-ABCoder provides deep integration with [Claude Code](https://claude.ai/code) through the AST-Driven Coding workflow, enabling hallucination-free code analysis and precise execution.
+ABCoder provides deep integration with [Claude Code](https://claude.ai/code) through the AST-Driven Coding workflow, enabling hallucination-free code analysis and precise execution. Check [Claude Code Specification](docs/claude-code-spec.md) for more details.
 
 ### Setup
 
