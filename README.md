@@ -25,6 +25,99 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 
 # Quick Start
+
+## Claude Code Integration
+
+ABCoder provides deep integration with [Claude Code](https://claude.ai/code) through the AST-Driven Coding workflow, enabling hallucination-free code analysis and precise execution. Check [Claude Code Specification](docs/claude-code-spec.md) for more details.
+
+### Setup
+
+Use the `init-spec` command to automatically configure Claude Code integration for your project:
+
+```bash
+# Install ABCoder
+go install github.com/cloudwego/abcoder@latest
+
+# Run init-spec in your project directory (optional: specify target path)
+cd /path/to/your/project
+abcoder init-spec
+```
+
+The `init-spec` command will:
+1. Copy `.claude` directory to your project root
+2. Configure MCP servers in `~/.claude.json`:
+   - `abcoder`: for code analysis using AST
+   - `sequential-thinking`: for complex problem decomposition
+3. Replace all `{{CLAUDE_HOME_PATH}}` placeholders with actual project paths
+
+### Start Coding with Claude Code
+
+Once setup, you can start coding with Claude Code:
+
+1. Start Claude Code in your project directory
+2. Use slash common `/abcoder:schedule <problem_desc>` to address your feature/requirement/issue, and ABCoder will help you analyze the codebase and design a technical solution.
+3. Once all questions are set, use slash common `/abcoder:task <task_name>` to create a coding task(specification)
+4. Recheck the task using `/abcoder:recheck <task_name>` before real implementation
+5. Begin coding! Claude Code will process the task step by step according to the specification, leveraging the power of AST-driven analysis.
+
+### AST-Driven Coding Workflow
+
+[`.claude/hooks`](docs/.claude/hooks) provide a 4-layer analysis chain from repository to node details:
+
+```
+list_repos → get_repo_structure → get_package_structure → get_file_structure → get_ast_node
+     │              │                      │                       │                    │
+     └── repo_name  └── mod/pkg list       └── file list           └── node list        └── dependencies/references
+```
+
+### Claude Code Slash Commands
+
+[`.claude/commands`](docs/.claude/commands) provide three custom slash commands to streamline development:
+
+| Command | Function | Description |
+|---------|----------|-------------|
+| [`/abcoder:schedule` <task_desc>](docs/.claude/commands/abcoder:schedule.md) | Design implementation | Analyze codebase by using ABCoder, design technical solution |
+| [`/abcoder:task <name>`](docs/.claude/commands/abcoder:task.md) | Create coding task | Generate standardized CODE_TASK document |
+| [`/abcoder:recheck <task>`](docs/.claude/commands/abcoder:recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
+
+### Workflow
+
+```
+User Request
+    │
+    ▼
+/abcoder:schedule ──────────→ Design Solution (ABCoder Analysis)
+    │                          │
+    ▼                          ▼
+/abcoder:task ─────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
+    │                          │
+    ▼                          ▼
+/abcoder:recheck ────→ Verify Solution (ABCoder Validation. After `/abcoder:task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/abcoder:recheck` to analyze external ast_node and technical detail with ABCoder)
+    │                          │
+    ▼                          ▼
+Start coding(sub-agent) ─────────→ Execute Implementation
+```
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| [`CLAUDE.md`](docs/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
+| [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
+| [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
+| [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schedule/abcoder:recheck) |
+| [`tmpls/ABCODER_CODE_TASK.md`](docs/.claude/tmpls/ABCODER_CODE_TASK.md) | Coding task template |
+
+### Dependencies
+
+- Claude Code CLI
+- ABCoder MCP server (provides `mcp__abcoder` tools)
+- Sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, automatically configured by init-spec)
+
+> For detailed configuration, see [docs/.claude/README.md](docs/.claude/README.md)
+
+> Watch the demo video [here](https://github.com/cloudwego/abcoder/pull/141)
+
 ## Use ABCoder as a MCP server
 
 1. Install ABCoder:
@@ -83,101 +176,6 @@ see [UniAST Specification](docs/uniast-zh.md)
 - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
     
 - Try to use [the recommended prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
-
-
-## Claude Code Integration
-
-ABCoder provides deep integration with [Claude Code](https://claude.ai/code) through the AST-Driven Coding workflow, enabling hallucination-free code analysis and precise execution.
-
-### Setup
-
-1. **Install ABCoder Claude Configuration**
-
-   Copy [`docs/.claude/`](docs/.claude/) to your home directory or project root:
-
-   ```bash
-   cp -r docs/.claude ~/
-   ```
-
-2. **Configure ABCoder MCP Server**
-
-   Configure in Claude Code's `~/.claude.json` (the hook uses `abcoder parse go/ts . -o ~/.asts/repo.json` for the default AST folder):
-
-   ```json
-   {
-       "mcpServers": {
-           "abcoder": {
-               "command": "abcoder",
-               "args": ["mcp", "~/.asts"]
-           }
-       }
-   }
-   ```
-
-3. **Configure Hooks**
-
-   Claude Code will automatically read hooks from [`~/.claude/settings.json`](docs/.claude/settings.json) to enable:
-   - Auto-detect language and generate AST before calling `mcp__abcoder` tools
-   - Display ABCoder workflow SOP to Claude after `list_repos`
-   - Remind to call `get_ast_node` recursively
-
-### AST-Driven Coding Workflow
-
-[`.claude/hooks`](docs/.claude/hooks) provide a 4-layer analysis chain from repository to node details:
-
-```
-list_repos → get_repo_structure → get_package_structure → get_file_structure → get_ast_node
-     │              │                      │                       │                    │
-     └── repo_name  └── mod/pkg list       └── file list           └── node list        └── dependencies/references
-```
-
-### Claude Code Slash Commands
-
-[`.claude/commands`](docs/.claude/commands) provide three custom slash commands to streamline development:
-
-| Command | Function | Description |
-|---------|----------|-------------|
-| [`/abcoder:schd`](docs/.claude/commands/abcoder:schd.md) | Design implementation | Analyze codebase using ABCoder, design technical solution |
-| [`/abcoder:task <name>`](docs/.claude/commands/abcoder:task.md) | Create coding task | Generate standardized CODE_TASK document |
-| [`/abcoder:recheck <task>`](docs/.claude/commands/abcoder:recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
-
-### Workflow
-
-```
-User Request
-    │
-    ▼
-/abcoder:schd ──────────→ Design Solution (ABCoder Analysis)
-    │                          │
-    ▼                          ▼
-/abcoder:task ─────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
-    │                          │
-    ▼                          ▼
-/abcoder:recheck ────→ Verify Solution (ABCoder Validation. After `/abcoder:task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/abcoder:recheck` to analyze external ast_node and technical detail with ABCoder)
-    │                          │
-    ▼                          ▼
-sub-agent ─────────→ Execute Implementation
-```
-
-### Configuration Files
-
-| File | Purpose |
-|------|---------|
-| [`CLAUDE.md`](docs/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
-| [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
-| [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
-| [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schd/abcoder:recheck) |
-| [`tmpls/CODE_TASK.md`](docs/.claude/tmpls/CODE_TASK.md) | Coding task template |
-
-### Dependencies
-
-- Claude Code CLI
-- abcoder MCP server (provides `mcp__abcoder` tools)
-- sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, optional)
-
-> For detailed configuration, see [docs/.claude/README.md](docs/.claude/README.md)
-
-> Watch the demo video [here](https://github.com/cloudwego/abcoder/pull/141)
 
 
 ## Use ABCoder as an Agent (WIP)

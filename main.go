@@ -39,6 +39,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	interutils "github.com/cloudwego/abcoder/internal/utils"
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -56,6 +57,7 @@ Action:
    write        write the specific UniAST back to codes
    mcp          run as a MCP server for all repo ASTs (*.json) in the specific directory
    agent        run as an Agent for all repo ASTs (*.json) in the specific directory. WIP: only support code-analyzing at present.
+   init-spec    initialize ABCoder integration for Claude Code (copies .claude directory and configures MCP servers)
    version      print the version of abcoder
 Language:
    go           for golang codes
@@ -192,6 +194,29 @@ func main() {
 		})
 		if err := svr.ServeStdio(); err != nil {
 			log.Error("Failed to run MCP server: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "init-spec":
+		// Parse flags only, uri is optional and defaults to current directory
+		flags.Parse(os.Args[2:])
+
+		var uri string
+		if flagHelp != nil && *flagHelp {
+			flags.Usage()
+			os.Exit(0)
+		}
+
+		if flagVerbose != nil && *flagVerbose {
+			log.SetLogLevel(log.DebugLevel)
+		}
+
+		if len(os.Args) > 2 && !strings.HasPrefix(os.Args[2], "-") {
+			uri = os.Args[2]
+		}
+
+		if err := interutils.RunInitSpec(uri); err != nil {
+			log.Error("Failed to init-spec: %v\n", err)
 			os.Exit(1)
 		}
 

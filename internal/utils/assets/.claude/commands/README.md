@@ -10,7 +10,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 **执行流程**:
 1. 创建 `./task/{{MMDD}}/` 目录
-2. 读取模板 `~/.claude/tmpls/CODE_TASK.md`
+2. 读取模板 `{{CLAUDE_HOME_PATH}}/.claude/tmpls/ABCODER_CODE_TASK.md`
 3. 根据任务上下文填充模板，生成 `./task/{{MMDD}}/{{NAME}}__CODE_TASK.md`
 4. 列出外部依赖包（如有）
 5. 提示创建成功
@@ -30,7 +30,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 ---
 
-### /abcoder:schd - 设计实现方案
+### /abcoder:schedule - 设计实现方案
 
 使用 mcp__abcoder 分析代码库，设计技术实现方案。
 
@@ -66,7 +66,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 
 ## 模板文件
 
-### CODE_TASK.md
+### ABCODER_CODE_TASK.md
 
 编码任务模板，定义任务清单格式。
 
@@ -89,7 +89,7 @@ Claude Code 斜杠命令定义，用于规范化和自动化开发工作流。
 用户需求
     │
     ▼
-/abcoder:schd ──────────────→ 设计方案（abcoder分析）
+/abcoder:schedule ──────────────→ 设计方案（abcoder分析）
     │                            │
     ▼                            ▼
 /abcoder:task ────────→ CODE_TASK（含技术规格）
@@ -104,11 +104,11 @@ coding-executor ──────→ 执行实现
 ## 文件位置
 
 ```
-~/.claude/
+{{CLAUDE_HOME_PATH}}/.claude/
 ├── commands/
 │   ├── abcoder:task.md
-│   ├── abcoder:schd.md
+│   ├── abcoder:schedule.md
 │   └── abcoder:recheck.md
 └── tmpls/
-    └── CODE_TASK.md
+    └── ABCODER_CODE_TASK.md
 ```
