@@ -123,5 +123,5 @@ coding-executor ──────→ 执行实现
 
 ## 相关文档
 
-- [hooks/README.md](../internal/utils/assets/.claude/hooks/README.md) - 钩子系统详解
-- [commands/README.md](../internal/utils/assets/.claude/commands/README.md) - 斜杠命令详解
+- [hooks/README.md](../internal/cmd/assets/.claude/hooks/README.md) - 钩子系统详解
+- [commands/README.md](../internal/cmd/assets/.claude/commands/README.md) - 斜杠命令详解

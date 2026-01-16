@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package utils
+package cmd
 
 import (
 	"embed"
@@ -113,6 +113,11 @@ func copyEmbeddedDir(srcPath string, destDir string, projectRootDir string) erro
 			return err
 		}
 
+		// Skip README.md files
+		if strings.HasSuffix(path, "README.md") {
+			return nil
+		}
+
 		// Skip the root directory itself
 		if relPath == "." {
 			return nil
@@ -129,19 +134,6 @@ func copyEmbeddedDir(srcPath string, destDir string, projectRootDir string) erro
 		parentDir := filepath.Dir(destPath)
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
 			return fmt.Errorf("failed to create parent directory %s: %w", parentDir, err)
-		}
-
-		// Rename command files with abcoder: prefix
-		if strings.HasPrefix(relPath, "commands/") {
-			baseName := filepath.Base(relPath)
-			switch baseName {
-			case "recheck.md":
-				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:recheck.md")
-			case "schedule.md":
-				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:schedule.md")
-			case "task.md":
-				destPath = filepath.Join(filepath.Dir(destPath), "abcoder:task.md")
-			}
 		}
 
 		// Copy file
