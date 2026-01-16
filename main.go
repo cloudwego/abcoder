@@ -80,7 +80,10 @@ func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "abcoder",
 		Short: "Universal AST parser and writer for multi-language",
-		Long:  Usage,
+		Long: `ABCoder is a universal code analysis tool that converts source code to UniAST format.
+
+It supports multiple programming languages and provides various subcommands for parsing,
+writing, and analyzing code structures.`,
 	}
 
 	// Global flags
@@ -100,7 +103,10 @@ func NewRootCmd() *cobra.Command {
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "print the version of abcoder",
+		Short: "Print abcoder version information",
+		Long: `Output the version number and build metadata in the format: vX.X.Y-BUILD.
+
+Use this command to verify installation or when reporting issues.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Fprintf(os.Stdout, "%s\n", version.Version)
 		},
@@ -117,7 +123,20 @@ func newParseCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "parse <language> <path>",
-		Short: "parse the specific repo and write its UniAST (to stdout by default)",
+		Short: "Parse repository and export to UniAST JSON format",
+		Long: `Parse the specified repository and generate its Universal AST representation.
+
+By default, outputs to stdout. Use --output to write to a file.
+
+Language Support:
+  go      - Go projects
+  rust    - Rust projects
+  cxx      - C/C++ projects
+  python   - Python projects
+  ts       - TypeScript projects
+  js       - JavaScript projects
+  java     - Java projects`,
+		Example: `abcoder parse go ./my-project -o ast.json`,
 		Args:  cobra.ExactArgs(2),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			// Validate language
@@ -176,17 +195,17 @@ func newParseCmd() *cobra.Command {
 	}
 
 	// Flags
-	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output path.")
-	cmd.Flags().StringVar(&flagLsp, "lsp", "", "Specify the language server path.")
-	cmd.Flags().StringVar(&javaHome, "java-home", "", "java home")
-	cmd.Flags().BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "load external symbols into results")
-	cmd.Flags().BoolVar(&opts.NoNeedComment, "no-need-comment", false, "not need comment (only works for Go now)")
-	cmd.Flags().BoolVar(&opts.NotNeedTest, "no-need-test", false, "not need parse test files (only works for Go now)")
-	cmd.Flags().BoolVar(&opts.LoadByPackages, "load-by-packages", false, "load by packages (only works for Go now)")
-	cmd.Flags().StringSliceVar(&opts.Excludes, "exclude", []string{}, "exclude files or directories, support multiple values")
-	cmd.Flags().StringVar(&opts.RepoID, "repo-id", "", "specify the repo id")
-	cmd.Flags().StringVar(&opts.TSConfig, "tsconfig", "", "tsconfig path (only works for TS now)")
-	cmd.Flags().StringSliceVar(&opts.TSSrcDir, "ts-src-dir", []string{}, "src-dir path (only works for TS now)")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output path for UniAST JSON (default: stdout).")
+	cmd.Flags().StringVar(&flagLsp, "lsp", "", "Path to Language Server Protocol executable. Required for languages with LSP support (e.g., Java).")
+	cmd.Flags().StringVar(&javaHome, "java-home", "", "Java installation directory (JAVA_HOME). Required when using LSP for Java.")
+	cmd.Flags().BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "Load external symbol references into AST results (slower but more complete).")
+	cmd.Flags().BoolVar(&opts.NoNeedComment, "no-need-comment", false, "Skip parsing code comments (only works for Go).")
+	cmd.Flags().BoolVar(&opts.NotNeedTest, "no-need-test", false, "Skip test files during parsing (only works for Go).")
+	cmd.Flags().BoolVar(&opts.LoadByPackages, "load-by-packages", false, "Load packages one by one instead of all at once (only works for Go, uses more memory).")
+	cmd.Flags().StringSliceVar(&opts.Excludes, "exclude", []string{}, "Files or directories to exclude from parsing (can be specified multiple times).")
+	cmd.Flags().StringVar(&opts.RepoID, "repo-id", "", "Custom identifier for this repository (useful for multi-repo scenarios).")
+	cmd.Flags().StringVar(&opts.TSConfig, "tsconfig", "", "Path to tsconfig.json file for TypeScript project configuration.")
+	cmd.Flags().StringSliceVar(&opts.TSSrcDir, "ts-src-dir", []string{}, "Additional TypeScript source directories (can be specified multiple times).")
 
 	return cmd
 }
@@ -236,16 +255,22 @@ func newWriteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output path.")
-	cmd.Flags().StringVar(&wopts.Compiler, "compiler", "", "destination compiler path.")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output directory for generated code files (default: <basename of input file>).")
+	cmd.Flags().StringVar(&wopts.Compiler, "compiler", "", "Path to compiler executable (language-specific).")
 
 	return cmd
 }
 
 func newMcpCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "mcp <path>",
-		Short: "run as a MCP server for all repo ASTs (*.json) in the specific directory",
+		Use:   "mcp <directory>",
+		Short: "Start MCP server for AST files",
+		Long: `Start a Model Context Protocol (MCP) server that provides AST reading tools.
+
+The server communicates via stdio and can be integrated with Claude Code or other MCP clients.
+
+It serves all *.json AST files in the specified directory.`,
+		Example: `abcoder mcp ./asts/`,
 		Args:  cobra.ExactArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
@@ -278,8 +303,18 @@ func newMcpCmd() *cobra.Command {
 
 func newInitSpecCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "init-spec [path]",
-		Short: "initialize ABCoder integration for Claude Code (copies .claude directory and configures MCP servers)",
+		Use:   "init-spec [project-path]",
+		Short: "Initialize ABCoder integration for Claude Code",
+		Long: `Initialize ABCoder integration by copying .claude directory and configuring MCP servers.
+
+This sets up Claude Code to use ABCoder for code analysis.
+
+The path defaults to the current directory if not specified.
+
+The command will:
+1. Copy the .claude configuration directory
+2. Configure MCP server settings in Claude's config.json`,
+		Example: `abcoder init-spec /path/to/project`,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, _ := cmd.Flags().GetBool("verbose")
@@ -308,8 +343,27 @@ func newAgentCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "agent <path>",
-		Short: "run as an Agent for all repo ASTs (*.json) in the specific directory. WIP: only support code-analyzing at present.",
+		Use:   "agent <directory>",
+		Short: "Run AI agent with code analysis capabilities",
+		Long: `Start an autonomous AI agent that can perform code analysis tasks using LLM.
+
+The agent reads AST files from the specified directory and can perform various
+code analysis operations.
+
+Required Environment Variables:
+  API_TYPE   LLM provider type (e.g., openai, anthropic)
+  API_KEY    LLM API authentication key
+  MODEL_NAME Model identifier (e.g., gpt-4, claude-3-opus-20240229)
+  BASE_URL    (Optional) Custom API base URL
+
+Examples:
+  # Basic usage with OpenAI
+  API_TYPE=openai API_KEY=sk-xxx MODEL_NAME=gpt-4 \
+    abcoder agent ./asts/
+
+  # With custom API endpoint and step limit
+  API_TYPE=custom API_KEY=xxx MODEL_NAME=my-model BASE_URL=https://api.example.com \
+    abcoder agent ./asts/ --agent-max-steps 100`,
 		Args:  cobra.ExactArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
@@ -350,8 +404,8 @@ func newAgentCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().IntVar(&aopts.MaxSteps, "agent-max-steps", 50, "specify the max steps that the agent can run for each time")
-	cmd.Flags().IntVar(&aopts.MaxHistories, "agent-max-histories", 10, "specify the max histories that the agent can use")
+	cmd.Flags().IntVar(&aopts.MaxSteps, "agent-max-steps", 50, "Maximum number of agent reasoning steps per task (default: 50). Higher values allow more complex tasks but increase cost.")
+	cmd.Flags().IntVar(&aopts.MaxHistories, "agent-max-histories", 10, "Maximum number of conversation histories to maintain for context (default: 10).")
 
 	return cmd
 }
