@@ -17,6 +17,7 @@ require (
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/sourcegraph/jsonrpc2 v0.2.0
+	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
 	github.com/vifraa/gopom v1.0.0
 	golang.org/x/mod v0.24.0
@@ -55,6 +56,7 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -75,6 +77,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/spf13/cast v1.7.1 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
