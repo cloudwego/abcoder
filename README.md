@@ -62,7 +62,7 @@ Once setup, you can start coding with Claude Code:
 
 ### AST-Driven Coding Workflow
 
-[`.claude/hooks`](docs/.claude/hooks) provide a 4-layer analysis chain from repository to node details:
+[`.claude/hooks`](internal/utils/assets/.claude/hooks) provide a 4-layer analysis chain from repository to node details:
 
 ```
 list_repos → get_repo_structure → get_package_structure → get_file_structure → get_ast_node
@@ -72,13 +72,13 @@ list_repos → get_repo_structure → get_package_structure → get_file_structu
 
 ### Claude Code Slash Commands
 
-[`.claude/commands`](docs/.claude/commands) provide three custom slash commands to streamline development:
+[`.claude/commands`](internal/utils/assets/.claude/commands) provide three custom slash commands to streamline development:
 
 | Command | Function | Description |
 |---------|----------|-------------|
-| [`/abcoder:schedule` <task_desc>](docs/.claude/commands/abcoder:schedule.md) | Design implementation | Analyze codebase by using ABCoder, design technical solution |
-| [`/abcoder:task <name>`](docs/.claude/commands/abcoder:task.md) | Create coding task | Generate standardized CODE_TASK document |
-| [`/abcoder:recheck <task>`](docs/.claude/commands/abcoder:recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
+| [`/abcoder:schedule` <task_desc>](internal/utils/assets/.claude/commands/schedule.md) | Design implementation | Analyze codebase by using ABCoder, design technical solution |
+| [`/abcoder:task <name>`](internal/utils/assets/.claude/commands/task.md) | Create coding task | Generate standardized CODE_TASK document |
+| [`/abcoder:recheck <task>`](internal/utils/assets/.claude/commands/recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
 
 ### Workflow
 
@@ -102,11 +102,11 @@ Start coding(sub-agent) ─────────→ Execute Implementation
 
 | File | Purpose |
 |------|---------|
-| [`CLAUDE.md`](docs/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
-| [`settings.json`](docs/.claude/settings.json) | Hooks and permissions configuration |
-| [`hooks/`](docs/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
-| [`commands/`](docs/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schedule/abcoder:recheck) |
-| [`tmpls/ABCODER_CODE_TASK.md`](docs/.claude/tmpls/ABCODER_CODE_TASK.md) | Coding task template |
+| [`CLAUDE.md`](internal/utils/assets/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
+| [`settings.json`](internal/utils/assets/.claude/settings.json) | Hooks and permissions configuration |
+| [`hooks/`](internal/utils/assets/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
+| [`commands/`](internal/utils/assets/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schedule/abcoder:recheck) |
+| [`tmpls/ABCODER_CODE_TASK.md`](internal/utils/assets/.claude/tmpls/ABCODER_CODE_TASK.md) | Coding task template |
 
 ### Dependencies
 
@@ -114,7 +114,7 @@ Start coding(sub-agent) ─────────→ Execute Implementation
 - ABCoder MCP server (provides `mcp__abcoder` tools)
 - Sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, automatically configured by init-spec)
 
-> For detailed configuration, see [docs/.claude/README.md](docs/.claude/README.md)
+> For detailed configuration, see [claude-code-spec.md](docs/claude-code-spec.md)
 
 > Watch the demo video [here](https://github.com/cloudwego/abcoder/pull/141)
 
