@@ -38,7 +38,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	interutils "github.com/cloudwego/abcoder/internal/utils"
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
@@ -49,25 +48,8 @@ import (
 	"github.com/cloudwego/abcoder/llm/mcp"
 	"github.com/cloudwego/abcoder/llm/tool"
 	"github.com/cloudwego/abcoder/version"
+	"github.com/spf13/cobra"
 )
-
-const Usage = `abcoder <Action> [Language] <Path> [Flags]
-Action:
-   parse        parse the specific repo and write its UniAST (to stdout by default)
-   write        write the specific UniAST back to codes
-   mcp          run as a MCP server for all repo ASTs (*.json) in the specific directory
-   agent        run as an Agent for all repo ASTs (*.json) in the specific directory. WIP: only support code-analyzing at present.
-   init-spec    initialize ABCoder integration for Claude Code (copies .claude directory and configures MCP servers)
-   version      print the version of abcoder
-Language:
-   go           for golang codes
-   rust         for rust codes
-   cxx          for c codes (cpp support is on the way)
-   python       for python codes
-   ts           for typescript codes
-   js           for javascript codes
-   java         for java codes
-`
 
 func main() {
 	cmd := NewRootCmd()
@@ -115,10 +97,10 @@ Use this command to verify installation or when reporting issues.`,
 
 func newParseCmd() *cobra.Command {
 	var (
-		flagOutput    string
-		flagLsp      string
-		javaHome     string
-		opts         lang.ParseOptions
+		flagOutput string
+		flagLsp    string
+		javaHome   string
+		opts       lang.ParseOptions
 	)
 
 	cmd := &cobra.Command{
@@ -137,7 +119,7 @@ Language Support:
   js       - JavaScript projects
   java     - Java projects`,
 		Example: `abcoder parse go ./my-project -o ast.json`,
-		Args:  cobra.ExactArgs(2),
+		Args:    cobra.ExactArgs(2),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			// Validate language
 			language := uniast.NewLanguage(args[0])
@@ -271,7 +253,7 @@ The server communicates via stdio and can be integrated with Claude Code or othe
 
 It serves all *.json AST files in the specified directory.`,
 		Example: `abcoder mcp ./asts/`,
-		Args:  cobra.ExactArgs(1),
+		Args:    cobra.ExactArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
 				return fmt.Errorf("argument Path is required")
@@ -315,7 +297,7 @@ The command will:
 1. Copy the .claude configuration directory
 2. Configure MCP server settings in Claude's config.json`,
 		Example: `abcoder init-spec /path/to/project`,
-		Args:  cobra.MaximumNArgs(1),
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, _ := cmd.Flags().GetBool("verbose")
 			if verbose {
@@ -364,7 +346,7 @@ Examples:
   # With custom API endpoint and step limit
   API_TYPE=custom API_KEY=xxx MODEL_NAME=my-model BASE_URL=https://api.example.com \
     abcoder agent ./asts/ --agent-max-steps 100`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
 				return fmt.Errorf("argument Path is required")
