@@ -38,7 +38,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	interutils "github.com/cloudwego/abcoder/internal/utils"
+	internalCmd "github.com/cloudwego/abcoder/internal/cmd"
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -48,6 +48,7 @@ import (
 	"github.com/cloudwego/abcoder/llm/mcp"
 	"github.com/cloudwego/abcoder/llm/tool"
 	"github.com/cloudwego/abcoder/version"
+
 	"github.com/spf13/cobra"
 )
 
@@ -309,7 +310,7 @@ The command will:
 				uri = args[0]
 			}
 
-			if err := interutils.RunInitSpec(uri); err != nil {
+			if err := internalCmd.RunInitSpec(uri); err != nil {
 				log.Error("Failed to init-spec: %v\n", err)
 				return err
 			}
