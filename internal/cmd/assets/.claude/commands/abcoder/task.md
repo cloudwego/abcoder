@@ -18,14 +18,14 @@ tags: [abcoder, task, creation]
 Track these steps as TODOs and complete them one by one.
 1. 验证用户提供了任务名称，如未提供则提示使用格式 `/task <任务名称>`。
 2. 执行 `d=$(date +%m%d) && mkdir -p "./task/$d/"` 创建 `./task/{{MMDD}}/` 目录。
-3. 读取模板文件 `/Users/bytedance/github/github.com/cloudwego/abcoder/.claude/tmpls/ABCODER_CODE_TASK.md`。
+3. 读取模板文件 `{{CLAUDE_HOME_PATH}}/.claude/tmpls/ABCODER_CODE_TASK.md`。
 4. 根据任务上下文和名称，按照模板格式填充内容，生成新文件 `./task/{{MMDD}}/{{NAME}}__CODE_TASK.md`。
 5. 检查并清晰列出 CODE_TASK 包含的外部依赖包（如有）。
 6. 验证生成的文件格式正确，包含所有必要字段。
 7. 告知用户文件已创建成功，包含文件路径和外部依赖信息（如有），停止操作。
 
 **Reference**
-- 模板文件：`/Users/bytedance/github/github.com/cloudwego/abcoder/.claude/tmpls/ABCODER_CODE_TASK.md`
+- 模板文件：`{{CLAUDE_HOME_PATH}}/.claude/tmpls/ABCODER_CODE_TASK.md`
 - 示例：
   - `/task Feature_Auth` → 创建 `./task/1013/Feature_Auth__CODE_TASK.md`
   - `/task Bugfix-Api` → 创建 `./task/1013/Bugfix_Api__CODE_TASK.md`
