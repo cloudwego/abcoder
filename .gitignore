@@ -78,3 +78,5 @@ src/lang/testdata
 tools
 
 !testdata/asts/*.json
+
+.claude/
