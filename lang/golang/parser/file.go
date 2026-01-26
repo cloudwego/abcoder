@@ -142,16 +142,12 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			if len(collects.directCalls) > 0 {
 				for i, dep := range v.Dependencies {
 					if collects.directCalls[dep.FileLine] {
-						if v.Dependencies[i].Extra == nil {
-							v.Dependencies[i].Extra = map[string]any{}
-						}
-						v.Dependencies[i].Extra["FunctionIsCall"] = true
+						v.Dependencies[i].SetExtra("FunctionIsCall", true)
 					}
 				}
 			}
 			if len(collects.anonymousFunctions) > 0 {
-				v.Extra = map[string]any{}
-				v.Extra["AnonymousFunctions"] = collects.anonymousFunctions
+				v.SetExtra("AnonymousFunctions", collects.anonymousFunctions)
 			}
 		}
 
@@ -588,24 +584,17 @@ set_func:
 	if len(collects.directCalls) > 0 {
 		for i, dep := range f.FunctionCalls {
 			if collects.directCalls[dep.FileLine] {
-				if f.FunctionCalls[i].Extra == nil {
-					f.FunctionCalls[i].Extra = map[string]any{}
-				}
-				f.FunctionCalls[i].Extra["FunctionIsCall"] = true
+				f.FunctionCalls[i].SetExtra("FunctionIsCall", true)
 			}
 		}
 		for i, dep := range f.MethodCalls {
 			if collects.directCalls[dep.FileLine] {
-				if f.MethodCalls[i].Extra == nil {
-					f.MethodCalls[i].Extra = map[string]any{}
-				}
-				f.MethodCalls[i].Extra["FunctionIsCall"] = true
+				f.MethodCalls[i].SetExtra("FunctionIsCall", true)
 			}
 		}
 	}
 	if len(collects.anonymousFunctions) > 0 {
-		f.Extra = map[string]any{}
-		f.Extra["AnonymousFunctions"] = collects.anonymousFunctions
+		f.SetExtra("AnonymousFunctions", collects.anonymousFunctions)
 	}
 	return f, false
 }
