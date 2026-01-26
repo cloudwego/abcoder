@@ -510,11 +510,14 @@ type Function struct {
 
 	// func llm compress result
 	CompressData *string `json:"compress_data,omitempty"`
+
+	Extra map[string]any `json:",omitempty"`
 }
 
 type Dependency struct {
 	Identity
 	FileLine `json:",omitempty"`
+	Extra    map[string]any `json:",omitempty"`
 }
 
 func (d Dependency) Id() Identity {
@@ -607,6 +610,9 @@ type Type struct {
 	// FieldFunctions map[string]string
 
 	CompressData *string `json:"compress_data,omitempty"` // struct llm compress result
+
+	// extra data
+	Extra map[string]any `json:",omitempty"`
 }
 
 type Var struct {
@@ -623,4 +629,7 @@ type Var struct {
 	Groups []Identity `json:",omitempty"`
 
 	CompressData *string `json:"compress_data,omitempty"`
+
+	// extra data
+	Extra map[string]any `json:",omitempty"`
 }

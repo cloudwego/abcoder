@@ -121,7 +121,9 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 
 		// collect func value dependencies, in case of var a = func() {...}
 		if val != nil && !isConst {
-			collects := collectInfos{}
+			collects := collectInfos{
+				directCalls: map[FileLine]bool{},
+			}
 			ast.Inspect(*val, func(n ast.Node) bool {
 				return p.parseASTNode(ctx, n, &collects)
 			})
@@ -136,6 +138,20 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			}
 			for _, dep := range collects.tys {
 				v.Dependencies = InsertDependency(v.Dependencies, dep)
+			}
+			if len(collects.directCalls) > 0 {
+				for i, dep := range v.Dependencies {
+					if collects.directCalls[dep.FileLine] {
+						if v.Dependencies[i].Extra == nil {
+							v.Dependencies[i].Extra = map[string]any{}
+						}
+						v.Dependencies[i].Extra["FunctionIsCall"] = true
+					}
+				}
+			}
+			if len(collects.anonymousFunctions) > 0 {
+				v.Extra = map[string]any{}
+				v.Extra["AnonymousFunctions"] = collects.anonymousFunctions
 			}
 		}
 
@@ -392,12 +408,19 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 type collectInfos struct {
 	functionCalls, methodCalls []Dependency
 	tys, globalVars            []Dependency
+
+	directCalls        map[FileLine]bool
+	anonymousFunctions []FileLine // record anonymous function
 }
 
 func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collectInfos) bool {
 	switch expr := node.(type) {
 	case *ast.SelectorExpr:
 		return p.parseSelector(ctx, expr, collect)
+	case *ast.CallExpr:
+		p.parseCall(ctx, expr, collect)
+	case *ast.FuncLit:
+		collect.anonymousFunctions = append(collect.anonymousFunctions, ctx.FileLine(expr))
 	case *ast.Ident:
 		callName := expr.Name
 		// println("[parseFunc] ast.Ident:", callName)
@@ -462,6 +485,22 @@ func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collec
 	return true
 }
 
+// parseCall collect direct call info
+func (p *GoParser) parseCall(ctx *fileContext, expr *ast.CallExpr, collect *collectInfos) {
+	var ident *ast.Ident
+
+	switch idt := expr.Fun.(type) {
+	case *ast.Ident:
+		ident = idt
+	case *ast.SelectorExpr:
+		ident = idt.Sel
+	}
+
+	if ident != nil {
+		collect.directCalls[ctx.FileLine(ident)] = true
+	}
+}
+
 // parseFunc parses all function declaration in one file
 func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Function, bool) {
 	// method receiver
@@ -511,7 +550,9 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	// collect content
 	content := string(ctx.GetRawContent(funcDecl))
 
-	collects := collectInfos{}
+	collects := collectInfos{
+		directCalls: map[FileLine]bool{},
+	}
 	if funcDecl.Body == nil {
 		goto set_func
 	}
@@ -521,7 +562,6 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	})
 
 set_func:
-
 	if fname == "init" && p.repo.GetFunction(NewIdentity(ctx.module.Name, ctx.pkgPath, fname)) != nil {
 		// according to https://go.dev/ref/spec#Program_initialization_and_execution,
 		// duplicated init() is allowed and never be referenced, thus add a subfix
@@ -544,6 +584,29 @@ set_func:
 		f.Types = InsertDependency(f.Types, t)
 	}
 	f.Signature = string(sig)
+
+	if len(collects.directCalls) > 0 {
+		for i, dep := range f.FunctionCalls {
+			if collects.directCalls[dep.FileLine] {
+				if f.FunctionCalls[i].Extra == nil {
+					f.FunctionCalls[i].Extra = map[string]any{}
+				}
+				f.FunctionCalls[i].Extra["FunctionIsCall"] = true
+			}
+		}
+		for i, dep := range f.MethodCalls {
+			if collects.directCalls[dep.FileLine] {
+				if f.MethodCalls[i].Extra == nil {
+					f.MethodCalls[i].Extra = map[string]any{}
+				}
+				f.MethodCalls[i].Extra["FunctionIsCall"] = true
+			}
+		}
+	}
+	if len(collects.anonymousFunctions) > 0 {
+		f.Extra = map[string]any{}
+		f.Extra["AnonymousFunctions"] = collects.anonymousFunctions
+	}
 	return f, false
 }
 
