@@ -245,6 +245,10 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			if skip {
 				continue
 			}
+			if filePath == "" {
+				fmt.Fprintf(os.Stderr, "filename is empty, pkg: %s\n", pkg.ID)
+				continue
+			}
 			bs := p.getFileBytes(filePath)
 			ctx := &fileContext{
 				repoDir:        p.homePageDir,
