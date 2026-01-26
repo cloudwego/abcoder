@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -511,13 +512,13 @@ type Function struct {
 	// func llm compress result
 	CompressData *string `json:"compress_data,omitempty"`
 
-	Extra map[string]any `json:",omitempty"`
+	Extra *ExtraInfo `json:",omitempty"`
 }
 
 type Dependency struct {
 	Identity
 	FileLine `json:",omitempty"`
-	Extra    map[string]any `json:",omitempty"`
+	Extra    *ExtraInfo `json:",omitempty"`
 }
 
 func (d Dependency) Id() Identity {
@@ -612,7 +613,7 @@ type Type struct {
 	CompressData *string `json:"compress_data,omitempty"` // struct llm compress result
 
 	// extra data
-	Extra map[string]any `json:",omitempty"`
+	Extra *ExtraInfo `json:",omitempty"`
 }
 
 type Var struct {
@@ -631,5 +632,93 @@ type Var struct {
 	CompressData *string `json:"compress_data,omitempty"`
 
 	// extra data
-	Extra map[string]any `json:",omitempty"`
+	Extra *ExtraInfo `json:",omitempty"`
+}
+
+type ExtraInfo struct {
+	data map[string]any
+}
+
+func (e *ExtraInfo) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(e.data)
+}
+
+func (e *ExtraInfo) UnmarshalJSON(data []byte) error {
+	return sonic.Unmarshal(data, &e.data)
+}
+
+func (t *Type) GetExtra(key string) any {
+	if t.Extra == nil {
+		return nil
+	}
+	if v, ok := t.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (e *Type) SetExtra(key string, value any) {
+	if e.Extra == nil {
+		e.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	e.Extra.data[key] = value
+}
+
+func (v *Var) GetExtra(key string) any {
+	if v.Extra == nil {
+		return nil
+	}
+	if v, ok := v.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (v *Var) SetExtra(key string, value any) {
+	if v.Extra == nil {
+		v.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	v.Extra.data[key] = value
+}
+
+func (f *Function) GetExtra(key string) any {
+	if f.Extra == nil {
+		return nil
+	}
+	if v, ok := f.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (f *Function) SetExtra(key string, value any) {
+	if f.Extra == nil {
+		f.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	f.Extra.data[key] = value
+}
+
+func (d *Dependency) GetExtra(key string) any {
+	if d.Extra == nil {
+		return nil
+	}
+	if v, ok := d.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (d *Dependency) SetExtra(key string, value any) {
+	if d.Extra == nil {
+		d.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	d.Extra.data[key] = value
 }
