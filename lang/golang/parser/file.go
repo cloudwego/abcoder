@@ -26,6 +26,11 @@ import (
 	. "github.com/cloudwego/abcoder/lang/uniast"
 )
 
+const (
+	ExtraKey_FunctionIsCall     = "FunctionIsCall"
+	ExtraKey_AnonymousFunctions = "AnonymousFunctions"
+)
+
 func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {
 	cont := true
 	ast.Inspect(f, func(node ast.Node) bool {
@@ -142,12 +147,12 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			if len(collects.directCalls) > 0 {
 				for i, dep := range v.Dependencies {
 					if collects.directCalls[dep.FileLine] {
-						v.Dependencies[i].SetExtra("FunctionIsCall", true)
+						v.Dependencies[i].SetExtra(ExtraKey_FunctionIsCall, true)
 					}
 				}
 			}
 			if len(collects.anonymousFunctions) > 0 {
-				v.SetExtra("AnonymousFunctions", collects.anonymousFunctions)
+				v.SetExtra(ExtraKey_AnonymousFunctions, collects.anonymousFunctions)
 			}
 		}
 
@@ -584,17 +589,17 @@ set_func:
 	if len(collects.directCalls) > 0 {
 		for i, dep := range f.FunctionCalls {
 			if collects.directCalls[dep.FileLine] {
-				f.FunctionCalls[i].SetExtra("FunctionIsCall", true)
+				f.FunctionCalls[i].SetExtra(ExtraKey_FunctionIsCall, true)
 			}
 		}
 		for i, dep := range f.MethodCalls {
 			if collects.directCalls[dep.FileLine] {
-				f.MethodCalls[i].SetExtra("FunctionIsCall", true)
+				f.MethodCalls[i].SetExtra(ExtraKey_FunctionIsCall, true)
 			}
 		}
 	}
 	if len(collects.anonymousFunctions) > 0 {
-		f.SetExtra("AnonymousFunctions", collects.anonymousFunctions)
+		f.SetExtra(ExtraKey_AnonymousFunctions, collects.anonymousFunctions)
 	}
 	return f, false
 }
