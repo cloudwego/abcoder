@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.1.3)
+# Universal Abstract-Syntax-Tree Specification (v0.2.0)
 
 Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言无关的代码上下文数据结构，表示某个仓库代码的统一抽象语法树。收集了语言实体（函数、类型、常（变）量）的定义及其相互依赖关系，用于后续的 AI 理解、coding-workflow 开发。
 
@@ -371,12 +371,29 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 - Vars: 当前函数内引用的全局量，包括变量和常量
 
 
+- Extra: 额外信息，用于存储一些语言特定的信息，或者是一些额外的元数据
+    
+
+    - AnonymousFunctions: 函数中所定义的匿名函数，每个元素为对应函数的 FileLine
+
+
+        - File: 所在的文件名
+
+
+        - Line: **起始位置文件的行号(从1开始)**
+
+
+        - StartOffset: 代码起始位置**相对文件头的字节偏移量** 
+
+
+        - EndOffset: 代码结束位置**相对文件头的字节偏移量**
+
 ###### Dependency
 
 表示一个依赖关系，包含依赖节点 Id、依赖产生位置等信息，方便 LLM 准确识别
 
 
-```
+```json
 {
     "ModPath": "github.com/cloudwego/localsession",
     "PkgPath": "github.com/cloudwego/localsession",
@@ -384,7 +401,10 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
     "File": "manager.go",
     "Line": 140,
     "StartOffset": 3547,
-    "EndOffset": 3564
+    "EndOffset": 3564,
+    "Extra": {
+        "FunctionIsCall": true
+    }
 }
 ```
 
@@ -407,6 +427,12 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 
 
 - EndOffset: 依赖点（不是被依赖节点）token 结束位置相对代码文件的偏移
+
+
+- Extra: 额外信息，用于存储一些语言特定的信息，或者是一些额外的元数据
+
+
+    - FunctionIsCall: 如果 Dependency 是一个函数调用，是否真正执行了函数调用，而不是只是引用了函数
 
 
 ##### Type
@@ -490,6 +516,9 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 - Implements: 该类型实现了哪些接口 **Identity**
 
 
+- Extra: 额外信息，用于存储一些语言特定的信息，或者是一些额外的元数据
+
+
 ##### Var
 
 全局量，包括变量和常量，**但是必须是全局**
@@ -551,6 +580,24 @@ var x = getx(y db.Data) int {
 中的 `db.Data` 和 `model.Var2`
 
 - Groups: 同组定义， 如 Go 中的 `const( A=1, B=2, C=3)`，Groups 为 `[C=3, B=2]`（假设 A 为变量自身）
+
+
+- Extra: 额外信息，用于存储一些语言特定的信息，或者是一些额外的元数据
+
+
+    - AnonymousFunctions: 在当前变量的初始化函数中，所定义的匿名函数。每个元素为对应函数的 FileLine
+
+
+        - File: 所在的文件名
+
+
+        - Line: **起始位置文件的行号(从1开始)**
+
+
+        - StartOffset: 代码起始位置**相对文件头的字节偏移量** 
+
+
+        - EndOffset: 代码结束位置**相对文件头的字节偏移量**
 
 
 ### Graph
