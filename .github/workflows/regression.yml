@@ -108,4 +108,4 @@ jobs:
           retention-days: 3
 
       - name: Compare outputs and check for regression
-        run: ./pr_repo/script/diffjson.py out_old out_new $COMPARE_IGNORE
+        run: ./pr_repo/script/diffjson.py out_old out_new -v
