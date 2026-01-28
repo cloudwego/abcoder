@@ -40,6 +40,7 @@ type LSPClient struct {
 	files                  map[DocumentURI]*TextDocumentItem
 	provider               LanguageServiceProvider
 	ClientOptions
+	LspOptions map[string]string
 }
 
 type ClientOptions struct {

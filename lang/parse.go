@@ -28,7 +28,7 @@ import (
 	"github.com/cloudwego/abcoder/lang/collect"
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/golang/parser"
-	"github.com/cloudwego/abcoder/lang/java"
+	"github.com/cloudwego/abcoder/lang/java/pb"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
@@ -75,7 +75,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		return nil, err
 	}
 
-	var client *lsp.LSPClient
+	var client = &lsp.LSPClient{ClientOptions: lsp.ClientOptions{Language: args.Language}, LspOptions: args.LspOptions}
 	if lspPath != "" {
 		// Initialize the LSP client
 		log.Info("start initialize LSP server %s...\n", lspPath)
@@ -87,6 +87,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 			Verbose:               args.Verbose,
 			InitializationOptions: args.LspOptions,
 		})
+		client.LspOptions = args.LspOptions
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)
 			return nil, err
@@ -129,7 +130,7 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 	case uniast.Python:
 		openfile, wait = python.CheckRepo(repoPath)
 	case uniast.Java:
-		openfile, wait = java.CheckRepo(repoPath)
+		openfile, wait = pb.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -154,7 +155,7 @@ func checkLSP(language uniast.Language, lspPath string, args ParseOptions) (l un
 		case uniast.Python:
 			l, s = python.GetDefaultLSP()
 		case uniast.Java:
-			l, s = java.GetDefaultLSP(args.LspOptions)
+			l, s = pb.GetDefaultLSP(args.LspOptions)
 		case uniast.Golang:
 			if _, err := exec.LookPath("go"); err != nil {
 				if _, err := os.Stat(lspPath); os.IsNotExist(err) {

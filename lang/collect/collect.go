@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -28,7 +29,9 @@ import (
 
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/java"
+	javaipc "github.com/cloudwego/abcoder/lang/java/ipc"
 	"github.com/cloudwego/abcoder/lang/java/parser"
+	javapb "github.com/cloudwego/abcoder/lang/java/pb"
 	"github.com/cloudwego/abcoder/lang/log"
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
@@ -69,9 +72,18 @@ type Collector struct {
 
 	localFunc map[Location]*DocumentSymbol
 
+	// javaIPC is optional; when set, Java Collect runs without LSP.
+	javaIPC *javaipc.Converter
+
 	// modPatcher ModulePatcher
 
 	CollectOption
+}
+
+// UseJavaIPC sets the Java IPC converter caches as the source of truth for Java collecting.
+// When enabled, Java Collect will not rely on LSP (no Definition/SemanticTokens).
+func (c *Collector) UseJavaIPC(conv *javaipc.Converter) {
+	c.javaIPC = conv
 }
 
 type methodInfo struct {
@@ -149,6 +161,11 @@ func (c *Collector) Collect(ctx context.Context) error {
 	var root_syms []*DocumentSymbol
 	var err error
 	if c.Language == uniast.Java {
+		// Prefer IPC-based collection when provided.
+		if c.javaIPC != nil || c.cli.LspOptions["java_parser"] == "ipc" {
+			_, err = c.ScannerByJavaIPC(ctx)
+			return err
+		}
 		root_syms, err = c.ScannerByTreeSitter(ctx)
 		if err != nil {
 			return err
@@ -282,6 +299,614 @@ func (c *Collector) Collect(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ScannerByJavaIPC collects Java symbols/deps from IPC Java Parser caches.
+// It fills c.files/c.syms/c.deps/c.funcs/c.vars directly and DOES NOT rely on LSP.
+func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, error) {
+	if c.Language != uniast.Java {
+		return nil, fmt.Errorf("ScannerByJavaIPC only supports Java")
+	}
+
+	// Ensure we have a lightweight file reader client for Export/Locate.
+	if c.cli == nil {
+		c.cli = &LSPClient{ClientOptions: ClientOptions{Language: c.Language}}
+	}
+	c.cli.InitFiles()
+
+	if c.javaIPC == nil {
+		converter, err := java.ParseRepositoryByIpc(ctx, c.repo, c.parserConfig())
+		if err != nil {
+		}
+		c.UseJavaIPC(converter)
+	}
+
+	// Build excludes (absolute)
+	excludes := make([]string, len(c.Excludes))
+	for i, e := range c.Excludes {
+		if !filepath.IsAbs(e) {
+			excludes[i] = filepath.Join(c.repo, e)
+		} else {
+			excludes[i] = e
+		}
+	}
+	shouldExclude := func(path string) bool {
+		for _, e := range excludes {
+			if strings.HasPrefix(path, e) {
+				return true
+			}
+		}
+		return false
+	}
+
+	normalizePath := func(p string) string {
+		if p == "" {
+			return ""
+		}
+		if filepath.IsAbs(p) {
+			return filepath.Clean(p)
+		}
+		return filepath.Clean(filepath.Join(c.repo, p))
+	}
+
+	// Merge caches for lookup
+	allByName := make(map[string]*javapb.ClassInfo, len(c.javaIPC.LocalClassCache)+len(c.javaIPC.JdkClassCache)+len(c.javaIPC.ThirdPartClassCache)+len(c.javaIPC.UnknowClassCache))
+	localByName := make(map[string]*javapb.ClassInfo, len(c.javaIPC.LocalClassCache))
+	merge := func(m map[string]*javapb.ClassInfo) {
+		for k, v := range m {
+			if v == nil {
+				continue
+			}
+			allByName[k] = v
+		}
+	}
+	merge(c.javaIPC.LocalClassCache)
+	merge(c.javaIPC.JdkClassCache)
+	merge(c.javaIPC.ThirdPartClassCache)
+	merge(c.javaIPC.UnknowClassCache)
+	for k, v := range c.javaIPC.LocalClassCache {
+		if v != nil {
+			localByName[k] = v
+		}
+	}
+
+	resolveClass := func(fqcn string) *javapb.ClassInfo {
+		if fqcn == "" {
+			return nil
+		}
+		if v, ok := allByName[fqcn]; ok {
+			return v
+		}
+		return nil
+	}
+
+	simpleName := func(fqcn string) string {
+		if fqcn == "" {
+			return ""
+		}
+		if idx := strings.LastIndex(fqcn, "."); idx >= 0 && idx+1 < len(fqcn) {
+			return fqcn[idx+1:]
+		}
+		return fqcn
+	}
+
+	// IPC Java Parser 的行号/列号是 1-based；当前系统内部 Position 需要 0-based。
+	// 为了兼容（避免出现负数），仅在值 > 0 时做 -1。
+	normLine := func(v int32) int {
+		if v > 0 {
+			return int(v - 1)
+		}
+		return int(v)
+	}
+	normCol := func(v int32) int {
+		if v > 0 {
+			return int(v - 1)
+		}
+		return int(v)
+	}
+	locFromPos := func(fileAbs string, sl, sc, el, ec int32) Location {
+		return Location{
+			URI: NewURI(fileAbs),
+			Range: Range{
+				Start: Position{Line: normLine(sl), Character: normCol(sc)},
+				End:   Position{Line: normLine(el), Character: normCol(ec)},
+			},
+		}
+	}
+
+	externalURIFor := func(ci *javapb.ClassInfo, fqcn string) DocumentURI {
+		base := "abcoder-external"
+		if ci != nil && ci.Source != nil {
+			switch ci.Source.Type {
+			case javapb.SourceType_SOURCE_TYPE_JDK:
+				base = "abcoder-jdk"
+			case javapb.SourceType_SOURCE_TYPE_MAVEN, javapb.SourceType_SOURCE_TYPE_EXTERNAL_JAR:
+				base = "abcoder-third"
+			}
+		}
+		p := filepath.Join(os.TempDir(), base, filepath.FromSlash(strings.ReplaceAll(fqcn, ".", "/"))+".java")
+		return NewURI(p)
+	}
+
+	classKind := func(ci *javapb.ClassInfo) SymbolKind {
+		if ci == nil {
+			return SKUnknown
+		}
+		switch ci.ClassType {
+		case javapb.ClassType_CLASS_TYPE_INTERFACE:
+			return SKInterface
+		case javapb.ClassType_CLASS_TYPE_ENUM:
+			return SKEnum
+		default:
+			return SKClass
+		}
+	}
+
+	// fileAbs -> local classes in file
+	fileToClasses := make(map[string][]*javapb.ClassInfo, len(c.javaIPC.LocalClassCache))
+	for _, ci := range c.javaIPC.LocalClassCache {
+		if ci == nil {
+			continue
+		}
+		fp := normalizePath(ci.FilePath)
+		if fp == "" {
+			continue
+		}
+		if shouldExclude(fp) {
+			continue
+		}
+		if c.spec.ShouldSkip(fp) {
+			continue
+		}
+		fileToClasses[fp] = append(fileToClasses[fp], ci)
+	}
+	for fp := range fileToClasses {
+		cls := fileToClasses[fp]
+		sort.Slice(cls, func(i, j int) bool {
+			if cls[i].StartLine != cls[j].StartLine {
+				return cls[i].StartLine < cls[j].StartLine
+			}
+			return cls[i].StartColumn < cls[j].StartColumn
+		})
+		fileToClasses[fp] = cls
+	}
+
+	// Module paths (same as ScannerByTreeSitter)
+	modulePaths := []string{c.repo}
+	rootPomPath := filepath.Join(c.repo, "pom.xml")
+	if rootModule, err := parser.ParseMavenProject(rootPomPath); err == nil && rootModule != nil {
+		modulePaths = parser.GetModulePaths(rootModule)
+		if len(modulePaths) == 0 {
+			modulePaths = []string{c.repo}
+		}
+	}
+
+	classSymByName := make(map[string]*DocumentSymbol, len(allByName))
+	methodSymByKey := make(map[string]*DocumentSymbol, 1024)
+	processed := make(map[string]bool, len(localByName))
+	processing := make(map[string]bool, 64)
+
+	ensureFile := func(fileAbs string, ci *javapb.ClassInfo) *uniast.File {
+		if fileAbs == "" {
+			return nil
+		}
+		if f := c.files[fileAbs]; f != nil {
+			return f
+		}
+		rel, err := filepath.Rel(c.repo, fileAbs)
+		if err != nil {
+			rel = filepath.Base(fileAbs)
+		}
+		f := uniast.NewFile(rel)
+		if ci != nil {
+			if ci.PackageName != "" {
+				f.Package = uniast.PkgPath(ci.PackageName)
+			}
+			if len(ci.Imports) > 0 {
+				f.Imports = make([]uniast.Import, 0, len(ci.Imports))
+				for _, imp := range ci.Imports {
+					if imp == "" {
+						continue
+					}
+					f.Imports = append(f.Imports, uniast.Import{Path: imp})
+				}
+			}
+		}
+		c.files[fileAbs] = f
+		return f
+	}
+
+	getOrCreateClassSym := func(fqcn string) *DocumentSymbol {
+		if fqcn == "" {
+			return nil
+		}
+		if sym, ok := classSymByName[fqcn]; ok {
+			return sym
+		}
+		ci := resolveClass(fqcn)
+		if ci == nil {
+			return nil
+		}
+		isLocal := ci.Source != nil && ci.Source.Type == javapb.SourceType_SOURCE_TYPE_LOCAL
+		fp := normalizePath(ci.FilePath)
+		var uri DocumentURI
+		if isLocal && fp != "" {
+			uri = NewURI(fp)
+			ensureFile(fp, ci)
+		} else {
+			// external/jdk/third-party
+			if fp != "" {
+				// Ensure it is an absolute path that is NOT under repo
+				if !filepath.IsAbs(fp) {
+					fp = filepath.Clean(filepath.Join(os.TempDir(), "abcoder-external-path", fp))
+				}
+				uri = NewURI(fp)
+			} else {
+				uri = externalURIFor(ci, fqcn)
+			}
+		}
+		name := simpleName(fqcn)
+		if name == "" {
+			name = fqcn
+		}
+		loc := Location{URI: uri, Range: Range{Start: Position{Line: normLine(ci.StartLine), Character: normCol(ci.StartColumn)}, End: Position{Line: normLine(ci.EndLine), Character: normCol(ci.EndColumn)}}}
+		sym := &DocumentSymbol{
+			Name:     name,
+			Kind:     classKind(ci),
+			Text:     ci.GetContent(),
+			Location: loc,
+			Role:     DEFINITION,
+		}
+		c.syms[sym.Location] = sym
+		classSymByName[fqcn] = sym
+		return sym
+	}
+
+	addDep := func(from *DocumentSymbol, depSym *DocumentSymbol, tokenLoc Location) {
+		if from == nil || depSym == nil {
+			return
+		}
+		c.deps[from] = append(c.deps[from], dependency{Location: tokenLoc, Symbol: depSym})
+	}
+
+	isStaticText := func(raw string) bool {
+		if raw == "" {
+			return false
+		}
+		l := strings.ToLower(raw)
+		return strings.Contains(l, " static ") || strings.HasPrefix(l, "static ") || strings.Contains(l, "\nstatic ")
+	}
+
+	isPublicText := func(raw string) bool {
+		if raw == "" {
+			return false
+		}
+		l := strings.ToLower(raw)
+		return strings.Contains(l, " public ") || strings.HasPrefix(l, "public ") || strings.Contains(l, "\npublic ")
+	}
+
+	isFinalText := func(raw string) bool {
+		if raw == "" {
+			return false
+		}
+		l := strings.ToLower(raw)
+		return strings.Contains(l, " final ") || strings.HasPrefix(l, "final ") || strings.Contains(l, "\nfinal ")
+	}
+
+	methodKey := func(fqcn, k string) string {
+		return fqcn + "#" + k
+	}
+
+	var processClass func(string)
+	processClass = func(fqcn string) {
+		if fqcn == "" {
+			return
+		}
+		if processed[fqcn] {
+			return
+		}
+		if processing[fqcn] {
+			return
+		}
+		ci := localByName[fqcn]
+		if ci == nil {
+			// Not local: only ensure stub symbol exists.
+			_ = getOrCreateClassSym(fqcn)
+			processed[fqcn] = true
+			return
+		}
+		processing[fqcn] = true
+		defer func() { processing[fqcn] = false }()
+
+		fileAbs := normalizePath(ci.FilePath)
+		if fileAbs == "" {
+			processing[fqcn] = false
+			processed[fqcn] = true
+			return
+		}
+		ensureFile(fileAbs, ci)
+		classSym := getOrCreateClassSym(fqcn)
+		if classSym == nil {
+			processed[fqcn] = true
+			return
+		}
+
+		// 1) Extends
+		if len(ci.ExtendsDetails) > 0 {
+			for _, ext := range ci.ExtendsDetails {
+				if ext == nil || ext.Fqcn == "" {
+					continue
+				}
+				if _, ok := localByName[ext.Fqcn]; ok {
+					processClass(ext.Fqcn)
+				}
+				depSym := getOrCreateClassSym(ext.Fqcn)
+				tokLoc := locFromPos(fileAbs, ext.StartLine, ext.StartColumn, ext.EndLine, ext.EndColumn)
+				addDep(classSym, depSym, tokLoc)
+			}
+		} else {
+			for _, ext := range ci.ExtendsTypes {
+				if ext == "" {
+					continue
+				}
+				if _, ok := localByName[ext]; ok {
+					processClass(ext)
+				}
+				depSym := getOrCreateClassSym(ext)
+				addDep(classSym, depSym, classSym.Location)
+			}
+		}
+
+		// 2) Implements
+		if len(ci.ImplementsDetails) > 0 {
+			for _, impl := range ci.ImplementsDetails {
+				if impl == nil || impl.Fqcn == "" {
+					continue
+				}
+				if _, ok := localByName[impl.Fqcn]; ok {
+					processClass(impl.Fqcn)
+				}
+				depSym := getOrCreateClassSym(impl.Fqcn)
+				if depSym != nil {
+					depSym.Kind = SKInterface
+				}
+				tokLoc := locFromPos(fileAbs, impl.StartLine, impl.StartColumn, impl.EndLine, impl.EndColumn)
+				addDep(classSym, depSym, tokLoc)
+			}
+		} else {
+			for _, impl := range ci.ImplementsTypes {
+				if impl == "" {
+					continue
+				}
+				if _, ok := localByName[impl]; ok {
+					processClass(impl)
+				}
+				depSym := getOrCreateClassSym(impl)
+				if depSym != nil {
+					depSym.Kind = SKInterface
+				}
+				addDep(classSym, depSym, classSym.Location)
+			}
+		}
+
+		// 3) Fields
+		for _, f := range ci.Fields {
+			if f == nil {
+				continue
+			}
+			if f.TypeFqcn != "" {
+				if _, ok := localByName[f.TypeFqcn]; ok {
+					processClass(f.TypeFqcn)
+				}
+				depSym := getOrCreateClassSym(f.TypeFqcn)
+				addDep(classSym, depSym, locFromPos(fileAbs, f.StartLine, f.StartColumn, f.EndLine, f.EndColumn))
+			}
+
+			// Exportable static vars/consts
+			if f.Name != "" && isPublicText(f.RawText) && isStaticText(f.RawText) {
+				kind := SKVariable
+				if isFinalText(f.RawText) {
+					kind = SKConstant
+				}
+				vsym := &DocumentSymbol{
+					Name:     f.Name,
+					Kind:     kind,
+					Text:     f.RawText,
+					Location: locFromPos(fileAbs, f.StartLine, f.StartColumn, f.EndLine, f.EndColumn),
+					Role:     DEFINITION,
+				}
+				c.syms[vsym.Location] = vsym
+				if f.TypeFqcn != "" {
+					depSym := getOrCreateClassSym(f.TypeFqcn)
+					if depSym != nil {
+						c.vars[vsym] = dependency{Location: vsym.Location, Symbol: depSym}
+					}
+				}
+			}
+		}
+
+		// 4) Methods (and method calls)
+		for _, m := range ci.Methods {
+			if m == nil {
+				continue
+			}
+			name := m.Descriptor
+			if name == "" {
+				name = m.GetName()
+			}
+			if name == "" {
+				continue
+			}
+			kind := SKMethod
+			if isStaticText(m.RawText) {
+				kind = SKFunction
+			}
+			mloc := locFromPos(fileAbs, m.StartLine, m.StartColumn, m.EndLine, m.EndColumn)
+			msym := &DocumentSymbol{
+				Name:     name,
+				Kind:     kind,
+				Text:     m.RawText,
+				Location: mloc,
+				Role:     DEFINITION,
+			}
+			c.syms[msym.Location] = msym
+			classSym.Children = append(classSym.Children, msym)
+
+			// Index method symbols for call resolution
+			if m.Descriptor != "" {
+				methodSymByKey[methodKey(fqcn, m.Descriptor)] = msym
+			}
+			if n := m.GetName(); n != "" {
+				methodSymByKey[methodKey(fqcn, n)] = msym
+			}
+
+			// Fill functionInfo
+			finfo := c.funcs[msym]
+			finfo.Signature = m.Descriptor
+			if finfo.Signature == "" {
+				finfo.Signature = strings.TrimSpace(m.RawText)
+			}
+			finfo.Method = &methodInfo{Receiver: dependency{Symbol: classSym, Location: classSym.Location}}
+
+			if len(m.Parameters) > 0 {
+				finfo.Inputs = make(map[int]dependency, len(m.Parameters))
+				finfo.InputsSorted = make([]dependency, 0, len(m.Parameters))
+				for i, p := range m.Parameters {
+					if p == nil || p.TypeFqcn == "" {
+						continue
+					}
+					if _, ok := localByName[p.TypeFqcn]; ok {
+						processClass(p.TypeFqcn)
+					}
+					depSym := getOrCreateClassSym(p.TypeFqcn)
+					if depSym == nil {
+						continue
+					}
+					ploc := locFromPos(fileAbs, p.StartLine, p.StartColumn, p.EndLine, p.EndColumn)
+					d := dependency{Location: ploc, Symbol: depSym}
+					finfo.Inputs[i] = d
+					finfo.InputsSorted = append(finfo.InputsSorted, d)
+				}
+			}
+			if m.ReturnType != nil && m.ReturnType.TypeFqcn != "" && m.ReturnType.TypeFqcn != "void" {
+				if _, ok := localByName[m.ReturnType.TypeFqcn]; ok {
+					processClass(m.ReturnType.TypeFqcn)
+				}
+				depSym := getOrCreateClassSym(m.ReturnType.TypeFqcn)
+				if depSym != nil {
+					rloc := locFromPos(fileAbs, m.ReturnType.StartLine, m.ReturnType.StartColumn, m.ReturnType.EndLine, m.ReturnType.EndColumn)
+					finfo.Outputs = map[int]dependency{0: {Location: rloc, Symbol: depSym}}
+					finfo.OutputsSorted = []dependency{{Location: rloc, Symbol: depSym}}
+				}
+			}
+			c.funcs[msym] = finfo
+
+			// Method calls
+			for _, call := range m.MethodCalls {
+				if call == nil || call.CalleeClass == "" {
+					continue
+				}
+				calleeInfo := resolveClass(call.CalleeClass)
+				if calleeInfo == nil {
+					// drop if callee class can't be resolved
+					continue
+				}
+				// Ensure callee class symbol exists, and for local callee class ensure it is processed so method index is ready.
+				if _, ok := localByName[call.CalleeClass]; ok {
+					processClass(call.CalleeClass)
+				}
+				calleeClassSym := getOrCreateClassSym(call.CalleeClass)
+				if calleeClassSym == nil {
+					continue
+				}
+
+				calleeMethodSym := (*DocumentSymbol)(nil)
+				if call.CalleeMethod != "" {
+					if s, ok := methodSymByKey[methodKey(call.CalleeClass, call.CalleeMethod)]; ok {
+						calleeMethodSym = s
+					}
+				}
+				if calleeMethodSym == nil {
+					// Create a lightweight stub method symbol (one-layer only).
+					// IMPORTANT: do NOT put it into c.syms to avoid clobbering class symbols.
+					stubLoc := Location{URI: calleeClassSym.Location.URI, Range: Range{Start: calleeClassSym.Location.Range.Start, End: calleeClassSym.Location.Range.Start}}
+					calleeMethodSym = &DocumentSymbol{
+						Name:     call.CalleeMethod,
+						Kind:     SKMethod,
+						Text:     "",
+						Location: stubLoc,
+						Role:     REFERENCE,
+					}
+				}
+				tokFile := normalizePath(call.FilePath)
+				if tokFile == "" {
+					tokFile = fileAbs
+				}
+				callLoc := locFromPos(tokFile, call.Line, call.Column, call.EndLine, call.EndColumn)
+				addDep(msym, calleeMethodSym, callLoc)
+			}
+		}
+
+		processed[fqcn] = true
+	}
+
+	// Traverse in module->file->class order.
+	rootSyms := make([]*DocumentSymbol, 0, len(localByName))
+	visitedFile := make(map[string]bool, len(fileToClasses))
+	for _, modulePath := range modulePaths {
+		// Collect files under current modulePath
+		files := make([]string, 0, 256)
+		for fp := range fileToClasses {
+			if visitedFile[fp] {
+				continue
+			}
+			if strings.HasPrefix(fp, modulePath) {
+				files = append(files, fp)
+			}
+		}
+		sort.Strings(files)
+		for _, fp := range files {
+			visitedFile[fp] = true
+			cls := fileToClasses[fp]
+			if len(cls) == 0 {
+				continue
+			}
+			// Ensure file metadata
+			ensureFile(fp, cls[0])
+			for _, ci := range cls {
+				if ci == nil || ci.ClassName == "" {
+					continue
+				}
+				rootSyms = append(rootSyms, getOrCreateClassSym(ci.ClassName))
+				processClass(ci.ClassName)
+			}
+		}
+	}
+	// Fallback: any remaining local file not under modulePaths
+	for fp, cls := range fileToClasses {
+		if visitedFile[fp] {
+			continue
+		}
+		visitedFile[fp] = true
+		if len(cls) == 0 {
+			continue
+		}
+		ensureFile(fp, cls[0])
+		for _, ci := range cls {
+			if ci == nil || ci.ClassName == "" {
+				continue
+			}
+			rootSyms = append(rootSyms, getOrCreateClassSym(ci.ClassName))
+			processClass(ci.ClassName)
+		}
+	}
+
+	return rootSyms, nil
+}
+
+func (c *Collector) parserConfig() *java.ParserConfig {
+	config := java.DefaultParserConfig()
+	return config
 }
 
 func (c *Collector) ScannerFile(ctx context.Context) []*DocumentSymbol {

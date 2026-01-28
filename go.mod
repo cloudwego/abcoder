@@ -11,6 +11,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250718041314-444cfd7822ec
 	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.3
 	github.com/fsnotify/fsnotify v1.4.9
+	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
 	github.com/mark3labs/mcp-go v0.34.0
 	github.com/pkg/errors v0.9.1
@@ -54,7 +55,6 @@ require (
 	github.com/getkin/kin-openapi v0.118.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect

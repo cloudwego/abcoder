@@ -156,6 +156,7 @@ Language Support:
 			if javaHome != "" {
 				lspOptions["java.home"] = javaHome
 			}
+			lspOptions["java_parser"] = "ipc"
 			opts.LspOptions = lspOptions
 
 			out, err := lang.Parse(context.Background(), uri, opts)
