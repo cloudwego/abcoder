@@ -159,7 +159,7 @@ func TestConcurrentHandlerInvocations(t *testing.T) {
 
 	for i := 0; i < numConcurrentRequests; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func() {
 			defer wg.Done()
 
 			// Each goroutine creates its own context and invokes the handler
@@ -192,7 +192,7 @@ func TestConcurrentHandlerInvocations(t *testing.T) {
 			}
 
 			successes <- true
-		}(i)
+		}()
 	}
 
 	// Wait for all goroutines to complete
@@ -202,11 +202,8 @@ func TestConcurrentHandlerInvocations(t *testing.T) {
 
 	// Check for errors
 	errorCount := 0
-	for err := range errors {
-		if err != nil {
-			t.Errorf("concurrent handler invocation error: %v", err)
-			errorCount++
-		}
+	for range errors {
+		errorCount++
 	}
 
 	// Verify we got all successful responses

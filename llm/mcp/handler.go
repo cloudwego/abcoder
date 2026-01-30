@@ -33,7 +33,7 @@ import (
 //   - The handler can be safely invoked concurrently
 // For details on concurrency safety, see CONCURRENCY.md
 func NewTool[R any, T any](name string, desc string, schema json.RawMessage, handler func(ctx context.Context, req R) (*T, error)) Tool {
-	return Tool{ // get_repo_structure
+	return Tool{
 		Tool: mcp.NewToolWithRawSchema(name, desc, schema),
 		Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			var req R

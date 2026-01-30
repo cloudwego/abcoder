@@ -22,9 +22,11 @@ Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolRe
         return nil, err
     }
     // handler execution with isolated context
-    if resp, err := handler(ctx, req); err != nil {
-        // ...
+    resp, err := handler(ctx, req)
+    if err != nil {
+        // handle error
     }
+    // process response
 }
 ```
 
