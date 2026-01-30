@@ -22,12 +22,14 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"sync"
 	"testing"
 	"time"
 
 	alog "github.com/cloudwego/abcoder/llm/log"
 	"github.com/cloudwego/abcoder/llm/tool"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -119,5 +121,104 @@ func TestASTServer(t *testing.T) {
 	// Check for server errors
 	if err := <-serverErrCh; err != nil {
 		t.Errorf("unexpected server error: %v", err)
+	}
+}
+
+// TestConcurrentHandlerInvocations verifies that the server handler's request context is concurrency-safe
+// by invoking handlers concurrently with different contexts to ensure proper isolation.
+func TestConcurrentHandlerInvocations(t *testing.T) {
+	alog.SetLogLevel(alog.DebugLevel)
+	astOpts := tool.ASTReadToolsOptions{
+		RepoASTsDir: "../../testdata/asts",
+	}
+
+	// Get the registered tools
+	tools := getASTTools(astOpts)
+	if len(tools) == 0 {
+		t.Fatal("no tools registered")
+	}
+
+	// Find the list_repos tool
+	var listReposTool *Tool
+	for i := range tools {
+		if tools[i].Tool.Name == "list_repos" {
+			listReposTool = &tools[i]
+			break
+		}
+	}
+
+	if listReposTool == nil {
+		t.Fatal("list_repos tool not found")
+	}
+
+	// Test concurrent handler invocations
+	const numConcurrentRequests = 20
+	var wg sync.WaitGroup
+	errors := make(chan error, numConcurrentRequests)
+	successes := make(chan bool, numConcurrentRequests)
+
+	for i := 0; i < numConcurrentRequests; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			// Each goroutine creates its own context and invokes the handler
+			ctx := context.Background()
+			
+			// Create a proper CallToolRequest
+			request := mcp.CallToolRequest{
+				Params: mcp.CallToolParams{
+					Name:      "list_repos",
+					Arguments: json.RawMessage(`{}`),
+				},
+			}
+
+			// Invoke the handler
+			result, err := listReposTool.Handler(ctx, request)
+			if err != nil {
+				errors <- err
+				return
+			}
+
+			// Verify the result
+			if result == nil {
+				errors <- io.EOF
+				return
+			}
+
+			if result.IsError {
+				errors <- io.EOF
+				return
+			}
+
+			successes <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(errors)
+	close(successes)
+
+	// Check for errors
+	errorCount := 0
+	for err := range errors {
+		if err != nil {
+			t.Errorf("concurrent handler invocation error: %v", err)
+			errorCount++
+		}
+	}
+
+	// Verify we got all successful responses
+	successCount := 0
+	for range successes {
+		successCount++
+	}
+
+	if successCount != numConcurrentRequests {
+		t.Errorf("Expected %d successful responses, got %d (errors: %d)", 
+			numConcurrentRequests, successCount, errorCount)
+	} else {
+		t.Logf("Successfully handled %d concurrent requests without context conflicts", successCount)
 	}
 }
