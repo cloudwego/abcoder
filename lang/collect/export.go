@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -39,16 +40,26 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	} else {
 		rel = filepath.Base(loc.URI.File())
 	}
-	if c.cli.GetFile(loc.URI) == nil {
-		return uniast.FileLine{}
+	fileURI := string(loc.URI)
+	if c.cli == nil {
+		return uniast.FileLine{File: rel, Line: loc.Range.Start.Line + 1}
 	}
-	text := c.cli.GetFile(loc.URI).Text
-	file_uri := string(loc.URI)
+	f := c.cli.GetFile(loc.URI)
+	text := ""
+	if f != nil {
+		text = f.Text
+	} else {
+		fd, err := os.ReadFile(loc.URI.File())
+		if err != nil {
+			return uniast.FileLine{File: rel, Line: loc.Range.Start.Line + 1}
+		}
+		text = string(fd)
+	}
 	return uniast.FileLine{
 		File:        rel,
 		Line:        loc.Range.Start.Line + 1,
-		StartOffset: PositionOffset(file_uri, text, loc.Range.Start),
-		EndOffset:   PositionOffset(file_uri, text, loc.Range.End),
+		StartOffset: PositionOffset(fileURI, text, loc.Range.Start),
+		EndOffset:   PositionOffset(fileURI, text, loc.Range.End),
 	}
 }
 
@@ -195,6 +206,31 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		e = err
 		return
 	}
+
+	// Java IPC mode: external/JDK/third-party symbols are exported as one-layer stub identities,
+	// and MUST NOT create module/package entries in repo.
+	isJavaIPC := c.Language == uniast.Java && c.javaIPC != nil
+	if isJavaIPC && !c.internal(symbol.Location) {
+		name := symbol.Name
+		if name == "" {
+			if refName == "" {
+				e = fmt.Errorf("both symbol %v name and refname is empty", symbol)
+				return
+			}
+			name = refName
+		}
+		m := "@external"
+		fp := symbol.Location.URI.File()
+		if strings.Contains(fp, "abcoder-jdk") {
+			m = "@jdk"
+		} else if strings.Contains(fp, "abcoder-third") {
+			m = "@third"
+		}
+		tmp := uniast.NewIdentity(m, "external", name)
+		id = &tmp
+		visited[symbol] = id
+		return id, nil
+	}
 	if !c.NeedStdSymbol && mod == "" {
 		e = ErrStdSymbol
 		return
@@ -240,10 +276,16 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	public := c.spec.IsPublicSymbol(*symbol)
 
 	if !isDefinition && !isLocalMethod && !isLocalSymbol {
-		defs, err := c.cli.Definition(context.Background(), symbol.Location.URI, symbol.Location.Range.Start)
-		if err != nil || len(defs) == 0 {
-			// 意味着引用为外部符号，LSP 无法查询到符号定位
-			return id, err
+		// In Java IPC mode we never rely on LSP Definition.
+		if !isJavaIPC {
+			if c.cli == nil {
+				return id, fmt.Errorf("LSP client is nil")
+			}
+			defs, err := c.cli.Definition(context.Background(), symbol.Location.URI, symbol.Location.Range.Start)
+			if err != nil || len(defs) == 0 {
+				// 意味着引用为外部符号，LSP 无法查询到符号定位
+				return id, err
+			}
 		}
 	}
 
@@ -258,9 +300,11 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	switch k := symbol.Kind; k {
 	// Function
 	case SKFunction, SKMethod:
-		if p := c.cli.GetParent(symbol); p != nil && p.Kind == SKInterface {
-			// NOTICE: no need collect interface method
-			break
+		if c.cli != nil {
+			if p := c.cli.GetParent(symbol); p != nil && p.Kind == SKInterface {
+				// NOTICE: no need collect interface method
+				break
+			}
 		}
 		obj := &uniast.Function{
 			FileLine: fileLine,
@@ -272,7 +316,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		// NOTICE: type parames collect into types
 		if info.TypeParams != nil {
 			for _, input := range info.TypeParamsSorted {
-				tok, _ := c.cli.Locate(input.Location)
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(input.Location)
+				}
 				tyid, err := c.exportSymbol(repo, input.Symbol, tok, visited)
 				if err != nil {
 					continue
@@ -283,7 +330,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		}
 		if info.Inputs != nil {
 			for _, input := range info.InputsSorted {
-				tok, _ := c.cli.Locate(input.Location)
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(input.Location)
+				}
 				tyid, err := c.exportSymbol(repo, input.Symbol, tok, visited)
 				if err != nil {
 					continue
@@ -294,7 +344,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		}
 		if info.Outputs != nil {
 			for _, output := range info.OutputsSorted {
-				tok, _ := c.cli.Locate(output.Location)
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(output.Location)
+				}
 				tyid, err := c.exportSymbol(repo, output.Symbol, tok, visited)
 				if err != nil {
 					continue
@@ -304,7 +357,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			}
 		}
 		if info.Method != nil && info.Method.Receiver.Symbol != nil {
-			tok, _ := c.cli.Locate(info.Method.Receiver.Location)
+			tok := ""
+			if c.cli != nil {
+				tok, _ = c.cli.Locate(info.Method.Receiver.Location)
+			}
 			rid, err := c.exportSymbol(repo, info.Method.Receiver.Symbol, tok, visited)
 			if err == nil {
 				obj.Receiver = &uniast.Receiver{
@@ -316,7 +372,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				// NOTICE: check if the method is a trait method
 				// if true, type = trait<receiver>
 				if info.Method.Interface != nil {
-					itok, _ := c.cli.Locate(info.Method.Interface.Location)
+					itok := ""
+					if c.cli != nil {
+						itok, _ = c.cli.Locate(info.Method.Interface.Location)
+					}
 					iid, err := c.exportSymbol(repo, info.Method.Interface.Symbol, itok, visited)
 					if err == nil {
 						id.Name = iid.Name + "<" + id.Name + ">"
@@ -338,7 +397,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		// collect deps
 		if deps := c.deps[symbol]; deps != nil {
 			for _, dep := range deps {
-				tok, _ := c.cli.Locate(dep.Location)
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(dep.Location)
+				}
 				depid, err := c.exportSymbol(repo, dep.Symbol, tok, visited)
 				if err != nil {
 					continue
@@ -382,7 +444,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		// collect deps
 		if deps := c.deps[symbol]; deps != nil {
 			for _, dep := range deps {
-				tok, _ := c.cli.Locate(dep.Location)
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(dep.Location)
+				}
 				depid, err := c.exportSymbol(repo, dep.Symbol, tok, visited)
 				if err != nil {
 					continue
@@ -400,7 +465,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		if rec := receivers[symbol]; rec != nil {
 			obj.Methods = make(map[string]uniast.Identity, len(rec))
 			for _, method := range rec {
-				tok, _ := c.cli.Locate(method.Location)
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(method.Location)
+				}
 				mid, err := c.exportSymbol(repo, method, tok, visited)
 				if err != nil {
 					continue
@@ -420,7 +488,10 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			IsConst:    k == SKConstant,
 		}
 		if ty, ok := c.vars[symbol]; ok {
-			tok, _ := c.cli.Locate(ty.Location)
+			tok := ""
+			if c.cli != nil {
+				tok, _ = c.cli.Locate(ty.Location)
+			}
 			tyid, err := c.exportSymbol(repo, ty.Symbol, tok, visited)
 			if err == nil {
 				obj.Type = tyid

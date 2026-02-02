@@ -33,7 +33,8 @@ type JavaSpec struct {
 }
 
 func (c *JavaSpec) ProtectedSymbolKinds() []lsp.SymbolKind {
-	return []lsp.SymbolKind{lsp.SKFunction}
+	// Java methods/vars are nested inside class ranges; keep them during Export filterLocalSymbols.
+	return []lsp.SymbolKind{lsp.SKFunction, lsp.SKMethod, lsp.SKVariable, lsp.SKConstant}
 }
 
 type JavaPkg struct {

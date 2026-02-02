@@ -47,7 +47,8 @@ func defaultOptions(lang string) ParseOptions {
 			NotNeedTest:        true,
 			Excludes:           []string{},
 		},
-		RepoID: "",
+		RepoID:     "",
+		LspOptions: make(map[string]string),
 	}
 }
 
