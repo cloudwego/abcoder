@@ -16,6 +16,7 @@ package lsp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -238,8 +239,32 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 	return toks, nil
 }
 
+// parseDefinitionResponse decodes LSP definition response: Location | Location[] | LocationLink | LocationLink[].
+func parseDefinitionResponse(raw json.RawMessage) []Location {
+	var locs []Location
+	if json.Unmarshal(raw, &locs) == nil && len(locs) > 0 && locs[0].URI != "" {
+		return locs
+	}
+	var one Location
+	if json.Unmarshal(raw, &one) == nil && one.URI != "" {
+		return []Location{one}
+	}
+	var links []LocationLink
+	if json.Unmarshal(raw, &links) == nil && len(links) > 0 && links[0].TargetURI != "" {
+		locs = make([]Location, 0, len(links))
+		for _, ll := range links {
+			locs = append(locs, ll.ToLocation())
+		}
+		return locs
+	}
+	var link LocationLink
+	if json.Unmarshal(raw, &link) == nil && link.TargetURI != "" {
+		return []Location{link.ToLocation()}
+	}
+	return nil
+}
+
 func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Position) ([]Location, error) {
-	// open file first
 	f, err := cli.DidOpen(ctx, uri)
 	if err != nil {
 		return nil, err
@@ -249,20 +274,15 @@ func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Posit
 			return locations, nil
 		}
 	}
-
-	// call
 	req := lsp.TextDocumentPositionParams{
-		TextDocument: lsp.TextDocumentIdentifier{
-			URI: lsp.DocumentURI(uri),
-		},
-		Position: lsp.Position(pos),
+		TextDocument: lsp.TextDocumentIdentifier{URI: lsp.DocumentURI(uri)},
+		Position:     lsp.Position(pos),
 	}
-	var resp []Location
-	if err := cli.Call(ctx, "textDocument/definition", req, &resp); err != nil {
+	var raw json.RawMessage
+	if err := cli.Conn.Call(ctx, "textDocument/definition", req, &raw); err != nil {
 		return nil, err
 	}
-
-	// cache definitions
+	resp := parseDefinitionResponse(raw)
 	if f.Definitions == nil {
 		f.Definitions = make(map[Position][]Location)
 	}

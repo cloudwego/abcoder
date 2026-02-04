@@ -128,6 +128,24 @@ func (l Location) String() string {
 	return fmt.Sprintf("%s:%d:%d-%d:%d", l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
 }
 
+// LocationLink is used by some LSP servers for definition responses.
+// Spec: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#locationLink
+type LocationLink struct {
+	OriginSelectionRange *Range      `json:"originSelectionRange,omitempty"`
+	TargetURI            DocumentURI `json:"targetUri"`
+	TargetRange          Range       `json:"targetRange"`
+	TargetSelectionRange Range       `json:"targetSelectionRange"`
+}
+
+func (ll LocationLink) ToLocation() Location {
+	r := ll.TargetSelectionRange
+	// Some servers may omit targetSelectionRange; fall back to targetRange.
+	if (r == Range{}) {
+		r = ll.TargetRange
+	}
+	return Location{URI: ll.TargetURI, Range: r}
+}
+
 var locationMarshalJSONInline = true
 
 func SetLocationMarshalJSONInline(inline bool) {
