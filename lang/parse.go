@@ -87,11 +87,11 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 			Verbose:               args.Verbose,
 			InitializationOptions: args.LspOptions,
 		})
-		client.LspOptions = args.LspOptions
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)
 			return nil, err
 		}
+		client.LspOptions = args.LspOptions
 		log.Info("end initialize LSP server")
 	}
 
