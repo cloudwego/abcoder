@@ -19,6 +19,7 @@ package tool
 import (
 	"context"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -180,6 +181,22 @@ func TestASTTools_GetRepoStructure(t *testing.T) {
 					RepoName: "metainfo",
 				},
 			},
+			want: &GetRepoStructResp{
+				Modules: []ModuleStruct{
+					{
+						ModPath: "metainfo",
+						Packages: []PackageStruct{
+							{PkgPath: "metainfo", Files: []FileStruct{{FilePath: "src/lib.rs"}}},
+							{PkgPath: "metainfo::backward", Files: []FileStruct{{FilePath: "src/backward.rs"}}},
+							{PkgPath: "metainfo::convert", Files: []FileStruct{{FilePath: "src/convert.rs"}}},
+							{PkgPath: "metainfo::faststr_map", Files: []FileStruct{{FilePath: "src/faststr_map.rs"}}},
+							{PkgPath: "metainfo::forward", Files: []FileStruct{{FilePath: "src/forward.rs"}}},
+							{PkgPath: "metainfo::kv", Files: []FileStruct{{FilePath: "src/kv.rs"}}},
+							{PkgPath: "metainfo::type_map", Files: []FileStruct{{FilePath: "src/type_map.rs"}}},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "test",
@@ -194,8 +211,66 @@ func TestASTTools_GetRepoStructure(t *testing.T) {
 					RepoName: "localsession",
 				},
 			},
+			want: &GetRepoStructResp{
+				Modules: []ModuleStruct{
+					{
+						ModPath: "github.com/cloudwego/localsession",
+						Packages: []PackageStruct{
+							{
+								PkgPath: "github.com/cloudwego/localsession",
+								Files: []FileStruct{
+									{FilePath: "gls.go"},
+									{FilePath: "manager.go"},
+									{FilePath: "session.go"},
+									{FilePath: "stubs.go"},
+								},
+							},
+							{
+								PkgPath: "github.com/cloudwego/localsession [github.com/cloudwego/localsession.test]",
+								Files: []FileStruct{
+									{FilePath: "api_test.go"},
+									{FilePath: "example_test.go"},
+								},
+							},
+							{
+								PkgPath: "github.com/cloudwego/localsession/backup",
+								Files: []FileStruct{
+									{FilePath: "backup/metainfo.go"},
+								},
+							},
+							{
+								PkgPath: "github.com/cloudwego/localsession/backup [github.com/cloudwego/localsession/backup.test]",
+								Files: []FileStruct{
+									{FilePath: "backup/metainfo_test.go"},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
+	sortResp := func(resp *GetRepoStructResp) {
+		if resp == nil {
+			return
+		}
+		sort.Slice(resp.Modules, func(i, j int) bool {
+			return resp.Modules[i].ModPath < resp.Modules[j].ModPath
+		})
+		for i := range resp.Modules {
+			mod := &resp.Modules[i]
+			sort.Slice(mod.Packages, func(i, j int) bool {
+				return mod.Packages[i].PkgPath < mod.Packages[j].PkgPath
+			})
+			for j := range mod.Packages {
+				pkg := &mod.Packages[j]
+				sort.Slice(pkg.Files, func(i, j int) bool {
+					return pkg.Files[i].FilePath < pkg.Files[j].FilePath
+				})
+			}
+		}
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tr := NewASTReadTools(tt.fields.opts)
@@ -204,6 +279,8 @@ func TestASTTools_GetRepoStructure(t *testing.T) {
 				t.Errorf("ASTTools.GetRepoStructure() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			sortResp(got)
+			sortResp(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ASTTools.GetRepoStructure() = %v, want %v", got, tt.want)
 			}
