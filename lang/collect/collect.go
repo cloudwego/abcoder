@@ -1856,7 +1856,16 @@ func (c *Collector) getDepsWithLimit(ctx context.Context, sym *DocumentSymbol, t
 	var sorted = make([]dependency, 0, len(tps))
 	for _, tp := range tps {
 		dep, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[tp], depth)
-		if err != nil || sym == nil {
+		if dep.Location == sym.Location {
+			// Skip.
+			//
+			// This is a sensible hack.
+			// Parameters like `self' comes up as definition for zubanls.
+			// Thus they end up in `ips` from FunctionSymbol.
+			// Then textDoc/definition for them yields the method itself.
+			// In the end, the method depends on itself. WE DO NOT WANT THIS.
+			// A better way is to ensure the returned ips are sensible.
+		} else if err != nil || sym == nil {
 			log.Error_skip(1, "token %v not found its symbol: %v", tp, err)
 		} else {
 			d := dependency{sym.Tokens[tp].Location, dep}
