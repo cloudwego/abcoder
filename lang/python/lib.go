@@ -87,8 +87,13 @@ func InstallLanguageServer() (string, error) {
 }
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
-	InstallLanguageServer()
-	return uniast.Python, lspName
+	// InstallLanguageServer()
+	// return uniast.Python, lspName
+	return WIP_zubanls()
+}
+
+func WIP_zubanls() (lang uniast.Language, name string) {
+	return uniast.Python, "zubanls"
 }
 
 func CheckRepo(repo string) (string, time.Duration) {
