@@ -76,14 +76,78 @@ export class RepositoryParser {
     }
   ): Promise<void> {
     console.log('Single project detected.');
+    
+    const packageJsonRoot = this.findPackageJsonRoot(absolutePath);
+    console.log(`Found package.json root at: ${packageJsonRoot}`);
+    console.log(`Original input path: ${absolutePath}`);
+    
     this.project = ProjectFactory.createProjectForSingleRepo(
-      this.projectRoot,
+      packageJsonRoot,
       this.tsConfigPath,
       this.tsConfigCache
     );
-    this.moduleParser = new ModuleParser(this.project, this.projectRoot);
-    const module = await this.moduleParser.parseModule(absolutePath, '.', options);
+    
+    this.moduleParser = new ModuleParser(this.project, absolutePath);
+    const module = await this.moduleParser.parseModule(packageJsonRoot, '.', options);
     repository.Modules[module.Name] = module;
+  }
+
+  /**
+   * Find the directory containing package.json by traversing all subdirectories
+   * @param startPath - The path to start searching from
+   * @returns The absolute path of the directory containing package.json
+   */
+  private findPackageJsonRoot(startPath: string): string {
+    const result = this.findPackageJsonRecursive(path.resolve(startPath));
+    
+    if (result) {
+      console.log(`Found package.json at: ${result}`);
+      return result;
+    }
+    
+    console.warn(`No package.json found starting from ${startPath}, using original path`);
+    return path.resolve(startPath);
+  }
+
+  /**
+   * Recursively search for package.json in directory and all subdirectories
+   * @param currentPath - Current directory to search
+   * @returns The absolute path of the directory containing package.json, or null if not found
+   */
+  private findPackageJsonRecursive(currentPath: string): string | null {
+    try {
+      const packageJsonPath = path.join(currentPath, 'package.json');
+      
+      if (fs.existsSync(packageJsonPath)) {
+        return currentPath;
+      }
+      
+      const items = fs.readdirSync(currentPath, { withFileTypes: true });
+      
+      for (const item of items) {
+        if (!item.isDirectory()) {
+          continue;
+        }
+        
+        const dirName = item.name;
+        
+        if (dirName === 'node_modules' || dirName.startsWith('.')) {
+          continue;
+        }
+        
+        const fullPath = path.join(currentPath, dirName);
+        const result = this.findPackageJsonRecursive(fullPath);
+        
+        if (result) {
+          return result;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn(`Error searching for package.json in ${currentPath}:`, error);
+      return null;
+    }
   }
 
   private buildGlobalGraph(repository: Repository): void {
