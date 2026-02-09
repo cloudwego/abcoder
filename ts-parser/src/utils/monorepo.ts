@@ -82,6 +82,13 @@ export class MonorepoUtils {
   private static countPackageJsonFiles(rootPath: string): number {
     try {
       let count = 0;
+      
+      // Check if rootPath itself has a package.json
+      const rootPackageJsonPath = path.join(rootPath, 'package.json');
+      if (fs.existsSync(rootPackageJsonPath)) {
+        count++;
+      }
+      
       const items = fs.readdirSync(rootPath);
       
       for (const item of items) {
@@ -137,6 +144,24 @@ export class MonorepoUtils {
    */
   private static discoverPackagesRecursive(rootPath: string, currentDir: string, packages: MonorepoPackage[]): void {
     try {
+      // Check if currentDir itself has a package.json
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        try {
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+          const relativePath = path.relative(rootPath, currentDir);
+          
+          packages.push({
+            path: relativePath,
+            absolutePath: currentDir,
+            shouldPublish: false, // Default to false for generic discovery
+            name: packageJson.name
+          });
+        } catch (error) {
+          console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
+        }
+      }
+      
       const items = fs.readdirSync(currentDir, { withFileTypes: true });
       
       for (const item of items) {
@@ -150,24 +175,6 @@ export class MonorepoUtils {
         // Skip node_modules and hidden directories
         if (dirName === 'node_modules' || dirName.startsWith('.')) {
           continue;
-        }
-        
-        // Check if this directory has a package.json
-        const packageJsonPath = path.join(fullPath, 'package.json');
-        if (fs.existsSync(packageJsonPath)) {
-          try {
-            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-            const relativePath = path.relative(rootPath, fullPath);
-            
-            packages.push({
-              path: relativePath,
-              absolutePath: fullPath,
-              shouldPublish: false, // Default to false for generic discovery
-              name: packageJson.name
-            });
-          } catch (error) {
-            console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
-          }
         }
         
         // Recursively search in subdirectories
