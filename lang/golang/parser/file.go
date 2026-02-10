@@ -637,7 +637,7 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 		// 	// Fixme: join names?
 		// 	fieldname = fieldDecl.Names[0].Name
 		// }
-		if _, ok := fieldDecl.Type.(*ast.FuncType); ok {
+		if ft, ok := fieldDecl.Type.(*ast.FuncType); ok {
 			// method decl
 			id := NewIdentity(ctx.module.Name, ctx.pkgPath, name.Name+"."+fieldDecl.Names[0].Name)
 			if st.Methods == nil {
@@ -655,6 +655,18 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 			for _, dep := range ty.Deps {
 				fn.Types = InsertDependency(fn.Types, NewDependency(dep, ctx.FileLine(fieldDecl)))
 			}
+			// collect parameters
+			var params []Dependency
+			if ft.Params != nil {
+				ctx.collectFields(ft.Params.List, &params)
+			}
+			// collect results
+			var results []Dependency
+			if ft.Results != nil {
+				ctx.collectFields(ft.Results.List, &results)
+			}
+			fn.Params = params
+			fn.Results = results
 		}
 		p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 	}
