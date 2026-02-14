@@ -371,7 +371,7 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 		// callName := string(ctx.GetRawContent(expr))
 		// get receiver type name
 		// var rname string
-		rev := ctx.getTypeinfo(sel.Recv())
+		rev := ctx.getTypeinfo(m.Signature().Recv().Type())
 		// if rev == nil {
 		// 	rname = extractName(sel.Recv().String())
 		// } else {

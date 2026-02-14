@@ -37,7 +37,11 @@ type InterfaceB interface {
 func (a MyStruct) String() string {
 	_ = a.Embed.MyStruct
 	_ = a.MyStructD
-	return "base struct"
+	return "base struct" + a.DFunction()
+}
+
+func (c MyStructD) DFunction() string {
+	return "I'm struct d function"
 }
 
 func (c MyStructC) String() string {
