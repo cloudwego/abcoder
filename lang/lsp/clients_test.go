@@ -65,6 +65,7 @@ func TestGolangLSP(t *testing.T) {
 	// documentSymbol
 	expectedSymNames := `(MyStruct).String
 (MyStructC).String
+(MyStructD).DFunction
 (MyStructD).String
 A
 G1
