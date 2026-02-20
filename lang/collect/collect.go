@@ -72,6 +72,17 @@ type Collector struct {
 
 	localFunc map[Location]*DocumentSymbol
 
+	// receivers cache: receiver symbol => list of method symbols
+	receivers map[*DocumentSymbol][]*DocumentSymbol
+
+	// file content cache to reduce IO in Export
+	fileContentCache map[string]string
+
+	fileMavenCache map[string]string
+
+	// syms index by file to speed up findMatchingSymbol
+	symsByFile map[DocumentURI][]*DocumentSymbol
+
 	// javaIPC is optional; when set, Java Collect runs without LSP.
 	javaIPC *javaipc.Converter
 
@@ -120,14 +131,16 @@ func switchSpec(l uniast.Language, repo string) LanguageSpec {
 
 func NewCollector(repo string, cli *LSPClient) *Collector {
 	ret := &Collector{
-		repo:  repo,
-		cli:   cli,
-		spec:  switchSpec(cli.ClientOptions.Language, repo),
-		syms:  map[Location]*DocumentSymbol{},
-		funcs: map[*DocumentSymbol]functionInfo{},
-		deps:  map[*DocumentSymbol][]dependency{},
-		vars:  map[*DocumentSymbol]dependency{},
-		files: map[string]*uniast.File{},
+		repo:             repo,
+		cli:              cli,
+		spec:             switchSpec(cli.ClientOptions.Language, repo),
+		syms:             map[Location]*DocumentSymbol{},
+		funcs:            map[*DocumentSymbol]functionInfo{},
+		deps:             map[*DocumentSymbol][]dependency{},
+		vars:             map[*DocumentSymbol]dependency{},
+		files:            map[string]*uniast.File{},
+		fileContentCache: make(map[string]string),
+		symsByFile:       make(map[DocumentURI][]*DocumentSymbol),
 	}
 	// if cli.Language == uniast.Rust {
 	// 	ret.modPatcher = &rust.RustModulePatcher{Root: repo}
@@ -287,7 +300,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 			if sym.Location.Include(dep.Location) {
 				continue
 			} else {
-				c.syms[dep.Location] = dep
+				c.addSymbol(dep.Location, dep)
 			}
 
 			c.deps[sym] = append(c.deps[sym], dependency{
@@ -420,8 +433,12 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			switch ci.Source.Type {
 			case javapb.SourceType_SOURCE_TYPE_JDK:
 				base = "abcoder-jdk"
-			case javapb.SourceType_SOURCE_TYPE_MAVEN, javapb.SourceType_SOURCE_TYPE_EXTERNAL_JAR:
-				base = "abcoder-third"
+			case javapb.SourceType_SOURCE_TYPE_MAVEN:
+				base = "abcoder-maven"
+			case javapb.SourceType_SOURCE_TYPE_EXTERNAL_JAR:
+				base = "abcoder-jar"
+			case javapb.SourceType_SOURCE_TYPE_UNKNOWN:
+				base = "abcoder-unknown"
 			}
 		}
 		p := filepath.Join(os.TempDir(), base, filepath.FromSlash(strings.ReplaceAll(fqcn, ".", "/"))+".java")
@@ -498,9 +515,17 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			rel = filepath.Base(fileAbs)
 		}
 		f := uniast.NewFile(rel)
+
 		if ci != nil {
+			// For external dependencies, PackageName may be empty, derive from ClassName
 			if ci.PackageName != "" {
 				f.Package = uniast.PkgPath(ci.PackageName)
+			} else if ci.ClassName != "" {
+				// Derive package name from FQCN: java.util.List -> java.util
+				lastDot := strings.LastIndex(ci.ClassName, ".")
+				if lastDot > 0 {
+					f.Package = uniast.PkgPath(ci.ClassName[:lastDot])
+				}
 			}
 			if len(ci.Imports) > 0 {
 				f.Imports = make([]uniast.Import, 0, len(ci.Imports))
@@ -511,6 +536,18 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 					f.Imports = append(f.Imports, uniast.Import{Path: imp})
 				}
 			}
+
+			if ci != nil && ci.Source != nil {
+				path := "abcoder-external"
+				switch ci.Source.Type {
+				case javapb.SourceType_SOURCE_TYPE_MAVEN:
+					path = ci.Source.MavenCoordinate
+				case javapb.SourceType_SOURCE_TYPE_EXTERNAL_JAR:
+					path = ci.Source.JarPath
+				}
+				f.Path = path
+			}
+
 		}
 		c.files[fileAbs] = f
 		return f
@@ -525,7 +562,28 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		}
 		ci := resolveClass(fqcn)
 		if ci == nil {
-			return nil
+			// Create a mock ClassInfo for unknown external class
+			// Extract package name from FQCN
+			packageName := ""
+			if idx := strings.LastIndex(fqcn, "."); idx >= 0 {
+				packageName = fqcn[:idx]
+			}
+			ci = &javapb.ClassInfo{
+				ClassName:   fqcn,
+				PackageName: packageName,
+				FilePath:    "",
+				ClassType:   javapb.ClassType_CLASS_TYPE_UNKNOWN,
+				Source: &javapb.SourceInfo{
+					Type:  javapb.SourceType_SOURCE_TYPE_UNKNOWN,
+					Depth: javapb.DependencyDepth_DEPTH_UNKNOWN,
+				},
+				StartLine:   0,
+				EndLine:     0,
+				StartColumn: 0,
+				EndColumn:   0,
+			}
+			// Cache it in allByName for future lookups
+			allByName[fqcn] = ci
 		}
 		isLocal := ci.Source != nil && ci.Source.Type == javapb.SourceType_SOURCE_TYPE_LOCAL
 		fp := normalizePath(ci.FilePath)
@@ -544,9 +602,15 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			} else {
 				uri = externalURIFor(ci, fqcn)
 			}
+			// Ensure file attribute is created for external classes
+			ensureFile(uri.File(), ci)
+			// Cache file content if available
+			if content := ci.GetContent(); content != "" {
+				c.fileContentCache[uri.File()] = content
+			}
 		}
 		name := simpleName(fqcn)
-		if name == "" {
+		if name == "" || localByName[fqcn] == nil {
 			name = fqcn
 		}
 		loc := Location{URI: uri, Range: Range{Start: Position{Line: normLine(ci.StartLine), Character: normCol(ci.StartColumn)}, End: Position{Line: normLine(ci.EndLine), Character: normCol(ci.EndColumn)}}}
@@ -557,7 +621,7 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			Location: loc,
 			Role:     DEFINITION,
 		}
-		c.syms[sym.Location] = sym
+		c.addSymbol(sym.Location, sym)
 		classSymByName[fqcn] = sym
 		return sym
 	}
@@ -608,9 +672,9 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		if processing[fqcn] {
 			return
 		}
-		ci := localByName[fqcn]
+		ci := resolveClass(fqcn)
 		if ci == nil {
-			// Not local: only ensure stub symbol exists.
+			// Not found in any cache: only ensure stub symbol exists.
 			_ = getOrCreateClassSym(fqcn)
 			processed[fqcn] = true
 			return
@@ -618,11 +682,18 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		processing[fqcn] = true
 		defer func() { processing[fqcn] = false }()
 
+		// Determine if this is a local class (recursion allowed) or JDK/ThirdParty (no recursion)
+		isLocal := localByName[fqcn] != nil
+
 		fileAbs := normalizePath(ci.FilePath)
 		if fileAbs == "" {
-			processing[fqcn] = false
-			processed[fqcn] = true
-			return
+			if isLocal {
+				processing[fqcn] = false
+				processed[fqcn] = true
+				return
+			} else {
+				fileAbs = externalURIFor(ci, fqcn).File()
+			}
 		}
 		ensureFile(fileAbs, ci)
 		classSym := getOrCreateClassSym(fqcn)
@@ -637,8 +708,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				if ext == nil || ext.Fqcn == "" {
 					continue
 				}
-				if _, ok := localByName[ext.Fqcn]; ok {
-					processClass(ext.Fqcn)
+				// Only recurse for local classes
+				if isLocal {
+					if _, ok := localByName[ext.Fqcn]; ok {
+						processClass(ext.Fqcn)
+					}
 				}
 				depSym := getOrCreateClassSym(ext.Fqcn)
 				tokLoc := locFromPos(fileAbs, ext.StartLine, ext.StartColumn, ext.EndLine, ext.EndColumn)
@@ -649,8 +723,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				if ext == "" {
 					continue
 				}
-				if _, ok := localByName[ext]; ok {
-					processClass(ext)
+				// Only recurse for local classes
+				if isLocal {
+					if _, ok := localByName[ext]; ok {
+						processClass(ext)
+					}
 				}
 				depSym := getOrCreateClassSym(ext)
 				addDep(classSym, depSym, classSym.Location)
@@ -663,8 +740,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				if impl == nil || impl.Fqcn == "" {
 					continue
 				}
-				if _, ok := localByName[impl.Fqcn]; ok {
-					processClass(impl.Fqcn)
+				// Only recurse for local classes
+				if isLocal {
+					if _, ok := localByName[impl.Fqcn]; ok {
+						processClass(impl.Fqcn)
+					}
 				}
 				depSym := getOrCreateClassSym(impl.Fqcn)
 				if depSym != nil {
@@ -678,8 +758,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				if impl == "" {
 					continue
 				}
-				if _, ok := localByName[impl]; ok {
-					processClass(impl)
+				// Only recurse for local classes
+				if isLocal {
+					if _, ok := localByName[impl]; ok {
+						processClass(impl)
+					}
 				}
 				depSym := getOrCreateClassSym(impl)
 				if depSym != nil {
@@ -695,8 +778,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				continue
 			}
 			if f.TypeFqcn != "" {
-				if _, ok := localByName[f.TypeFqcn]; ok {
-					processClass(f.TypeFqcn)
+				// Only recurse for local classes
+				if isLocal {
+					if _, ok := localByName[f.TypeFqcn]; ok {
+						processClass(f.TypeFqcn)
+					}
 				}
 				depSym := getOrCreateClassSym(f.TypeFqcn)
 				addDep(classSym, depSym, locFromPos(fileAbs, f.StartLine, f.StartColumn, f.EndLine, f.EndColumn))
@@ -715,7 +801,7 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 					Location: locFromPos(fileAbs, f.StartLine, f.StartColumn, f.EndLine, f.EndColumn),
 					Role:     DEFINITION,
 				}
-				c.syms[vsym.Location] = vsym
+				c.addSymbol(vsym.Location, vsym)
 				if f.TypeFqcn != "" {
 					depSym := getOrCreateClassSym(f.TypeFqcn)
 					if depSym != nil {
@@ -749,7 +835,7 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				Location: mloc,
 				Role:     DEFINITION,
 			}
-			c.syms[msym.Location] = msym
+			c.addSymbol(msym.Location, msym)
 			classSym.Children = append(classSym.Children, msym)
 
 			// Index method symbols for call resolution
@@ -775,8 +861,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 					if p == nil || p.TypeFqcn == "" {
 						continue
 					}
-					if _, ok := localByName[p.TypeFqcn]; ok {
-						processClass(p.TypeFqcn)
+					// Only recurse for local classes
+					if isLocal {
+						if _, ok := localByName[p.TypeFqcn]; ok {
+							processClass(p.TypeFqcn)
+						}
 					}
 					depSym := getOrCreateClassSym(p.TypeFqcn)
 					if depSym == nil {
@@ -789,8 +878,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				}
 			}
 			if m.ReturnType != nil && m.ReturnType.TypeFqcn != "" && m.ReturnType.TypeFqcn != "void" {
-				if _, ok := localByName[m.ReturnType.TypeFqcn]; ok {
-					processClass(m.ReturnType.TypeFqcn)
+				// Only recurse for local classes
+				if isLocal {
+					if _, ok := localByName[m.ReturnType.TypeFqcn]; ok {
+						processClass(m.ReturnType.TypeFqcn)
+					}
 				}
 				depSym := getOrCreateClassSym(m.ReturnType.TypeFqcn)
 				if depSym != nil {
@@ -835,9 +927,14 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 						Kind:     SKMethod,
 						Text:     "",
 						Location: stubLoc,
-						Role:     REFERENCE,
+						Role:     DEFINITION,
+					}
+
+					if _, ok := localByName[call.CalleeClass]; !ok {
+						calleeMethodSym.Name = call.CalleeClass + "." + call.CalleeMethod
 					}
 				}
+
 				tokFile := normalizePath(call.FilePath)
 				if tokFile == "" {
 					tokFile = fileAbs
@@ -901,11 +998,41 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		}
 	}
 
+	// Process JDK classes (one-layer only, no recursion)
+	for fqcn := range c.javaIPC.JdkClassCache {
+		if !processed[fqcn] {
+			processClass(fqcn)
+		}
+	}
+
+	// Process ThirdParty classes (one-layer only, no recursion)
+	for fqcn := range c.javaIPC.ThirdPartClassCache {
+		if !processed[fqcn] {
+			processClass(fqcn)
+		}
+	}
+
+	// Process Unknown classes (one-layer only, no recursion)
+	for fqcn := range c.javaIPC.UnknowClassCache {
+		if !processed[fqcn] {
+			processClass(fqcn)
+		}
+	}
+
 	return rootSyms, nil
 }
 
 func (c *Collector) parserConfig() *java.ParserConfig {
 	config := java.DefaultParserConfig()
+
+	if c.CollectOption.LoadExternalSymbol {
+		config.IncludeExternalClasses = true
+		config.ResolveMavenDependencies = true
+	}
+	if c.cli.Verbose {
+		config.Debug = true
+	}
+
 	return config
 }
 
@@ -981,7 +1108,7 @@ func (c *Collector) ScannerFile(ctx context.Context) []*DocumentSymbol {
 			}
 			sym.Text = content
 			sym.Tokens = tokens
-			c.syms[sym.Location] = sym
+			c.addSymbol(sym.Location, sym)
 			root_syms = append(root_syms, sym)
 		}
 
@@ -1174,7 +1301,7 @@ func (c *Collector) collectFields(node *sitter.Node, uri DocumentURI, content []
 						// Store the type dependency in c.vars
 						if typeDep.Symbol != nil && kind == SKConstant || kind == SKVariable {
 							c.vars[sym] = typeDep
-							c.syms[sym.Location] = sym
+							c.addSymbol(sym.Location, sym)
 						}
 					}
 				}
@@ -1303,7 +1430,7 @@ func (c *Collector) walk(node *sitter.Node, uri DocumentURI, content []byte, fil
 			}
 		}
 
-		c.syms[sym.Location] = sym
+		c.addSymbol(sym.Location, sym)
 		if parent != nil {
 			parent.Children = append(parent.Children, sym)
 			c.deps[parent] = append(c.deps[parent], dependency{
@@ -1480,7 +1607,7 @@ func (c *Collector) walk(node *sitter.Node, uri DocumentURI, content []byte, fil
 		}
 		info.Signature = strings.TrimSpace(string(content[node.StartByte():signatureEnd]))
 		c.funcs[sym] = info
-		c.syms[sym.Location] = sym
+		c.addSymbol(sym.Location, sym)
 
 		return // children already walked
 
@@ -1629,6 +1756,13 @@ func (c *Collector) internal(loc Location) bool {
 	return strings.HasPrefix(loc.URI.File(), c.repo)
 }
 
+func (c *Collector) addSymbol(loc Location, sym *DocumentSymbol) {
+	if _, ok := c.syms[loc]; !ok {
+		c.syms[loc] = sym
+		c.symsByFile[loc.URI] = append(c.symsByFile[loc.URI], sym)
+	}
+}
+
 func (c *Collector) getSymbolByToken(ctx context.Context, tok Token) (*DocumentSymbol, error) {
 	return c.getSymbolByTokenWithLimit(ctx, tok, 1)
 }
@@ -1699,8 +1833,11 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	// }
 
 	// 1. already loaded
-	if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
-		return sym, nil
+	// Optimization: only search in symbols of the same file
+	if fileSyms, ok := c.symsByFile[loc.URI]; ok {
+		if sym := c.findMatchingSymbolIn(loc, fileSyms); sym != nil {
+			return sym, nil
+		}
 	}
 
 	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
@@ -1718,7 +1855,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 					return nil, err
 				}
 				sym.Text = content
-				c.syms[sym.Location] = sym
+				c.addSymbol(sym.Location, sym)
 			}
 		}
 		// load more external symbols if depth permits
@@ -1846,7 +1983,7 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 			Location: loc,
 			Text:     text,
 		}
-		c.syms[loc] = tmp
+		c.addSymbol(loc, tmp)
 		return tmp, nil
 	}
 }

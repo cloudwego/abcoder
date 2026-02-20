@@ -76,7 +76,7 @@ func DefaultParserConfig() *ParserConfig {
 	}
 
 	return &ParserConfig{
-		ResolveMavenDependencies: true,
+		ResolveMavenDependencies: false,
 		IncludeExternalClasses:   false,
 		Debug:                    false,
 		JarPath:                  jarPath,
@@ -104,9 +104,38 @@ func ParseRepositoryByIpc(ctx context.Context, repoPath string, config *ParserCo
 	// Create analyzer config
 	analyzerConfig := &pb.AnalyzerConfig{
 		ResolveMavenDependencies: config.ResolveMavenDependencies,
-		M2RepositoryPath:         config.M2RepositoryPath,
 		ExtraJarPaths:            config.ExtraJarPaths,
 		IncludeExternalClasses:   config.IncludeExternalClasses,
+		ExtraConfig:              make(map[string]string),
+	}
+
+	if config.ResolveMavenDependencies {
+		m2RepositoryPath := os.Getenv("MAVEN_M2_REPOSITORY_PATH")
+		settingsFilePath := os.Getenv("MAVEN_SETTINGS_FILE_PATH")
+		java8Home := os.Getenv("JAVA_8_HOME_PATH")
+		java11Home := os.Getenv("JAVA_11_HOME_PATH")
+		java17Home := os.Getenv("JAVA_17_HOME_PATH")
+		java21Home := os.Getenv("JAVA_21_HOME_PATH")
+		java25Home := os.Getenv("JAVA_25_HOME_PATH")
+
+		analyzerConfig.ExtraConfig["maven.enabled"] = "true"
+		analyzerConfig.ExtraConfig["maven.m2RepositoryPath"] = m2RepositoryPath
+		analyzerConfig.ExtraConfig["maven.settingsFilePath"] = settingsFilePath
+		analyzerConfig.ExtraConfig["maven.java8Home"] = java8Home
+		analyzerConfig.ExtraConfig["maven.java11Home"] = java11Home
+		analyzerConfig.ExtraConfig["maven.java17Home"] = java17Home
+		analyzerConfig.ExtraConfig["maven.java21Home"] = java21Home
+		analyzerConfig.ExtraConfig["maven.java25Home"] = java25Home
+		analyzerConfig.ExtraConfig["maven.timeoutSeconds"] = "600"
+		analyzerConfig.ExtraConfig["maven.includeScopes"] = "compile,runtime"
+		analyzerConfig.ExtraConfig["maven.excludeScopes"] = "test,provided"
+		analyzerConfig.ExtraConfig["maven.offlineMode"] = "false"
+		analyzerConfig.ExtraConfig["maven.skipTests"] = "true"
+		analyzerConfig.ExtraConfig["maven.installBeforeResolve"] = "true"
+	}
+
+	if config.Debug {
+		analyzerConfig.ExtraConfig["maven.verbose"] = "true"
 	}
 
 	// Create server and start analysis
@@ -126,6 +155,10 @@ func ParseRepositoryByIpc(ctx context.Context, repoPath string, config *ParserCo
 		if err := converter.ProcessResponse(resp); err != nil {
 			log.Printf("Warning: error processing response: %v", err)
 		}
+	}
+	// Process class dependencies
+	if err := converter.ProcessClassDepInfo(); err != nil {
+		return nil, fmt.Errorf("failed to process class dependencies: %w", err)
 	}
 
 	return converter, nil

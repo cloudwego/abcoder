@@ -154,10 +154,11 @@ const (
 
 // AnalyzerConfig holds configuration for the analyzer
 type AnalyzerConfig struct {
-	ResolveMavenDependencies bool     `json:"resolveMavenDependencies,omitempty"`
-	M2RepositoryPath         string   `json:"m2RepositoryPath,omitempty"`
-	ExtraJarPaths            []string `json:"extraJarPaths,omitempty"`
-	IncludeExternalClasses   bool     `json:"includeExternalClasses,omitempty"`
+	ResolveMavenDependencies bool              `json:"resolveMavenDependencies,omitempty"`
+	M2RepositoryPath         string            `json:"m2RepositoryPath,omitempty"`
+	ExtraJarPaths            []string          `json:"extraJarPaths,omitempty"`
+	IncludeExternalClasses   bool              `json:"includeExternalClasses,omitempty"`
+	ExtraConfig              map[string]string `json:"extraConfig,omitempty"`
 }
 
 // AnalyzeRequest is the request message sent to Java parser
