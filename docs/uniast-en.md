@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.2.0)
+# Universal Abstract-Syntax-Tree Specification (v0.1.5)
 
 Universal Abstract-Syntax-Tree is a LLM-friendly, language-agnostic code context data structure established by ABCoder. It represents a unified abstract syntax tree of a repository's code, collecting definitions of language entities (functions, types, constants/variables) and their interdependencies for subsequent AI understanding and coding-workflow development.
 
