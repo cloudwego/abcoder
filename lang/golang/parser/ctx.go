@@ -249,7 +249,16 @@ func GetRawContent(fset *token.FileSet, file []byte, node ast.Node, collectComme
 			doc.WriteByte('\n')
 		}
 	}
-	doc.Write(file[fset.Position(node.Pos()).Offset:fset.Position(node.End()).Offset])
+	pos := fset.Position(node.Pos())
+	endPos := fset.Position(node.End())
+	if endPos.Offset < pos.Offset {
+		var funcName string
+		if fn, ok := node.(*ast.FuncDecl); ok {
+			funcName = fn.Name.Name
+		}
+		fmt.Fprintf(os.Stderr, "end < begin, file: %s, function: %s, possibly because file compilation failed\n", pos.Filename, funcName)
+	}
+	doc.Write(file[pos.Offset:endPos.Offset])
 	return doc.Bytes()
 }
 
