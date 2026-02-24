@@ -403,7 +403,7 @@ Represents a dependency relationship, containing the dependent node Id, dependen
     "StartOffset": 3547,
     "EndOffset": 3564,
     "Extra": {
-        "FunctionIsCall": true
+        "IsInvoked": true
     }
 }
 ```
@@ -432,7 +432,7 @@ Represents a dependency relationship, containing the dependent node Id, dependen
 - Extra: Additional information for storing language-specific details or extra metadata
 
 
-    - FunctionIsCall: If the Dependency is a function call, whether it actually executes the function call or just references the function
+    - IsInvoked: For function/method dependencies, whether it is invoked or just referenced (not executed).
 
 
 ##### Type

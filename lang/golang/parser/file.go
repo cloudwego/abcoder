@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	ExtraKey_FunctionIsCall     = "FunctionIsCall"
+	ExtraKey_IsInvoked          = "IsInvoked"
 	ExtraKey_AnonymousFunctions = "AnonymousFunctions"
 )
 
@@ -147,7 +147,7 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			if len(collects.directCalls) > 0 {
 				for i, dep := range v.Dependencies {
 					if collects.directCalls[dep.FileLine] {
-						v.Dependencies[i].SetExtra(ExtraKey_FunctionIsCall, true)
+						v.Dependencies[i].SetExtra(ExtraKey_IsInvoked, true)
 					}
 				}
 			}
@@ -589,12 +589,12 @@ set_func:
 	if len(collects.directCalls) > 0 {
 		for i, dep := range f.FunctionCalls {
 			if collects.directCalls[dep.FileLine] {
-				f.FunctionCalls[i].SetExtra(ExtraKey_FunctionIsCall, true)
+				f.FunctionCalls[i].SetExtra(ExtraKey_IsInvoked, true)
 			}
 		}
 		for i, dep := range f.MethodCalls {
 			if collects.directCalls[dep.FileLine] {
-				f.MethodCalls[i].SetExtra(ExtraKey_FunctionIsCall, true)
+				f.MethodCalls[i].SetExtra(ExtraKey_IsInvoked, true)
 			}
 		}
 	}

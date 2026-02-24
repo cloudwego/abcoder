@@ -403,7 +403,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
     "StartOffset": 3547,
     "EndOffset": 3564,
     "Extra": {
-        "FunctionIsCall": true
+        "IsInvoked": true
     }
 }
 ```
@@ -432,7 +432,7 @@ Universal Abstract-Syntax-Tree 是 ABCoder 建立的一种 LLM 亲和、语言�
 - Extra: 额外信息，用于存储一些语言特定的信息，或者是一些额外的元数据
 
 
-    - FunctionIsCall: 如果 Dependency 是一个函数调用，是否真正执行了函数调用，而不是只是引用了函数
+    - IsInvoked: 对于函数 / 方法调用类依赖，用于说明该函数是被调用（invoke），还是仅获取其引用而不执行。
 
 
 ##### Type
