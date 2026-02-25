@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.1.3)
+# Universal Abstract-Syntax-Tree Specification (v0.1.5)
 
 Universal Abstract-Syntax-Tree is a LLM-friendly, language-agnostic code context data structure established by ABCoder. It represents a unified abstract syntax tree of a repository's code, collecting definitions of language entities (functions, types, constants/variables) and their interdependencies for subsequent AI understanding and coding-workflow development.
 
@@ -370,6 +370,23 @@ Function type AST Node entity, corresponding to [NodeType] as FUNC, including fu
 
 - Vars: Global variables referenced within the current function, including variables and constants
 
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
+    - AnonymousFunctions: Anonymous functions defined in the function, each element is the FileLine of the corresponding function
+
+
+        - File: The filename where it is located
+
+
+        - Line: **Line number of the starting position in the file (starting from 1)**
+
+
+        - StartOffset: **Byte offset of the code starting position relative to the file header**
+
+
+        - EndOffset: **Byte offset of the code ending position relative to the file header**
+
 
 ###### Dependency
 
@@ -384,7 +401,10 @@ Represents a dependency relationship, containing the dependent node Id, dependen
     "File": "manager.go",
     "Line": 140,
     "StartOffset": 3547,
-    "EndOffset": 3564
+    "EndOffset": 3564,
+    "Extra": {
+        "IsInvoked": true
+    }
 }
 ```
 
@@ -407,6 +427,12 @@ Represents a dependency relationship, containing the dependent node Id, dependen
 
 
 - EndOffset: Offset of the ending position of the dependency point (not the dependent node) token relative to the code file
+
+
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
+    - IsInvoked: For function/method dependencies, whether it is invoked or just referenced (not executed).
 
 
 ##### Type
@@ -490,6 +516,9 @@ Type definition, [NodeType] is TYPE, including type definitions in specific lang
 - Implements: Which interfaces this type implements Identity
 
 
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
 ##### Var
 
 Global variables, including variables and constants, **but must be global**
@@ -551,6 +580,24 @@ var x = getx(y db.Data) int {
 中的 `db.Data` 和 `model.Var2`
 
 - Groups: Group definitions, such as `const( A=1, B=2, C=3)` in Go, Groups would be `[C=3, B=2]` (assuming A is the variable itself)
+
+
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
+    - AnonymousFunctions: Anonymous functions defined in the initialization function of the current variable. Each element is the FileLine of the corresponding function
+
+
+        - File: The filename where it is located
+
+
+        - Line: **Line number of the starting position in the file (starting from 1)**
+
+
+        - StartOffset: **Byte offset of the code starting position relative to the file header**
+
+
+        - EndOffset: **Byte offset of the code ending position relative to the file header**
 
 
 ### Graph

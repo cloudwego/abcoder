@@ -19,6 +19,7 @@ jobs:
         ['id']
         ['Path']
         ['ToolVersion']
+        ['ASTVersion']
         ['Modules']['a.b/c']['Dependencies']['a.b/c']
         ['Modules']['a.b/c/cmdx']['Dependencies']['a.b/c/cmdx']
     steps:
