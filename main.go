@@ -98,10 +98,11 @@ Use this command to verify installation or when reporting issues.`,
 
 func newParseCmd() *cobra.Command {
 	var (
-		flagOutput string
-		flagLsp    string
-		javaHome   string
-		opts       lang.ParseOptions
+		flagOutput  string
+		flagStdout  bool
+		flagLsp     string
+		javaHome    string
+		opts        lang.ParseOptions
 	)
 
 	cmd := &cobra.Command{
@@ -109,7 +110,7 @@ func newParseCmd() *cobra.Command {
 		Short: "Parse repository and export to UniAST JSON format",
 		Long: `Parse the specified repository and generate its Universal AST representation.
 
-By default, outputs to stdout. Use --output to write to a file.
+By default, saves to ~/.asts/<repo>.json. Use --stdout to output to stdout, use --output to write to a file.
 
 Language Support:
   go      - Go projects
@@ -140,10 +141,33 @@ Language Support:
 			language := uniast.NewLanguage(args[0])
 			uri := args[1]
 
+			// Convert to absolute path for consistent naming
+			absPath, err := filepath.Abs(uri)
+			if err != nil {
+				log.Error("Failed to get absolute path: %v\n", err)
+				return err
+			}
+
+			// Determine output path
+			outputPath := flagOutput
+			if outputPath == "" && !flagStdout {
+				// Default: save to ~/.asts/
+				astsDir := filepath.Join(os.Getenv("HOME"), ".asts")
+				if err := os.MkdirAll(astsDir, 0755); err != nil {
+					log.Error("Failed to create asts directory: %v\n", err)
+					return err
+				}
+				filename := sanitizeFilename(absPath)
+				outputPath = filepath.Join(astsDir, filename)
+			}
+
 			if language == uniast.TypeScript {
-				if err := parseTSProject(context.Background(), uri, opts, flagOutput); err != nil {
+				if err := parseTSProject(context.Background(), uri, opts, outputPath); err != nil {
 					log.Error("Failed to parse: %v\n", err)
 					return err
+				}
+				if outputPath != "" && !flagStdout {
+					fmt.Fprintf(os.Stdout, "AST saved to %s\n", outputPath)
 				}
 				return nil
 			}
@@ -165,12 +189,23 @@ Language Support:
 				return err
 			}
 
-			if flagOutput != "" {
-				if err := utils.MustWriteFile(flagOutput, out); err != nil {
+			if flagStdout {
+				// Explicitly output to stdout
+				fmt.Fprintf(os.Stdout, "%s\n", out)
+			} else if outputPath != "" {
+				// Write to .tmp first, then rename to .json
+				tmpPath := outputPath + ".tmp"
+				if err := utils.MustWriteFile(tmpPath, out); err != nil {
 					log.Error("Failed to write output: %v\n", err)
 					return err
 				}
+				if err := os.Rename(tmpPath, outputPath); err != nil {
+					log.Error("Failed to rename temp file: %v\n", err)
+					return err
+				}
+				fmt.Fprintf(os.Stdout, "AST saved to %s\n", outputPath)
 			} else {
+				// Fallback to stdout (should not happen with new logic)
 				fmt.Fprintf(os.Stdout, "%s\n", out)
 			}
 
@@ -179,7 +214,8 @@ Language Support:
 	}
 
 	// Flags
-	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output path for UniAST JSON (default: stdout).")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output path for UniAST JSON (default: ~/.asts/<repo>.json).")
+	cmd.Flags().BoolVar(&flagStdout, "stdout", false, "Output to stdout instead of saving to file.")
 	cmd.Flags().StringVar(&flagLsp, "lsp", "", "Path to Language Server Protocol executable. Required for languages with LSP support (e.g., Java).")
 	cmd.Flags().StringVar(&javaHome, "java-home", "", "Java installation directory (JAVA_HOME). Required when using LSP for Java.")
 	cmd.Flags().BoolVar(&opts.LoadExternalSymbol, "load-external-symbol", false, "Load external symbol references into AST results (slower but more complete).")
@@ -192,6 +228,13 @@ Language Support:
 	cmd.Flags().StringSliceVar(&opts.TSSrcDir, "ts-src-dir", []string{}, "Additional TypeScript source directories (can be specified multiple times).")
 
 	return cmd
+}
+
+// sanitizeFilename converts absolute path to safe filename
+// e.g., /Users/bytedance/astRepo/golang/abcoder -> -Users-bytedance-astRepo-golang-abcoder.json
+func sanitizeFilename(path string) string {
+	name := strings.ReplaceAll(path, "/", "-")
+	return name + ".json"
 }
 
 func newWriteCmd() *cobra.Command {
