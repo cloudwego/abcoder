@@ -18,6 +18,7 @@ package tool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,8 @@ const (
 	DescGetFileStructure    = "[STRUCTURE] level3/4: Get file structure with node list. Input: repo_name, file_path from get_repo_structure output. Output: nodes with signatures."
 	ToolGetASTNode          = "get_ast_node"
 	DescGetASTNode          = "[ANALYSIS] level4/4: Get detailed AST node info. Input: repo_name, node_ids from previous calls. Output: codes, dependencies, references, implementations."
+	ToolGetFileSymbol       = "get_file_symbol"
+	DescGetFileSymbol       = "[ANALYSIS] level4/4: Get detailed AST node info by file path and symbol name. Input: repo_name, file_path, name. Output: codes, dependencies, references, implementations."
 	// ToolWriteASTNode        = "write_ast_node"
 )
 
@@ -51,6 +54,7 @@ var (
 	SchemaGetPackageStructure = GetJSONSchema(GetPackageStructReq{})
 	SchemaGetFileStructure    = GetJSONSchema(GetFileStructReq{})
 	SchemaGetASTNode          = GetJSONSchema(GetASTNodeReq{})
+	SchemaGetFileSymbol       = GetJSONSchema(GetFileSymbolReq{})
 )
 
 type ASTReadToolsOptions struct {
@@ -150,6 +154,16 @@ func NewASTReadTools(opts ASTReadToolsOptions) *ASTReadTools {
 		panic(err)
 	}
 	ret.tools[ToolGetASTNode] = tt
+
+	tt, err = utils.InferTool(ToolGetFileSymbol,
+		string(DescGetFileSymbol),
+		ret.GetFileSymbol, utils.WithMarshalOutput(func(ctx context.Context, output interface{}) (string, error) {
+			return abutil.MarshalJSONIndent(output)
+		}))
+	if err != nil {
+		panic(err)
+	}
+	ret.tools[ToolGetFileSymbol] = tt
 	return ret
 }
 
@@ -241,6 +255,78 @@ func (n NodeID) Identity() uniast.Identity {
 		PkgPath: n.PkgPath,
 		Name:    n.Name,
 	}
+}
+
+// FileNodeID 文件节点标识（用于 get_file_symbol 输出）
+type FileNodeID struct {
+	FilePath string `json:"file_path" jsonschema:"description=file path relative to repo root"`
+	Name     string `json:"name" jsonschema:"description=symbol name in the file"`
+}
+
+// fileNodeIDGroupByPath 控制是否按 file_path 分组输出（默认 true）
+var fileNodeIDGroupByPath = true
+
+// SetFileNodeIDGroupByPath 设置是否按 file_path 分组输出
+func SetFileNodeIDGroupByPath(group bool) {
+	fileNodeIDGroupByPath = group
+}
+
+// fileNodeGroup 用于聚合相同 file_path 的 name（私有）
+type fileNodeGroup struct {
+	FilePath string   `json:"file_path"`
+	Names    []string `json:"names"`
+}
+
+// groupFileNodeIDs 将 []FileNodeID 转换为 []fileNodeGroup
+func groupFileNodeIDs(nodeIDs []FileNodeID) []fileNodeGroup {
+	groupMap := make(map[string]*fileNodeGroup)
+
+	for _, nid := range nodeIDs {
+		key := nid.FilePath
+
+		if group, exists := groupMap[key]; exists {
+			group.Names = append(group.Names, nid.Name)
+		} else {
+			groupMap[key] = &fileNodeGroup{
+				FilePath: nid.FilePath,
+				Names:    []string{nid.Name},
+			}
+		}
+	}
+
+	result := make([]fileNodeGroup, 0, len(groupMap))
+	for _, group := range groupMap {
+		result = append(result, *group)
+	}
+
+	return result
+}
+
+type _FileNodeID FileNodeID
+
+func (f FileNodeID) MarshalJSON() ([]byte, error) {
+	if fileNodeIDGroupByPath {
+		return json.Marshal(fileNodeGroup{
+			FilePath: f.FilePath,
+			Names:    []string{f.Name},
+		})
+	}
+	return json.Marshal(_FileNodeID(f))
+}
+
+// convertNodeIDs 将 uniast.Relation 转换为 FileNodeID
+func convertNodeIDs(repo *uniast.Repository, relations []uniast.Relation) []FileNodeID {
+	result := make([]FileNodeID, 0, len(relations))
+	for _, rel := range relations {
+		if n := repo.GetNode(rel.Identity); n != nil {
+			fl := n.FileLine()
+			result = append(result, FileNodeID{
+				FilePath: fl.File,
+				Name:     rel.Identity.Name,
+			})
+		}
+	}
+	return result
 }
 
 func (t *ASTReadTools) getRepoAST(repoName string) (*uniast.Repository, error) {
@@ -453,6 +539,57 @@ type GetASTNodeResp struct {
 	Error string       `json:"error,omitempty" jsonschema:"description=the error message"`
 }
 
+type GetFileSymbolReq struct {
+	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+	FilePath string `json:"file_path" jsonschema:"description=the file path (output of get_repo_structure tool)"`
+	Name     string `json:"name" jsonschema:"description=the name of the symbol (function, type, or variable) to query"`
+}
+
+type GetFileSymbolResp struct {
+	Node  FileNodeStruct `json:"node" jsonschema:"description=the ast node"`
+	Error string         `json:"error,omitempty" jsonschema:"description=the error message"`
+}
+
+// FileNodeStruct 文件节点结构（使用 FileNodeID）
+type FileNodeStruct struct {
+	Name         string       `json:"name" jsonschema:"description=the name of the node"`
+	Type         string       `json:"type,omitempty" jsonschema:"description=the type of the node"`
+	Signature    string       `json:"signature,omitempty" jsonschema:"description=the func signature of the node"`
+	File         string       `json:"file,omitempty" jsonschema:"description=the file path of the node"`
+	Line         int          `json:"line,omitempty" jsonschema:"description=the line of the node"`
+	Codes        string       `json:"codes,omitempty" jsonschema:"description=the codes of the node"`
+	Dependencies []FileNodeID `json:"dependencies,omitempty" jsonschema:"description=the dependencies of the node"`
+	References   []FileNodeID `json:"references,omitempty" jsonschema:"description=the references of the node"`
+	Implements   []FileNodeID `json:"implements,omitempty" jsonschema:"description=the implements of the node"`
+	Groups       []FileNodeID `json:"groups,omitempty" jsonschema:"description=the groups of the node"`
+	Inherits     []FileNodeID `json:"inherits,omitempty" jsonschema:"description=the inherits of the node"`
+}
+
+// MarshalJSON 自定义JSON序列化，实现所有关系字段的分组输出
+type _FileNodeStruct FileNodeStruct
+
+func (n FileNodeStruct) MarshalJSON() ([]byte, error) {
+	if fileNodeIDGroupByPath {
+		aux := &struct {
+			Dependencies []fileNodeGroup `json:"dependencies,omitempty"`
+			References   []fileNodeGroup `json:"references,omitempty"`
+			Implements   []fileNodeGroup `json:"implements,omitempty"`
+			Groups       []fileNodeGroup `json:"groups,omitempty"`
+			Inherits     []fileNodeGroup `json:"inherits,omitempty"`
+			*_FileNodeStruct
+		}{
+			Dependencies: groupFileNodeIDs(n.Dependencies),
+			References:   groupFileNodeIDs(n.References),
+			Implements:   groupFileNodeIDs(n.Implements),
+			Groups:       groupFileNodeIDs(n.Groups),
+			Inherits:     groupFileNodeIDs(n.Inherits),
+			_FileNodeStruct: (*_FileNodeStruct)(&n),
+		}
+		return json.Marshal(aux)
+	}
+	return json.Marshal(_FileNodeStruct(n))
+}
+
 func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*GetASTNodeResp, error) {
 	log.Debug("get ast node, req: %v", abutil.MarshalJSONIndentNoError(params))
 
@@ -513,4 +650,66 @@ func (t *ASTReadTools) GetASTNode(_ context.Context, params GetASTNodeReq) (*Get
 
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
 	return resp, nil
+}
+
+// GetFileSymbol get detailed AST node info by file path and symbol name
+func (t *ASTReadTools) GetFileSymbol(_ context.Context, req GetFileSymbolReq) (*GetFileSymbolResp, error) {
+	log.Debug("get file symbol, req: %v", abutil.MarshalJSONIndentNoError(req))
+
+	// 加载仓库
+	repo, err := t.getRepoAST(req.RepoName)
+	if err != nil {
+		return &GetFileSymbolResp{
+			Error: err.Error(),
+		}, nil
+	}
+
+	// 查找文件
+	file, _ := repo.GetFile(req.FilePath)
+	if file == nil {
+		return &GetFileSymbolResp{
+			Error: fmt.Errorf("file '%s' not found. Use 'get_repo_structure' to get valid file paths", req.FilePath).Error(),
+		}, nil
+	}
+
+	// 在文件中查找符号
+	nodes := repo.GetFileNodes(req.FilePath)
+	var targetNode *uniast.Node
+	var found bool
+
+	for _, node := range nodes {
+		if node.Identity.Name == req.Name {
+			targetNode = node
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return &GetFileSymbolResp{
+			Error: fmt.Sprintf("symbol '%s' not found in file '%s'. Use 'get_file_structure' to list all symbols in the file", req.Name, req.FilePath),
+		}, nil
+	}
+
+	// 构建 FileNodeStruct
+	fl := targetNode.FileLine()
+	nodeStruct := FileNodeStruct{
+		Name:      targetNode.Identity.Name,
+		Type:      targetNode.Type.String(),
+		File:      fl.File,
+		Line:      fl.Line,
+		Codes:     targetNode.Content(),
+		Signature: targetNode.Signature(),
+		// 使用抽象函数转换所有关系字段
+		Dependencies: convertNodeIDs(repo, targetNode.Dependencies),
+		References:   convertNodeIDs(repo, targetNode.References),
+		Implements:   convertNodeIDs(repo, targetNode.Implements),
+		Inherits:     convertNodeIDs(repo, targetNode.Inherits),
+		Groups:       convertNodeIDs(repo, targetNode.Groups),
+	}
+
+	log.Debug("get file symbol, resp: %v", abutil.MarshalJSONIndentNoError(&GetFileSymbolResp{Node: nodeStruct}))
+	return &GetFileSymbolResp{
+		Node: nodeStruct,
+	}, nil
 }
