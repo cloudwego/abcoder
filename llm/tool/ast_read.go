@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -34,17 +35,20 @@ import (
 
 const (
 	ToolListRepos           = "list_repos"
-	DescListRepos           = "[DISCOVERY] level1/4: List all repositories. No parameters required. Always the first step in any analysis workflow."
+	DescListRepos           = "[DISCOVERY] Step 1/4: List available repositories. Always the first step in ABCoder workflow. You MUST call `tree_repo` later."
+	ToolTreeRepo            = "tree_repo"
+	DescTreeRepo            = "[STRUCTURE] Step 2/4: Get available file_paths of a repo. Input: repo_name from `list_repos` output. Output: available file_paths. You MUST call `get_file_structure` later."
+	ToolGetFileStructure    = "get_file_structure"
+	DescGetFileStructure    = "[STRUCTURE] Step 3/4: Get available symbol names of a file. Input: repo_name, file_path from `tree_repo` output. Output: symbol names with signatures. You MUST call `get_file_symbol` later."
+	ToolGetFileSymbol       = "get_file_symbol"
+	DescGetFileSymbol       = "[ANALYSIS] Step 4/4: Get symbol's code, dependencies and references; use refer/depend's file_path and name as next `get_file_symbol` input. Input: repo_name, file_path, name. Output: codes, dependencies, references. You MUST call `get_file_symbol` with refers/depends file_path and name to check its code, call-chain or data-flow detail."
+
 	ToolGetRepoStructure    = "get_repo_structure"
 	DescGetRepoStructure    = "[STRUCTURE] level2/4: Get repository structure. Input: repo_name from list_repos output. Output: modules with packages and files."
 	ToolGetPackageStructure = "get_package_structure"
 	DescGetPackageStructure = "[STRUCTURE] level3/4: Get package structure with node_ids. Input: repo_name, mod_path, pkg_path from get_repo_structure output. Output: files with node_ids."
-	ToolGetFileStructure    = "get_file_structure"
-	DescGetFileStructure    = "[STRUCTURE] level3/4: Get file structure with node list. Input: repo_name, file_path from get_repo_structure output. Output: nodes with signatures."
 	ToolGetASTNode          = "get_ast_node"
 	DescGetASTNode          = "[ANALYSIS] level4/4: Get detailed AST node info. Input: repo_name, node_ids from previous calls. Output: codes, dependencies, references, implementations."
-	ToolGetFileSymbol       = "get_file_symbol"
-	DescGetFileSymbol       = "[ANALYSIS] level4/4: Get detailed AST node info by file path and symbol name. Input: repo_name, file_path, name. Output: codes, dependencies, references, implementations."
 	// ToolWriteASTNode        = "write_ast_node"
 )
 
@@ -55,6 +59,7 @@ var (
 	SchemaGetFileStructure    = GetJSONSchema(GetFileStructReq{})
 	SchemaGetASTNode          = GetJSONSchema(GetASTNodeReq{})
 	SchemaGetFileSymbol       = GetJSONSchema(GetFileSymbolReq{})
+	SchemaTreeRepo            = GetJSONSchema(TreeRepoReq{})
 )
 
 type ASTReadToolsOptions struct {
@@ -164,6 +169,16 @@ func NewASTReadTools(opts ASTReadToolsOptions) *ASTReadTools {
 		panic(err)
 	}
 	ret.tools[ToolGetFileSymbol] = tt
+
+	tt, err = utils.InferTool(ToolTreeRepo,
+		DescTreeRepo,
+		ret.TreeRepo, utils.WithMarshalOutput(func(ctx context.Context, output interface{}) (string, error) {
+			return abutil.MarshalJSONIndent(output)
+		}))
+	if err != nil {
+		panic(err)
+	}
+	ret.tools[ToolTreeRepo] = tt
 	return ret
 }
 
@@ -712,4 +727,61 @@ func (t *ASTReadTools) GetFileSymbol(_ context.Context, req GetFileSymbolReq) (*
 	return &GetFileSymbolResp{
 		Node: nodeStruct,
 	}, nil
+}
+
+type TreeRepoReq struct {
+	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+}
+
+type TreeRepoResp struct {
+	Files map[string][]string `json:"files" jsonschema:"description=map of directory path to file list (directories end with '/')"`
+	Error string              `json:"error,omitempty" jsonschema:"description=the error message"`
+}
+
+// TreeRepo returns a map of package paths to file lists, with directories ending in '/'
+func (t *ASTReadTools) TreeRepo(_ context.Context, req TreeRepoReq) (*TreeRepoResp, error) {
+	log.Debug("tree repo, req: %v", abutil.MarshalJSONIndentNoError(req))
+	repo, err := t.getRepoAST(req.RepoName)
+	if err != nil {
+		return &TreeRepoResp{
+			Error: err.Error(),
+		}, nil
+	}
+
+	// 收集所有文件，按目录聚合
+	files := make(map[string][]string)
+	for _, mod := range repo.Modules {
+		if mod.IsExternal() {
+			continue
+		}
+		for _, file := range mod.Files {
+			if file.Package == "" {
+				continue
+			}
+			// 过滤掉非当前仓库的文件（以 .. 开头或包含 ..）
+			if strings.HasPrefix(file.Path, "..") {
+				continue
+			}
+			// 获取文件的目录路径
+			dir := filepath.Dir(file.Path)
+			if dir == "." {
+				dir = "./"
+			}
+			// 添加 '/' 后缀
+			if dir != "" && dir != "./" && !strings.HasSuffix(dir, "/") {
+				dir = dir + "/"
+			}
+			// 获取文件名
+			name := filepath.Base(file.Path)
+			files[dir] = append(files[dir], name)
+		}
+	}
+
+	// 对每个目录下的文件列表进行排序
+	for dir := range files {
+		sort.Strings(files[dir])
+	}
+
+	log.Debug("tree repo, resp: %v", abutil.MarshalJSONIndentNoError(&TreeRepoResp{Files: files}))
+	return &TreeRepoResp{Files: files}, nil
 }
