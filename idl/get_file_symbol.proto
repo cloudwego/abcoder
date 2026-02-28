@@ -1,0 +1,39 @@
+// get_file_symbol IDL
+
+syntax = "proto3";
+
+package abcoder;
+
+// Request
+message GetFileSymbolReq {
+    string repo_name = 1;  // the name of the repository (output of list_repos tool)
+    string file_path = 2;  // the file path (output of get_repo_structure tool)
+    string name = 3;        // the name of the symbol (function, type, or variable) to query
+}
+
+// Response
+message GetFileSymbolResp {
+    FileNodeStruct node = 1; // the ast node
+    string error = 2;         // optional, the error message
+}
+
+// FileNodeStruct 文件节点结构（使用 FileNodeID）
+message FileNodeStruct {
+    string name = 1;          // the name of the node
+    string type = 2;          // optional, the type of the node
+    string signature = 3;     // optional, the func signature of the node
+    string file = 4;          // optional, the file path of the node
+    int32 line = 5;           // optional, the line of the node
+    string codes = 6;         // optional, the codes of the node
+    repeated FileNodeID dependencies = 7;  // optional, the dependencies of the node
+    repeated FileNodeID references = 8;   // optional, the references of the node
+    repeated FileNodeID implements = 9;   // optional, the implements of the node
+    repeated FileNodeID groups = 10;       // optional, the groups of the node
+    repeated FileNodeID inherits = 11;     // optional, the inherits of the node
+}
+
+// FileNodeID 文件节点标识（用于 get_file_symbol 输出）
+message FileNodeID {
+    string file_path = 1; // file path relative to repo root
+    string name = 2;     // symbol name in the file
+}
