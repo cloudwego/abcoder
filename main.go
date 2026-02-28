@@ -39,6 +39,7 @@ import (
 	"strings"
 
 	internalCmd "github.com/cloudwego/abcoder/internal/cmd"
+	"github.com/cloudwego/abcoder/internal/cmd/cli"
 	"github.com/cloudwego/abcoder/lang"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -71,12 +72,14 @@ writing, and analyzing code structures.`,
 
 	// Global flags
 	cmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose mode.")
+	cmd.PersistentFlags().String("asts-dir", "", "Base directory for AST files (default: ~/.asts).")
 
 	// Add subcommands
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newParseCmd())
 	cmd.AddCommand(newWriteCmd())
 	cmd.AddCommand(newMcpCmd())
+	cmd.AddCommand(cli.NewCliCmd())
 	cmd.AddCommand(newInitSpecCmd())
 	cmd.AddCommand(newAgentCmd())
 
