@@ -233,8 +233,10 @@ type PackageStruct struct {
 
 type FileStruct struct {
 	FilePath string          `json:"file_path" jsonschema:"description=the path of the file"`
-	Imports  []uniast.Import `json:"imports,omitempty" jsonschema:"description=the imports of the file"`
-	Nodes    []NodeStruct    `json:"nodes,omitempty" jsonschema:"description=the node structs of the file"`
+	ModPath   uniast.ModPath `json:"mod_path,omitempty" jsonschema:"description=the module path"`
+	PkgPath   uniast.PkgPath `json:"pkg_path,omitempty" jsonschema:"description=the package path"`
+	Imports   []uniast.Import `json:"imports,omitempty" jsonschema:"description=the imports of the file"`
+	Nodes     []NodeStruct    `json:"nodes,omitempty" jsonschema:"description=the node structs of the file"`
 }
 
 type NodeStruct struct {
@@ -524,20 +526,23 @@ func (t *ASTReadTools) getFileStructure(_ context.Context, req GetFileStructReq,
 	nodes := repo.GetFileNodes(req.FilePath)
 	ff := FileStruct{
 		FilePath: req.FilePath,
+		ModPath:  mod.Name,
+		PkgPath:  file.Package,
 	}
 	if needNodeDetail {
 		ff.Imports = file.Imports
 	}
+	// If nodes count > 500, only show name + line
+	simplifiedOutput := len(nodes) > 500
 	for _, n := range nodes {
 		nn := NodeStruct{
-			ModPath: mod.Name,
-			PkgPath: file.Package,
-			Name:    n.Identity.Name,
+			Name: n.Identity.Name,
 		}
 		if needNodeDetail {
-			nn.Type = n.Type.String()
-			nn.Signature = n.Signature()
 			nn.Line = n.FileLine().Line
+			if !simplifiedOutput && n.Type != uniast.VAR {
+				nn.Signature = n.Signature()
+			}
 		}
 		ff.Nodes = append(ff.Nodes,
 			nn,
