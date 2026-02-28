@@ -64,7 +64,8 @@ var (
 
 type ASTReadToolsOptions struct {
 	// PatchOptions patch.Options
-	RepoASTsDir string
+	RepoASTsDir  string
+	DisableWatch bool
 }
 
 type ASTReadTools struct {
@@ -94,21 +95,23 @@ func NewASTReadTools(opts ASTReadToolsOptions) *ASTReadTools {
 		}
 	}
 
-	// add a file watch on the RepoASTsDir
-	abutil.WatchDir(opts.RepoASTsDir, func(op fsnotify.Op, file string) {
-		if !strings.HasSuffix(file, ".json") {
-			return
-		}
-		if op&fsnotify.Write != 0 || op&fsnotify.Create != 0 {
-			if repo, err := uniast.LoadRepo(file); err != nil {
-				log.Error("Load Uniast JSON file failed: %v", err)
-			} else {
-				ret.repos.Store(repo.Name, repo)
+	// add a file watch on the RepoASTsDir (unless disabled)
+	if !opts.DisableWatch {
+		abutil.WatchDir(opts.RepoASTsDir, func(op fsnotify.Op, file string) {
+			if !strings.HasSuffix(file, ".json") {
+				return
 			}
-		} else if op&fsnotify.Remove != 0 {
-			ret.repos.Delete(filepath.Base(file))
-		}
-	})
+			if op&fsnotify.Write != 0 || op&fsnotify.Create != 0 {
+				if repo, err := uniast.LoadRepo(file); err != nil {
+					log.Error("Load Uniast JSON file failed: %v", err)
+				} else {
+					ret.repos.Store(repo.Name, repo)
+				}
+			} else if op&fsnotify.Remove != 0 {
+				ret.repos.Delete(filepath.Base(file))
+			}
+		})
+	}
 
 	tt, err := utils.InferTool(string(ToolListRepos),
 		DescListRepos,
