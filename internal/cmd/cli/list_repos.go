@@ -52,16 +52,17 @@ The repositories are loaded from .repo_index.json or *.json files in the --asts-
 			var currentRepo string
 
 			if data, err := os.ReadFile(indexFile); err == nil {
-				// 解析 repo_index.json
-				var index struct {
-					Mappings map[string]string `json:"mappings"`
-				}
-				if err := json.Unmarshal(data, &index); err == nil && index.Mappings != nil {
-					for name, path := range index.Mappings {
-						repoNames = append(repoNames, name)
-						// 检查当前目录是否匹配
-						if path == cwd {
-							currentRepo = name
+				// 用 sonic 解析 mappings
+				mappingsVal, err := sonic.Get(data, "mappings")
+				if err == nil {
+					mappings, err := mappingsVal.Map()
+					if err == nil {
+						for name, v := range mappings {
+							repoNames = append(repoNames, name)
+							// 检查当前目录是否匹配 (mappings value 是文件名，需要检查对应的 json 文件)
+							if pathMatchesCwd(astsDir, v.(string), cwd) {
+								currentRepo = name
+							}
 						}
 					}
 				}

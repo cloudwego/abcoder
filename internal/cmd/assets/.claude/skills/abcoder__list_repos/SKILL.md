@@ -1,12 +1,17 @@
 ---
 name: skill__abcoder__list_repos
-description: skill__abcoder__list_repos `abcoder cli list_repos` [DISCOVERY] Step 1/4: List available repositories. Always the first step in ABCoder workflow. You MUST call `tree_repo` later.
+description: skill__abcoder__list_repos `abcoder cli list_repos` [DISCOVERY] Step 1/4: List available repositories. Always the first step in ABCoder workflow. You MUST call `tree_repo` later. 获取当前仓库名: `abcoder cli list_repos | jq .current_repo`
 ---
 
 Execute the list_repos command to discover all available repositories:
 
 ```bash
 abcoder cli list_repos
+```
+
+获取当前仓库名（根据 pwd 匹配）:
+```bash
+abcoder cli list_repos | jq .current_repo
 ```
 
 ## Workflow Context
@@ -22,8 +27,7 @@ This tool is **Level 1** in the 4-level ABCoder discovery hierarchy:
 Output
 ```
 {
-  "repo_names": {
-    "array[i]": "string"
-  }
+  "repo_names": ["string"],
+  "current_repo": "string"
 }
 ```
