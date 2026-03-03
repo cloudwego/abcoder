@@ -234,7 +234,7 @@ func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs
 	cmd.Env = append(os.Environ(), "GOSUMDB=off")
 	output, err = cmd.CombinedOutput()
 	if err != nil {
-		return nil, cgoPkgs, fmt.Errorf("failed to execute 'go list -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
+		return nil, cgoPkgs, fmt.Errorf("failed to execute 'go list -m -json all', err: %v, output: %s, cmd string: %s, dir: %s", err, string(output), cmd.String(), dir)
 	}
 	// ignore content until first open
 	index := strings.Index(string(output), "{")
