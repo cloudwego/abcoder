@@ -15,12 +15,10 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
-	"github.com/cloudwego/abcoder/llm/tool"
 	"github.com/spf13/cobra"
 )
 
@@ -41,16 +39,53 @@ Returns a list of functions, types, and variables defined in the file.`,
 
 			repoName := args[0]
 			filePath := args[1]
-			tools := tool.NewASTReadTools(tool.ASTReadToolsOptions{
-				RepoASTsDir: astsDir,
-				DisableWatch: true,
-			})
-			resp, err := tools.GetFileStructure(context.Background(), tool.GetFileStructReq{
-				RepoName: repoName,
-				FilePath: filePath,
-			})
+
+			repoFile := findRepoFile(astsDir, repoName)
+			if repoFile == "" {
+				return fmt.Errorf("repo not found: %s", repoName)
+			}
+
+			// 加载 data（用于后续按需读取）
+			data, err := loadRepoFileData(repoFile)
 			if err != nil {
-				return fmt.Errorf("failed to get file structure: %w", err)
+				return err
+			}
+
+			// 1. 定位 pkgPath（极致按需：只读取 File 字段验证）
+			modPath, pkgPath, err := findPkgPathByFile(data, filePath)
+			if err != nil {
+				return fmt.Errorf("file '%s' not found in repo", filePath)
+			}
+
+			// 2. 读取该文件所有 symbols
+			syms, err := getFileSymbolsByFile(data, modPath, pkgPath, filePath)
+			if err != nil || len(syms) == 0 {
+				return fmt.Errorf("no symbols found in file '%s'", filePath)
+			}
+
+			type Node struct {
+				Name      string `json:"name"`
+				Line     int    `json:"line"`
+				Signature string `json:"signature,omitempty"`
+			}
+
+			var nodes []Node
+			for _, sym := range syms {
+				n := Node{
+					Name: sym["Name"].(string),
+					Line: int(sym["Line"].(float64)),
+				}
+				if sig, ok := sym["Signature"].(string); ok {
+					n.Signature = sig
+				}
+				nodes = append(nodes, n)
+			}
+
+			resp := map[string]interface{}{
+				"file_path": filePath,
+				"mod_path":  modPath,
+				"pkg_path":  pkgPath,
+				"nodes":     nodes,
 			}
 
 			b, _ := json.MarshalIndent(resp, "", "  ")

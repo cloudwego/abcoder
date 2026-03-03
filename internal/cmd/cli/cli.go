@@ -18,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var verbose bool
+
 // NewCliCmd returns the parent command for CLI operations.
 func NewCliCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -27,13 +29,24 @@ func NewCliCmd() *cobra.Command {
 
 These commands provide direct access to repository, file, and symbol information.`,
 		Example: `abcoder cli list-repos`,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// 解析 -v flag
+			v, err := cmd.Flags().GetBool("verbose")
+			if err == nil {
+				verbose = v
+			}
+		},
 	}
+
+	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output for debugging")
 
 	// Add subcommands
 	cmd.AddCommand(newListReposCmd())
 	cmd.AddCommand(newTreeRepoCmd())
 	cmd.AddCommand(newGetFileStructureCmd())
 	cmd.AddCommand(newGetFileSymbolCmd())
+	cmd.AddCommand(newExtractSymbolCmd())
+	cmd.AddCommand(newSearchSymbolCmd())
 
 	return cmd
 }

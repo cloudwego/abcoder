@@ -15,12 +15,10 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
-	"github.com/cloudwego/abcoder/llm/tool"
 	"github.com/spf13/cobra"
 )
 
@@ -41,18 +39,76 @@ Returns the symbol's code, type, line number, and relationship with other symbol
 
 			repoName := args[0]
 			filePath := args[1]
-			name := args[2]
-			tools := tool.NewASTReadTools(tool.ASTReadToolsOptions{
-				RepoASTsDir: astsDir,
-				DisableWatch: true,
-			})
-			resp, err := tools.GetFileSymbol(context.Background(), tool.GetFileSymbolReq{
-				RepoName: repoName,
-				FilePath: filePath,
-				Name:     name,
-			})
+			symbolName := args[2]
+
+			repoFile := findRepoFile(astsDir, repoName)
+			if repoFile == "" {
+				return fmt.Errorf("repo not found: %s", repoName)
+			}
+
+			// 加载 data（用于后续按需读取）
+			data, err := loadRepoFileData(repoFile)
 			if err != nil {
-				return fmt.Errorf("failed to get file symbol: %w", err)
+				return err
+			}
+
+			// 1. 定位 pkgPath（极致按需：只读取 File 字段验证）
+			modPath, pkgPath, err := findPkgPathByFile(data, filePath)
+			if err != nil {
+				return fmt.Errorf("symbol '%s' not found in file '%s'", symbolName, filePath)
+			}
+
+			// 2. 读取 symbol 完整内容
+			sym, err := getSymbolByFileFull(data, modPath, pkgPath, filePath, symbolName)
+			if err != nil {
+				return fmt.Errorf("symbol '%s' not found in file '%s'", symbolName, filePath)
+			}
+
+			// 找到 symbol，构建返回结构
+			nodeType := "FUNC"
+			if t, ok := sym["node_type"].(string); ok {
+				nodeType = t
+			}
+
+			signature := ""
+			if s, ok := sym["Signature"].(string); ok {
+				signature = s
+			}
+			content := ""
+			if c, ok := sym["Content"].(string); ok {
+				content = c
+			}
+
+			// 3. 按需读取 Graph References
+			refs, err := getSymbolReferences(data, modPath, pkgPath, symbolName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "DEBUG: getSymbolReferences error: %v\n", err)
+				return err
+			}
+
+			// 按 Kind 分类
+			var deps, refsOnly []map[string]string
+			for _, r := range refs {
+				if r["kind"] == "Dependency" {
+					deps = append(deps, r)
+				} else {
+					refsOnly = append(refsOnly, r)
+				}
+			}
+
+			node := map[string]interface{}{
+				"name":         symbolName,
+				"type":         nodeType,
+				"file":         filePath,
+				"line":         int(sym["Line"].(float64)),
+				"codes":        content,
+				"signature":    signature,
+				"dependencies": deps,
+				"references":   refsOnly,
+			}
+
+			resp := map[string]interface{}{
+				"node": node,
 			}
 
 			b, _ := json.MarshalIndent(resp, "", "  ")
