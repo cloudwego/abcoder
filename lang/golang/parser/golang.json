@@ -1,0 +1,3575 @@
+{
+  "id": "a.b/c",
+  "ASTVersion": "v0.1.5",
+  "ToolVersion": "",
+  "Path": "a.b/c",
+  "Modules": {
+    "../.@": {
+      "Language": "go",
+      "Version": "",
+      "Name": "../.",
+      "Dir": "",
+      "Packages": {
+        "a.b/c/pkg": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "a.b/c/pkg",
+          "Functions": {
+            "CaseStruct.CaseMethod": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "../.@",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseStruct.CaseMethod",
+              "File": "pkg/util.go",
+              "Line": 42,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func (s *CaseStruct) CaseMethod(in []byte, x *entity.MyStruct) Integer {\n\t_ = json.Unmarshal(in, x)\n\treturn Integer(0)\n}",
+              "Receiver": {
+                "IsPointer": true,
+                "Type": {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct"
+                }
+              }
+            },
+            "Case_Func": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "../.@",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func",
+              "File": "pkg/util.go",
+              "Line": 25,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func Case_Func(in []byte, s *CaseStruct) error {\n\treturn sonic.Unmarshal(in, s)\n}"
+            }
+          },
+          "Types": {
+            "CaseGenericStruct": {
+              "Exported": true,
+              "TypeKind": "",
+              "ModPath": "../.@",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseGenericStruct",
+              "File": "pkg/generic.go",
+              "Line": 30,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type CaseGenericStruct struct{}"
+            },
+            "CaseStruct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "../.@",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseStruct",
+              "File": "pkg/util.go",
+              "Line": 29,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type CaseStruct struct {\n\tFieldPremitive         string\n\tFieldType              Integer\n\tFieldExternalType      entity.MyStruct\n\tFieldInterface         InterfaceA\n\tFieldExternalInterface entity.InterfaceB\n\tFieldClosuer           func(in string) int\n}",
+              "Methods": {
+                "CaseMethod": {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod"
+                }
+              }
+            },
+            "Obj": {
+              "Exported": true,
+              "TypeKind": "",
+              "ModPath": "../.@",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Obj",
+              "File": "pkg/refer.go",
+              "Line": 37,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type Obj struct{}"
+            }
+          },
+          "Vars": {}
+        },
+        "a.b/c/pkg/entity": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "a.b/c/pkg/entity",
+          "Functions": {},
+          "Types": {
+            "MyStruct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "../.@",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStruct",
+              "File": "pkg/entity/entity.go",
+              "Line": 23,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type MyStruct struct {\n\ta string\n\tb string\n\tc MyStructC\n\tMyStructD\n\tEmbed struct {\n\t\t*MyStruct\n\t}\n}"
+            }
+          },
+          "Vars": {}
+        }
+      }
+    },
+    "a.b/c": {
+      "Language": "go",
+      "Version": "",
+      "Name": "a.b/c",
+      "Dir": ".",
+      "Packages": {
+        "a.b/c/merge": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "a.b/c/merge",
+          "Functions": {
+            "CaseMergeRef": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/merge",
+              "Name": "CaseMergeRef",
+              "File": "merge/merge_ref.go",
+              "Line": 25,
+              "StartOffset": 685,
+              "EndOffset": 777,
+              "Content": "func CaseMergeRef() MyStruct {\n\t_ = G1 + G2\n\treturn MyStruct{\n\t\tMyStructD: MyStructD{},\n\t}\n}",
+              "Signature": "func CaseMergeRef() MyStruct",
+              "Results": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "merge/merge_ref.go",
+                  "Line": 25,
+                  "StartOffset": 705,
+                  "EndOffset": 713
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "merge/merge_ref.go",
+                  "Line": 27,
+                  "StartOffset": 737,
+                  "EndOffset": 745
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD",
+                  "File": "merge/merge_ref.go",
+                  "Line": 28,
+                  "StartOffset": 760,
+                  "EndOffset": 769
+                }
+              ],
+              "GlobalVars": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "G1",
+                  "File": "merge/merge_ref.go",
+                  "Line": 26,
+                  "StartOffset": 721,
+                  "EndOffset": 723
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/merge",
+                  "Name": "G2",
+                  "File": "merge/merge_ref.go",
+                  "Line": 26,
+                  "StartOffset": 726,
+                  "EndOffset": 728
+                }
+              ]
+            }
+          },
+          "Types": {
+            "S": {
+              "Exported": true,
+              "TypeKind": "typedef",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/merge",
+              "Name": "S",
+              "File": "merge/merge_ref.go",
+              "Line": 23,
+              "StartOffset": 667,
+              "EndOffset": 683,
+              "Content": "type S MyStructD",
+              "SubStruct": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD",
+                  "File": "merge/merge_ref.go",
+                  "Line": 23,
+                  "StartOffset": 674,
+                  "EndOffset": 683
+                }
+              ]
+            }
+          },
+          "Vars": {
+            "G2": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/merge",
+              "Name": "G2",
+              "File": "merge/merge_ref.go",
+              "Line": 19,
+              "StartOffset": 642,
+              "EndOffset": 649,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var G2 = G1",
+              "Dependencies": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "G1",
+                  "File": "merge/merge_ref.go",
+                  "Line": 19,
+                  "StartOffset": 647,
+                  "EndOffset": 649
+                }
+              ]
+            },
+            "I1": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/merge",
+              "Name": "I1",
+              "File": "merge/merge_ref.go",
+              "Line": 21,
+              "StartOffset": 655,
+              "EndOffset": 665,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg/entity",
+                "Name": "Integer"
+              },
+              "Content": "var I1 Integer"
+            }
+          }
+        },
+        "a.b/c/pkg": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "a.b/c/pkg",
+          "Functions": {
+            "CaseGenericFunc": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseGenericFunc",
+              "File": "pkg/generic.go",
+              "Line": 35,
+              "StartOffset": 893,
+              "EndOffset": 1036,
+              "Content": "func CaseGenericFunc[U InterfaceA, T entity.InterfaceB, V any](a T, b U, c V) string {\n\treturn a.String() + fmt.Sprintf(\"%v\", c) + b.String()\n}",
+              "Signature": "func CaseGenericFunc[U InterfaceA, T entity.InterfaceB, V any](a T, b U, c V) string",
+              "Params": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB",
+                  "File": "pkg/generic.go",
+                  "Line": 35,
+                  "StartOffset": 956,
+                  "EndOffset": 959
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA",
+                  "File": "pkg/generic.go",
+                  "Line": 35,
+                  "StartOffset": 961,
+                  "EndOffset": 964
+                }
+              ],
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB.String",
+                  "File": "pkg/generic.go",
+                  "Line": 36,
+                  "StartOffset": 990,
+                  "EndOffset": 996,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA.String",
+                  "File": "pkg/generic.go",
+                  "Line": 36,
+                  "StartOffset": 1026,
+                  "EndOffset": 1032,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA",
+                  "File": "pkg/generic.go",
+                  "Line": 35,
+                  "StartOffset": 914,
+                  "EndOffset": 926
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB",
+                  "File": "pkg/generic.go",
+                  "Line": 35,
+                  "StartOffset": 928,
+                  "EndOffset": 947
+                }
+              ]
+            },
+            "CaseGenericStruct.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseGenericStruct.String",
+              "File": "pkg/generic.go",
+              "Line": 31,
+              "StartOffset": 761,
+              "EndOffset": 891,
+              "Content": "func (s *CaseGenericStruct[_, _, _]) String() string {\n\treturn s.Prefix.String() + fmt.Sprintf(\"%v\", s.Data) + s.Subfix.String()\n}",
+              "Signature": "func (s *CaseGenericStruct[_, _, _]) String() string",
+              "Receiver": {
+                "IsPointer": true,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseGenericStruct"
+                }
+              },
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB.String",
+                  "File": "pkg/generic.go",
+                  "Line": 32,
+                  "StartOffset": 833,
+                  "EndOffset": 839,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA.String",
+                  "File": "pkg/generic.go",
+                  "Line": 32,
+                  "StartOffset": 881,
+                  "EndOffset": 887,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB",
+                  "File": "pkg/generic.go",
+                  "Line": 31,
+                  "StartOffset": 769,
+                  "EndOffset": 796
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA",
+                  "File": "pkg/generic.go",
+                  "Line": 31,
+                  "StartOffset": 769,
+                  "EndOffset": 796
+                }
+              ]
+            },
+            "CaseInterface.CaseMethodDeps": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": true,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseInterface.CaseMethodDeps",
+              "File": "pkg/util.go",
+              "Line": 166,
+              "StartOffset": 3404,
+              "EndOffset": 3452,
+              "Content": "CaseMethodDeps(a int, b entity.MyStruct) Integer",
+              "Signature": "CaseMethodDeps(a int, b entity.MyStruct) Integer",
+              "Params": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 166,
+                  "StartOffset": 3426,
+                  "EndOffset": 3443
+                }
+              ],
+              "Results": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 166,
+                  "StartOffset": 3445,
+                  "EndOffset": 3452
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 166,
+                  "StartOffset": 3404,
+                  "EndOffset": 3452
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 166,
+                  "StartOffset": 3404,
+                  "EndOffset": 3452
+                }
+              ]
+            },
+            "CaseStrucLiterMethod": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseStrucLiterMethod",
+              "File": "pkg/util.go",
+              "Line": 146,
+              "StartOffset": 2920,
+              "EndOffset": 3193,
+              "Content": "func CaseStrucLiterMethod() {\n\t_ = (\u0026CaseStruct{\n\t\tFieldPremitive:         \"a\",\n\t\tFieldType:              1,\n\t\tFieldExternalType:      entity.MyStruct{},\n\t\tFieldInterface:         nil,\n\t\tFieldExternalInterface: nil,\n\t\tFieldClosuer:           nil,\n\t}).CaseMethod(nil, nil)\n}",
+              "Signature": "func CaseStrucLiterMethod()",
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod",
+                  "File": "pkg/util.go",
+                  "Line": 154,
+                  "StartOffset": 3171,
+                  "EndOffset": 3181,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "pkg/util.go",
+                  "Line": 147,
+                  "StartOffset": 2957,
+                  "EndOffset": 2967
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 150,
+                  "StartOffset": 3062,
+                  "EndOffset": 3070
+                }
+              ]
+            },
+            "CaseStruct.CaseMethod": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseStruct.CaseMethod",
+              "File": "pkg/util.go",
+              "Line": 42,
+              "StartOffset": 1080,
+              "EndOffset": 1200,
+              "Content": "func (s *CaseStruct) CaseMethod(in []byte, x *entity.MyStruct) Integer {\n\t_ = json.Unmarshal(in, x)\n\treturn Integer(0)\n}",
+              "Signature": "func (s *CaseStruct) CaseMethod(in []byte, x *entity.MyStruct) Integer",
+              "Receiver": {
+                "IsPointer": true,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct"
+                }
+              },
+              "Params": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 42,
+                  "StartOffset": 1123,
+                  "EndOffset": 1141
+                }
+              ],
+              "Results": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 42,
+                  "StartOffset": 1143,
+                  "EndOffset": 1150
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 44,
+                  "StartOffset": 1188,
+                  "EndOffset": 1195
+                }
+              ]
+            },
+            "CaseStruct.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseStruct.String",
+              "File": "pkg/util.go",
+              "Line": 47,
+              "StartOffset": 1202,
+              "EndOffset": 1279,
+              "Content": "func (s *CaseStruct) String() string {\n\treturn s.FieldExternalType.String()\n}",
+              "Signature": "func (s *CaseStruct) String() string",
+              "Receiver": {
+                "IsPointer": true,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct"
+                }
+              },
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct.String",
+                  "File": "pkg/util.go",
+                  "Line": 48,
+                  "StartOffset": 1269,
+                  "EndOffset": 1275,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            },
+            "Case_All": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_All",
+              "File": "pkg/util.go",
+              "Line": 77,
+              "StartOffset": 1668,
+              "EndOffset": 2120,
+              "Content": "func Case_All(in string, a entity.MyStruct, b CaseStruct) (int, Integer, entity.Integer) {\n\tvar x entity.Integer\n\tvar y Integer\n\t_ = int(x) + int(y)\n\tvar s CaseStruct\n\t_ = s.CaseMethod(nil, nil)\n\tvar a2 entity.MyStruct\n\t_ = a2.String()\n\tb.FieldClosuer = func(in string) int { return 0 }\n\t_ = b.CaseMethod(nil, nil)\n\ta.MyStructD = entity.MyStructD{}\n\t_ = a.String()\n\t_ = Case_Func(nil, nil)\n\t_ = entity.A(\"\")\n\t_ = GlobalVar + entity.G1\n\treturn 0, 0, 0\n}",
+              "Signature": "func Case_All(in string, a entity.MyStruct, b CaseStruct) (int, Integer, entity.Integer)",
+              "Params": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 77,
+                  "StartOffset": 1693,
+                  "EndOffset": 1710
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "pkg/util.go",
+                  "Line": 77,
+                  "StartOffset": 1712,
+                  "EndOffset": 1724
+                }
+              ],
+              "Results": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 77,
+                  "StartOffset": 1732,
+                  "EndOffset": 1739
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 77,
+                  "StartOffset": 1741,
+                  "EndOffset": 1755
+                }
+              ],
+              "FunctionCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Case_Func",
+                  "File": "pkg/util.go",
+                  "Line": 89,
+                  "StartOffset": 2038,
+                  "EndOffset": 2047,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "A",
+                  "File": "pkg/util.go",
+                  "Line": 90,
+                  "StartOffset": 2070,
+                  "EndOffset": 2071,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod",
+                  "File": "pkg/util.go",
+                  "Line": 82,
+                  "StartOffset": 1842,
+                  "EndOffset": 1852,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct.String",
+                  "File": "pkg/util.go",
+                  "Line": 84,
+                  "StartOffset": 1895,
+                  "EndOffset": 1901,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 78,
+                  "StartOffset": 1773,
+                  "EndOffset": 1780
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 79,
+                  "StartOffset": 1788,
+                  "EndOffset": 1795
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "pkg/util.go",
+                  "Line": 81,
+                  "StartOffset": 1824,
+                  "EndOffset": 1834
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 83,
+                  "StartOffset": 1878,
+                  "EndOffset": 1886
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD",
+                  "File": "pkg/util.go",
+                  "Line": 87,
+                  "StartOffset": 2005,
+                  "EndOffset": 2014
+                }
+              ],
+              "GlobalVars": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "GlobalVar",
+                  "File": "pkg/util.go",
+                  "Line": 91,
+                  "StartOffset": 2081,
+                  "EndOffset": 2090
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "G1",
+                  "File": "pkg/util.go",
+                  "Line": 91,
+                  "StartOffset": 2100,
+                  "EndOffset": 2102
+                }
+              ],
+              "Extra": {
+                "AnonymousFunctions": [
+                  {
+                    "File": "pkg/util.go",
+                    "Line": 85,
+                    "StartOffset": 1922,
+                    "EndOffset": 1954
+                  }
+                ]
+              }
+            },
+            "Case_Chain_Selector": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Chain_Selector",
+              "File": "pkg/refer.go",
+              "Line": 46,
+              "StartOffset": 994,
+              "EndOffset": 1056,
+              "Content": "func Case_Chain_Selector() {\n\tvar obj Obj\n\tobj.Call().Call()\n}",
+              "Signature": "func Case_Chain_Selector()",
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj.Call",
+                  "File": "pkg/refer.go",
+                  "Line": 48,
+                  "StartOffset": 1048,
+                  "EndOffset": 1052,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj",
+                  "File": "pkg/refer.go",
+                  "Line": 47,
+                  "StartOffset": 1032,
+                  "EndOffset": 1035
+                }
+              ]
+            },
+            "Case_Closure": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Closure",
+              "File": "pkg/refer.go",
+              "Line": 51,
+              "StartOffset": 1058,
+              "EndOffset": 1148,
+              "Content": "func Case_Closure() {\n\tvar obj Obj\n\tobj.CallFunc(func(o Obj) Obj {\n\t\treturn o.Call()\n\t})\n}",
+              "Signature": "func Case_Closure()",
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj.CallFunc",
+                  "File": "pkg/refer.go",
+                  "Line": 53,
+                  "StartOffset": 1098,
+                  "EndOffset": 1106,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj.Call",
+                  "File": "pkg/refer.go",
+                  "Line": 54,
+                  "StartOffset": 1136,
+                  "EndOffset": 1140,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj",
+                  "File": "pkg/refer.go",
+                  "Line": 52,
+                  "StartOffset": 1089,
+                  "EndOffset": 1092
+                }
+              ],
+              "Extra": {
+                "AnonymousFunctions": [
+                  {
+                    "File": "pkg/refer.go",
+                    "Line": 53,
+                    "StartOffset": 1107,
+                    "EndOffset": 1145
+                  }
+                ]
+              }
+            },
+            "Case_Func": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func",
+              "File": "pkg/util.go",
+              "Line": 25,
+              "StartOffset": 697,
+              "EndOffset": 778,
+              "Content": "func Case_Func(in []byte, s *CaseStruct) error {\n\treturn sonic.Unmarshal(in, s)\n}",
+              "Signature": "func Case_Func(in []byte, s *CaseStruct) error",
+              "Params": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "pkg/util.go",
+                  "Line": 25,
+                  "StartOffset": 723,
+                  "EndOffset": 736
+                }
+              ],
+              "FunctionCalls": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Unmarshal",
+                  "File": "pkg/util.go",
+                  "Line": 26,
+                  "StartOffset": 760,
+                  "EndOffset": 769,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            },
+            "Case_Func_Func": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func_Func",
+              "File": "pkg/util.go",
+              "Line": 72,
+              "StartOffset": 1598,
+              "EndOffset": 1666,
+              "Content": "func Case_Func_Func() {\n\t_ = Case_Func(nil, nil)\n\t_ = entity.A(\"\")\n}",
+              "Signature": "func Case_Func_Func()",
+              "FunctionCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Case_Func",
+                  "File": "pkg/util.go",
+                  "Line": 73,
+                  "StartOffset": 1627,
+                  "EndOffset": 1636,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "A",
+                  "File": "pkg/util.go",
+                  "Line": 74,
+                  "StartOffset": 1659,
+                  "EndOffset": 1660,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            },
+            "Case_Func_GloabVar": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func_GloabVar",
+              "File": "pkg/util.go",
+              "Line": 53,
+              "StartOffset": 1300,
+              "EndOffset": 1363,
+              "Content": "func Case_Func_GloabVar() int {\n\treturn GlobalVar + entity.G1\n}",
+              "Signature": "func Case_Func_GloabVar() int",
+              "GlobalVars": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "GlobalVar",
+                  "File": "pkg/util.go",
+                  "Line": 54,
+                  "StartOffset": 1340,
+                  "EndOffset": 1349
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "G1",
+                  "File": "pkg/util.go",
+                  "Line": 54,
+                  "StartOffset": 1359,
+                  "EndOffset": 1361
+                }
+              ]
+            },
+            "Case_Func_Global": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func_Global",
+              "File": "pkg/util.go",
+              "Line": 111,
+              "StartOffset": 2453,
+              "EndOffset": 2634,
+              "Content": "func Case_Func_Global() {\n\t_ = Enum1\n\t_ = Enum2\n\t_ = Enum3\n\t_ = Enum4\n\t_ = Var1\n\t_ = Var2\n\t_ = Var3\n\t_ = Var4\n\t_ = Var5\n\t_ = Var6\n\t_ = Var7\n\t_ = Var8\n\t_ = entity.G1\n\t_ = entity.V1\n}",
+              "Signature": "func Case_Func_Global()",
+              "GlobalVars": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum1",
+                  "File": "pkg/util.go",
+                  "Line": 112,
+                  "StartOffset": 2484,
+                  "EndOffset": 2489
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum2",
+                  "File": "pkg/util.go",
+                  "Line": 113,
+                  "StartOffset": 2495,
+                  "EndOffset": 2500
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum3",
+                  "File": "pkg/util.go",
+                  "Line": 114,
+                  "StartOffset": 2506,
+                  "EndOffset": 2511
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum4",
+                  "File": "pkg/util.go",
+                  "Line": 115,
+                  "StartOffset": 2517,
+                  "EndOffset": 2522
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var1",
+                  "File": "pkg/util.go",
+                  "Line": 116,
+                  "StartOffset": 2528,
+                  "EndOffset": 2532
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var2",
+                  "File": "pkg/util.go",
+                  "Line": 117,
+                  "StartOffset": 2538,
+                  "EndOffset": 2542
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var3",
+                  "File": "pkg/util.go",
+                  "Line": 118,
+                  "StartOffset": 2548,
+                  "EndOffset": 2552
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var4",
+                  "File": "pkg/util.go",
+                  "Line": 119,
+                  "StartOffset": 2558,
+                  "EndOffset": 2562
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var5",
+                  "File": "pkg/util.go",
+                  "Line": 120,
+                  "StartOffset": 2568,
+                  "EndOffset": 2572
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var6",
+                  "File": "pkg/util.go",
+                  "Line": 121,
+                  "StartOffset": 2578,
+                  "EndOffset": 2582
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var7",
+                  "File": "pkg/util.go",
+                  "Line": 122,
+                  "StartOffset": 2588,
+                  "EndOffset": 2592
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var8",
+                  "File": "pkg/util.go",
+                  "Line": 123,
+                  "StartOffset": 2598,
+                  "EndOffset": 2602
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "G1",
+                  "File": "pkg/util.go",
+                  "Line": 124,
+                  "StartOffset": 2615,
+                  "EndOffset": 2617
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "V1",
+                  "File": "pkg/util.go",
+                  "Line": 125,
+                  "StartOffset": 2630,
+                  "EndOffset": 2632
+                }
+              ]
+            },
+            "Case_Func_Method": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func_Method",
+              "File": "pkg/util.go",
+              "Line": 65,
+              "StartOffset": 1478,
+              "EndOffset": 1596,
+              "Content": "func Case_Func_Method() {\n\ts := \u0026CaseStruct{}\n\t_ = s.CaseMethod(nil, nil)\n\ts2 := \u0026entity.MyStruct{}\n\t_ = s2.String()\n}",
+              "Signature": "func Case_Func_Method()",
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod",
+                  "File": "pkg/util.go",
+                  "Line": 67,
+                  "StartOffset": 1531,
+                  "EndOffset": 1541,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct.String",
+                  "File": "pkg/util.go",
+                  "Line": 69,
+                  "StartOffset": 1586,
+                  "EndOffset": 1592,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "pkg/util.go",
+                  "Line": 66,
+                  "StartOffset": 1511,
+                  "EndOffset": 1521
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 68,
+                  "StartOffset": 1567,
+                  "EndOffset": 1575
+                }
+              ]
+            },
+            "Case_Func_RefType": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Func_RefType",
+              "File": "pkg/util.go",
+              "Line": 59,
+              "StartOffset": 1383,
+              "EndOffset": 1476,
+              "Content": "func Case_Func_RefType() int {\n\tvar x entity.Integer\n\tvar y Integer\n\treturn int(x) + int(y)\n}",
+              "Signature": "func Case_Func_RefType() int",
+              "Types": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 60,
+                  "StartOffset": 1428,
+                  "EndOffset": 1435
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 61,
+                  "StartOffset": 1443,
+                  "EndOffset": 1450
+                }
+              ]
+            },
+            "Case_Refer_Func": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Refer_Func",
+              "File": "pkg/refer.go",
+              "Line": 24,
+              "StartOffset": 706,
+              "EndOffset": 773,
+              "Content": "func Case_Refer_Func() {\n\tsonic.Get(nil, \"\")\n\tsonic.Pretouch(nil)\n}",
+              "Signature": "func Case_Refer_Func()",
+              "FunctionCalls": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Get",
+                  "File": "pkg/refer.go",
+                  "Line": 25,
+                  "StartOffset": 738,
+                  "EndOffset": 741,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Pretouch",
+                  "File": "pkg/refer.go",
+                  "Line": 26,
+                  "StartOffset": 758,
+                  "EndOffset": 766,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            },
+            "Case_Refer_Method": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Refer_Method",
+              "File": "pkg/refer.go",
+              "Line": 29,
+              "StartOffset": 775,
+              "EndOffset": 835,
+              "Content": "func Case_Refer_Method() {\n\tn := sonic.Config{}\n\tn.Froze()\n}",
+              "Signature": "func Case_Refer_Method()",
+              "MethodCalls": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config.Froze",
+                  "File": "pkg/refer.go",
+                  "Line": 31,
+                  "StartOffset": 826,
+                  "EndOffset": 831,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config",
+                  "File": "pkg/refer.go",
+                  "Line": 30,
+                  "StartOffset": 814,
+                  "EndOffset": 820
+                }
+              ]
+            },
+            "InterfaceA.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": true,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "InterfaceA.String",
+              "File": "pkg/util.go",
+              "Line": 39,
+              "StartOffset": 1061,
+              "EndOffset": 1076,
+              "Content": "String() string",
+              "Signature": "String() string"
+            },
+            "Obj.Call": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Obj.Call",
+              "File": "pkg/refer.go",
+              "Line": 38,
+              "StartOffset": 894,
+              "EndOffset": 931,
+              "Content": "func (o Obj) Call() Obj {\n\treturn o\n}",
+              "Signature": "func (o Obj) Call() Obj",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj"
+                }
+              },
+              "Results": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj",
+                  "File": "pkg/refer.go",
+                  "Line": 38,
+                  "StartOffset": 914,
+                  "EndOffset": 917
+                }
+              ]
+            },
+            "Obj.CallFunc": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Obj.CallFunc",
+              "File": "pkg/refer.go",
+              "Line": 42,
+              "StartOffset": 933,
+              "EndOffset": 992,
+              "Content": "func (o Obj) CallFunc(f func(Obj) Obj) Obj {\n\treturn f(o)\n}",
+              "Signature": "func (o Obj) CallFunc(f func(Obj) Obj) Obj",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj"
+                }
+              },
+              "Params": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj",
+                  "File": "pkg/refer.go",
+                  "Line": 42,
+                  "StartOffset": 955,
+                  "EndOffset": 970
+                }
+              ],
+              "Results": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj",
+                  "File": "pkg/refer.go",
+                  "Line": 42,
+                  "StartOffset": 972,
+                  "EndOffset": 975
+                }
+              ]
+            }
+          },
+          "Types": {
+            "CaseGenericStruct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseGenericStruct",
+              "File": "pkg/generic.go",
+              "Line": 25,
+              "StartOffset": 654,
+              "EndOffset": 759,
+              "Content": "type CaseGenericStruct[T entity.InterfaceB, U InterfaceA, V any] struct {\n\tPrefix T\n\tSubfix U\n\tData   V\n}",
+              "SubStruct": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB",
+                  "File": "pkg/generic.go",
+                  "Line": 26,
+                  "StartOffset": 736,
+                  "EndOffset": 737
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA",
+                  "File": "pkg/generic.go",
+                  "Line": 27,
+                  "StartOffset": 746,
+                  "EndOffset": 747
+                }
+              ],
+              "Methods": {
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseGenericStruct.String"
+                }
+              },
+              "Implements": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA"
+                }
+              ]
+            },
+            "CaseInterface": {
+              "Exported": true,
+              "TypeKind": "interface",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseInterface",
+              "File": "pkg/util.go",
+              "Line": 165,
+              "StartOffset": 3372,
+              "EndOffset": 3454,
+              "Content": "type CaseInterface interface {\n\tCaseMethodDeps(a int, b entity.MyStruct) Integer\n}",
+              "SubStruct": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 166,
+                  "StartOffset": 3418,
+                  "EndOffset": 3452
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 166,
+                  "StartOffset": 3418,
+                  "EndOffset": 3452
+                }
+              ],
+              "Methods": {
+                "CaseMethodDeps": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseInterface.CaseMethodDeps"
+                }
+              }
+            },
+            "CaseStruct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseStruct",
+              "File": "pkg/util.go",
+              "Line": 29,
+              "StartOffset": 780,
+              "EndOffset": 1030,
+              "Content": "type CaseStruct struct {\n\tFieldPremitive         string\n\tFieldType              Integer\n\tFieldExternalType      entity.MyStruct\n\tFieldInterface         InterfaceA\n\tFieldExternalInterface entity.InterfaceB\n\tFieldClosuer           func(in string) int\n}",
+              "SubStruct": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 31,
+                  "StartOffset": 860,
+                  "EndOffset": 867
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 32,
+                  "StartOffset": 892,
+                  "EndOffset": 907
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA",
+                  "File": "pkg/util.go",
+                  "Line": 33,
+                  "StartOffset": 932,
+                  "EndOffset": 942
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB",
+                  "File": "pkg/util.go",
+                  "Line": 34,
+                  "StartOffset": 967,
+                  "EndOffset": 984
+                }
+              ],
+              "Methods": {
+                "CaseMethod": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod"
+                },
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.String"
+                }
+              },
+              "Implements": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA"
+                }
+              ]
+            },
+            "Case_Annoy_Struct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Annoy_Struct",
+              "File": "pkg/refer.go",
+              "Line": 58,
+              "StartOffset": 1150,
+              "EndOffset": 1213,
+              "Content": "type Case_Annoy_Struct struct {\n\tA struct {\n\t\tB int\n\t}\n\tC int\n}"
+            },
+            "Case_Refer_Type": {
+              "Exported": true,
+              "TypeKind": "typedef",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Refer_Type",
+              "File": "pkg/refer.go",
+              "Line": 22,
+              "StartOffset": 671,
+              "EndOffset": 704,
+              "Content": "type Case_Refer_Type sonic.Config",
+              "SubStruct": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config",
+                  "File": "pkg/refer.go",
+                  "Line": 22,
+                  "StartOffset": 692,
+                  "EndOffset": 704
+                }
+              ]
+            },
+            "Integer": {
+              "Exported": true,
+              "TypeKind": "typedef",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Integer",
+              "File": "pkg/util.go",
+              "Line": 57,
+              "StartOffset": 1365,
+              "EndOffset": 1381,
+              "Content": "type Integer int"
+            },
+            "InterfaceA": {
+              "Exported": true,
+              "TypeKind": "interface",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "InterfaceA",
+              "File": "pkg/util.go",
+              "Line": 38,
+              "StartOffset": 1032,
+              "EndOffset": 1078,
+              "Content": "type InterfaceA interface {\n\tString() string\n}",
+              "Methods": {
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA.String"
+                }
+              }
+            },
+            "Obj": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Obj",
+              "File": "pkg/refer.go",
+              "Line": 36,
+              "StartOffset": 875,
+              "EndOffset": 892,
+              "Content": "type Obj struct{}",
+              "Methods": {
+                "Call": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj.Call"
+                },
+                "CallFunc": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Obj.CallFunc"
+                }
+              }
+            },
+            "Type": {
+              "Exported": true,
+              "TypeKind": "typedef",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Type",
+              "File": "pkg/util.go",
+              "Line": 129,
+              "StartOffset": 2659,
+              "EndOffset": 2672,
+              "Content": "type Type int"
+            }
+          },
+          "Vars": {
+            "CaseGenericVar": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseGenericVar",
+              "File": "pkg/generic.go",
+              "Line": 39,
+              "StartOffset": 1042,
+              "EndOffset": 1110,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "CaseGenericStruct"
+              },
+              "Content": "var CaseGenericVar CaseGenericStruct[entity.InterfaceB, InterfaceA, int]",
+              "Dependencies": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB",
+                  "File": "pkg/generic.go",
+                  "Line": 39,
+                  "StartOffset": 1057,
+                  "EndOffset": 1110
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA",
+                  "File": "pkg/generic.go",
+                  "Line": 39,
+                  "StartOffset": 1057,
+                  "EndOffset": 1110
+                }
+              ]
+            },
+            "CaseVarFunc": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "CaseVarFunc",
+              "File": "pkg/util.go",
+              "Line": 157,
+              "StartOffset": 3199,
+              "EndOffset": 3370,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "CaseStruct"
+              },
+              "Content": "var CaseVarFunc CaseStruct = func() CaseStruct {\n\treturn CaseStruct{\n\t\tFieldPremitive:    Var4,\n\t\tFieldType:         Integer(1),\n\t\tFieldExternalType: entity.MyStruct{},\n\t}\n}()",
+              "Dependencies": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Var4",
+                  "File": "pkg/util.go",
+                  "Line": 159,
+                  "StartOffset": 3285,
+                  "EndOffset": 3289
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "pkg/util.go",
+                  "Line": 157,
+                  "StartOffset": 3231,
+                  "EndOffset": 3241
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Integer",
+                  "File": "pkg/util.go",
+                  "Line": 160,
+                  "StartOffset": 3312,
+                  "EndOffset": 3319,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/util.go",
+                  "Line": 161,
+                  "StartOffset": 3352,
+                  "EndOffset": 3360
+                }
+              ],
+              "Extra": {
+                "AnonymousFunctions": [
+                  {
+                    "File": "pkg/util.go",
+                    "Line": 157,
+                    "StartOffset": 3224,
+                    "EndOffset": 3368
+                  }
+                ]
+              }
+            },
+            "Case_Ref_Const": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Ref_Const",
+              "File": "pkg/refer.go",
+              "Line": 65,
+              "StartOffset": 1221,
+              "EndOffset": 1247,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped int"
+              },
+              "Content": "const Case_Ref_Const = entity.G1",
+              "Dependencies": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "G1",
+                  "File": "pkg/refer.go",
+                  "Line": 65,
+                  "StartOffset": 1238,
+                  "EndOffset": 1247
+                }
+              ]
+            },
+            "Case_Refer_Var": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Case_Refer_Var",
+              "File": "pkg/refer.go",
+              "Line": 34,
+              "StartOffset": 841,
+              "EndOffset": 873,
+              "Type": {
+                "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                "PkgPath": "github.com/bytedance/sonic",
+                "Name": "API"
+              },
+              "Content": "var Case_Refer_Var = sonic.ConfigStd",
+              "Dependencies": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "ConfigStd",
+                  "File": "pkg/refer.go",
+                  "Line": 34,
+                  "StartOffset": 864,
+                  "EndOffset": 873
+                }
+              ]
+            },
+            "Enum1": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Enum1",
+              "File": "pkg/util.go",
+              "Line": 96,
+              "StartOffset": 2131,
+              "EndOffset": 2154,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped int"
+              },
+              "Content": "const Enum1               = 1",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum3"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum4"
+                }
+              ]
+            },
+            "Enum2": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Enum2",
+              "File": "pkg/util.go",
+              "Line": 97,
+              "StartOffset": 2156,
+              "EndOffset": 2182,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped int"
+              },
+              "Content": "const Enum2, Enum3        = 2, 3"
+            },
+            "Enum3": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Enum3",
+              "File": "pkg/util.go",
+              "Line": 97,
+              "StartOffset": 2156,
+              "EndOffset": 2182,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped int"
+              },
+              "Content": "const Enum2, Enum3        = 2, 3",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum1"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum4"
+                }
+              ]
+            },
+            "Enum4": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Enum4",
+              "File": "pkg/util.go",
+              "Line": 98,
+              "StartOffset": 2184,
+              "EndOffset": 2209,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "string"
+              },
+              "Content": "const Enum4        string = \"4\"",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum1"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Enum3"
+                }
+              ]
+            },
+            "False": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "False",
+              "File": "pkg/util.go",
+              "Line": 135,
+              "StartOffset": 2765,
+              "EndOffset": 2770,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "Type"
+              },
+              "Content": "const False = 1",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Null"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Number"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "String"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "True"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "JSON"
+                }
+              ]
+            },
+            "GlobalVar": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "GlobalVar",
+              "File": "pkg/util.go",
+              "Line": 51,
+              "StartOffset": 1285,
+              "EndOffset": 1298,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var GlobalVar int"
+            },
+            "JSON": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "JSON",
+              "File": "pkg/util.go",
+              "Line": 143,
+              "StartOffset": 2912,
+              "EndOffset": 2916,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "Type"
+              },
+              "Content": "const JSON = 5",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Null"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "False"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Number"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "String"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "True"
+                }
+              ]
+            },
+            "Null": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Null",
+              "File": "pkg/util.go",
+              "Line": 133,
+              "StartOffset": 2713,
+              "EndOffset": 2729,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "Type"
+              },
+              "Content": "const Null Type = iota",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "False"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Number"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "String"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "True"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "JSON"
+                }
+              ]
+            },
+            "Number": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Number",
+              "File": "pkg/util.go",
+              "Line": 137,
+              "StartOffset": 2798,
+              "EndOffset": 2804,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "Type"
+              },
+              "Content": "const Number = 2",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Null"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "False"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "String"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "True"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "JSON"
+                }
+              ]
+            },
+            "String": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "String",
+              "File": "pkg/util.go",
+              "Line": 139,
+              "StartOffset": 2834,
+              "EndOffset": 2840,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "Type"
+              },
+              "Content": "const String = 3",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Null"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "False"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Number"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "True"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "JSON"
+                }
+              ]
+            },
+            "True": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "True",
+              "File": "pkg/util.go",
+              "Line": 141,
+              "StartOffset": 2874,
+              "EndOffset": 2878,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "Type"
+              },
+              "Content": "const True = 4",
+              "Groups": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Null"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "False"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Number"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "String"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "JSON"
+                }
+              ]
+            },
+            "Var1": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var1",
+              "File": "pkg/util.go",
+              "Line": 102,
+              "StartOffset": 2220,
+              "EndOffset": 2241,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var Var1              = 1"
+            },
+            "Var2": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var2",
+              "File": "pkg/util.go",
+              "Line": 103,
+              "StartOffset": 2243,
+              "EndOffset": 2267,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var Var2, Var3        = 2, 3"
+            },
+            "Var3": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var3",
+              "File": "pkg/util.go",
+              "Line": 103,
+              "StartOffset": 2243,
+              "EndOffset": 2267,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var Var2, Var3        = 2, 3"
+            },
+            "Var4": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var4",
+              "File": "pkg/util.go",
+              "Line": 104,
+              "StartOffset": 2269,
+              "EndOffset": 2292,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "string"
+              },
+              "Content": "var Var4       string = \"4\""
+            },
+            "Var5": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var5",
+              "File": "pkg/util.go",
+              "Line": 105,
+              "StartOffset": 2294,
+              "EndOffset": 2327,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "[]string"
+              },
+              "Content": "var Var5              = []string{\"a\"}"
+            },
+            "Var6": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var6",
+              "File": "pkg/util.go",
+              "Line": 106,
+              "StartOffset": 2329,
+              "EndOffset": 2358,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "func()"
+              },
+              "Content": "var Var6              = func() {}",
+              "Extra": {
+                "AnonymousFunctions": [
+                  {
+                    "File": "pkg/util.go",
+                    "Line": 106,
+                    "StartOffset": 2349,
+                    "EndOffset": 2358
+                  }
+                ]
+              }
+            },
+            "Var7": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": true,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var7",
+              "File": "pkg/util.go",
+              "Line": 107,
+              "StartOffset": 2360,
+              "EndOffset": 2413,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "*bool"
+              },
+              "Content": "var Var7              = flag.Bool(\"flag\", false, \"usage\")"
+            },
+            "Var8": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg",
+              "Name": "Var8",
+              "File": "pkg/util.go",
+              "Line": 108,
+              "StartOffset": 2415,
+              "EndOffset": 2449,
+              "Type": {
+                "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                "PkgPath": "github.com/bytedance/sonic",
+                "Name": "Config"
+              },
+              "Content": "var Var8              = sonic.Config{}",
+              "Dependencies": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config",
+                  "File": "pkg/util.go",
+                  "Line": 108,
+                  "StartOffset": 2441,
+                  "EndOffset": 2447
+                }
+              ]
+            }
+          }
+        },
+        "a.b/c/pkg/entity": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "a.b/c/pkg/entity",
+          "Functions": {
+            "A": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "A",
+              "File": "pkg/entity/entity.go",
+              "Line": 55,
+              "StartOffset": 1132,
+              "EndOffset": 1173,
+              "Content": "func A(in string) int {\n\treturn len(in)\n}",
+              "Signature": "func A(in string) int"
+            },
+            "InterfaceB.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": true,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "InterfaceB.String",
+              "File": "pkg/entity/entity.go",
+              "Line": 34,
+              "StartOffset": 796,
+              "EndOffset": 811,
+              "Content": "String() string",
+              "Signature": "String() string"
+            },
+            "MyStruct.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStruct.String",
+              "File": "pkg/entity/entity.go",
+              "Line": 37,
+              "StartOffset": 815,
+              "EndOffset": 929,
+              "Content": "func (a MyStruct) String() string {\n\t_ = a.Embed.MyStruct\n\t_ = a.MyStructD\n\treturn \"base struct\" + a.DFunction()\n}",
+              "Signature": "func (a MyStruct) String() string",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct"
+                }
+              },
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD.DFunction",
+                  "File": "pkg/entity/entity.go",
+                  "Line": 40,
+                  "StartOffset": 916,
+                  "EndOffset": 925,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            },
+            "MyStructC.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStructC.String",
+              "File": "pkg/entity/entity.go",
+              "Line": 47,
+              "StartOffset": 1006,
+              "EndOffset": 1067,
+              "Content": "func (c MyStructC) String() string {\n\treturn \"I'm struct c\"\n}",
+              "Signature": "func (c MyStructC) String() string",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructC"
+                }
+              }
+            },
+            "MyStructD.DFunction": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStructD.DFunction",
+              "File": "pkg/entity/entity.go",
+              "Line": 43,
+              "StartOffset": 931,
+              "EndOffset": 1004,
+              "Content": "func (c MyStructD) DFunction() string {\n\treturn \"I'm struct d function\"\n}",
+              "Signature": "func (c MyStructD) DFunction() string",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD"
+                }
+              }
+            },
+            "MyStructD.String": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStructD.String",
+              "File": "pkg/entity/entity.go",
+              "Line": 51,
+              "StartOffset": 1069,
+              "EndOffset": 1130,
+              "Content": "func (c MyStructD) String() string {\n\treturn \"I'm struct d\"\n}",
+              "Signature": "func (c MyStructD) String() string",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD"
+                }
+              }
+            }
+          },
+          "Types": {
+            "Integer": {
+              "Exported": true,
+              "TypeKind": "typedef",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "Integer",
+              "File": "pkg/entity/entity.go",
+              "Line": 61,
+              "StartOffset": 1189,
+              "EndOffset": 1205,
+              "Content": "type Integer int"
+            },
+            "InterfaceB": {
+              "Exported": true,
+              "TypeKind": "interface",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "InterfaceB",
+              "File": "pkg/entity/entity.go",
+              "Line": 33,
+              "StartOffset": 767,
+              "EndOffset": 813,
+              "Content": "type InterfaceB interface {\n\tString() string\n}",
+              "Methods": {
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB.String"
+                }
+              }
+            },
+            "MyStruct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStruct",
+              "File": "pkg/entity/entity.go",
+              "Line": 23,
+              "StartOffset": 666,
+              "EndOffset": 765,
+              "Content": "type MyStruct struct {\n\ta string\n\tb string\n\tc MyStructC\n\tMyStructD\n\tEmbed struct {\n\t\t*MyStruct\n\t}\n}",
+              "SubStruct": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD",
+                  "File": "pkg/entity/entity.go",
+                  "Line": 27,
+                  "StartOffset": 723,
+                  "EndOffset": 732
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "pkg/entity/entity.go",
+                  "Line": 29,
+                  "StartOffset": 751,
+                  "EndOffset": 760
+                }
+              ],
+              "InlineStruct": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD",
+                  "File": "pkg/entity/entity.go",
+                  "Line": 27,
+                  "StartOffset": 723,
+                  "EndOffset": 732
+                }
+              ],
+              "Methods": {
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct.String"
+                }
+              },
+              "Implements": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA"
+                }
+              ]
+            },
+            "MyStructC": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStructC",
+              "File": "pkg/entity/entity.go",
+              "Line": 17,
+              "StartOffset": 612,
+              "EndOffset": 637,
+              "Content": "type MyStructC struct {\n}",
+              "Methods": {
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructC.String"
+                }
+              },
+              "Implements": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB"
+                }
+              ]
+            },
+            "MyStructD": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "MyStructD",
+              "File": "pkg/entity/entity.go",
+              "Line": 20,
+              "StartOffset": 639,
+              "EndOffset": 664,
+              "Content": "type MyStructD struct {\n}",
+              "Methods": {
+                "DFunction": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD.DFunction"
+                },
+                "String": {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStructD.String"
+                }
+              },
+              "Implements": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "InterfaceB"
+                },
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "InterfaceA"
+                }
+              ]
+            }
+          },
+          "Vars": {
+            "G1": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "G1",
+              "File": "pkg/entity/entity.go",
+              "Line": 59,
+              "StartOffset": 1181,
+              "EndOffset": 1187,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped int"
+              },
+              "Content": "const G1 = 1"
+            },
+            "V1": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c",
+              "PkgPath": "a.b/c/pkg/entity",
+              "Name": "V1",
+              "File": "pkg/entity/entity.go",
+              "Line": 63,
+              "StartOffset": 1211,
+              "EndOffset": 1226,
+              "Type": {
+                "ModPath": "a.b/c",
+                "PkgPath": "a.b/c/pkg/entity",
+                "Name": "Integer"
+              },
+              "Content": "var V1 = Integer(1)",
+              "Dependencies": [
+                {
+                  "ModPath": "a.b/c",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "Integer",
+                  "File": "pkg/entity/entity.go",
+                  "Line": 63,
+                  "StartOffset": 1216,
+                  "EndOffset": 1223,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "Dependencies": {
+        "a.b/c": "a.b/c@7361f67ef606a7ab7dcf1b6d7ebcf1e0188b00f8",
+        "github.com/bytedance/sonic": "github.com/bytedance/sonic@v1.10.2",
+        "golang.org/x/arch": "golang.org/x/arch@v0.0.0-20210923205945-b76863e36670"
+      },
+      "Files": {
+        "cmd/go.mod": {
+          "Path": "cmd/go.mod"
+        },
+        "cmd/go.sum": {
+          "Path": "cmd/go.sum"
+        },
+        "cmd/main.go": {
+          "Path": "cmd/main.go"
+        },
+        "cmd/serdes.go": {
+          "Path": "cmd/serdes.go"
+        },
+        "go.mod": {
+          "Path": "go.mod"
+        },
+        "go.sum": {
+          "Path": "go.sum"
+        },
+        "merge/merge_ref.go": {
+          "Path": "merge/merge_ref.go",
+          "Imports": [
+            {
+              "Alias": ".",
+              "Path": "\"a.b/c/pkg/entity\""
+            }
+          ],
+          "Package": "a.b/c/merge"
+        },
+        "pkg/entity/entity.go": {
+          "Path": "pkg/entity/entity.go",
+          "Package": "a.b/c/pkg/entity"
+        },
+        "pkg/generic.go": {
+          "Path": "pkg/generic.go",
+          "Imports": [
+            {
+              "Path": "\"fmt\""
+            },
+            {
+              "Path": "\"a.b/c/pkg/entity\""
+            }
+          ],
+          "Package": "a.b/c/pkg"
+        },
+        "pkg/refer.go": {
+          "Path": "pkg/refer.go",
+          "Imports": [
+            {
+              "Path": "\"a.b/c/pkg/entity\""
+            },
+            {
+              "Path": "\"github.com/bytedance/sonic\""
+            }
+          ],
+          "Package": "a.b/c/pkg"
+        },
+        "pkg/util.go": {
+          "Path": "pkg/util.go",
+          "Imports": [
+            {
+              "Path": "\"encoding/json\""
+            },
+            {
+              "Path": "\"flag\""
+            },
+            {
+              "Path": "\"a.b/c/pkg/entity\""
+            },
+            {
+              "Path": "\"github.com/bytedance/sonic\""
+            }
+          ],
+          "Package": "a.b/c/pkg"
+        }
+      }
+    },
+    "a.b/c/cmdx": {
+      "Language": "go",
+      "Version": "",
+      "Name": "a.b/c/cmdx",
+      "Dir": "cmd",
+      "Packages": {
+        "a.b/c/cmdx": {
+          "IsMain": true,
+          "IsTest": false,
+          "PkgPath": "a.b/c/cmdx",
+          "Functions": {
+            "DuplicateName": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "DuplicateName",
+              "File": "cmd/serdes.go",
+              "Line": 36,
+              "StartOffset": 912,
+              "EndOffset": 936,
+              "Content": "func DuplicateName() {\n}",
+              "Signature": "func DuplicateName()"
+            },
+            "InternalFunc": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "InternalFunc",
+              "File": "cmd/serdes.go",
+              "Line": 25,
+              "StartOffset": 692,
+              "EndOffset": 910,
+              "Content": "func InternalFunc(in []byte) {\n\tvar s = new(pkg.CaseStruct)\n\tif err := pkg.Case_Func(in, s); err != nil {\n\t\tprintln(err.Error())\n\t}\n\tvar x = new(entity.MyStruct)\n\tif v := s.CaseMethod(in, x); v != 0 {\n\t\tprintln(v)\n\t}\n}",
+              "Signature": "func InternalFunc(in []byte)",
+              "FunctionCalls": [
+                {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "Case_Func",
+                  "File": "cmd/serdes.go",
+                  "Line": 27,
+                  "StartOffset": 767,
+                  "EndOffset": 776,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "MethodCalls": [
+                {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod",
+                  "File": "cmd/serdes.go",
+                  "Line": 31,
+                  "StartOffset": 865,
+                  "EndOffset": 875,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "cmd/serdes.go",
+                  "Line": 26,
+                  "StartOffset": 740,
+                  "EndOffset": 750
+                },
+                {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg/entity",
+                  "Name": "MyStruct",
+                  "File": "cmd/serdes.go",
+                  "Line": 30,
+                  "StartOffset": 844,
+                  "EndOffset": 852
+                }
+              ]
+            },
+            "Struct.DuplicateName": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Struct.DuplicateName",
+              "File": "cmd/serdes.go",
+              "Line": 55,
+              "StartOffset": 1238,
+              "EndOffset": 1283,
+              "Content": "func (s *Struct) DuplicateName(in []byte) {\n}",
+              "Signature": "func (s *Struct) DuplicateName(in []byte)",
+              "Receiver": {
+                "IsPointer": true,
+                "Type": {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "Struct"
+                }
+              }
+            },
+            "Struct.InternalMethod": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Struct.InternalMethod",
+              "File": "cmd/serdes.go",
+              "Line": 46,
+              "StartOffset": 1045,
+              "EndOffset": 1236,
+              "Content": "func (s *Struct) InternalMethod(in []byte) {\n\tif err := sonic.Unmarshal(in, \u0026s); err != nil {\n\t\tprintln(err.Error())\n\t}\n\tif err := s.Field2.CaseMethod(in, nil); err != 0 {\n\t\tprintln(err)\n\t}\n}",
+              "Signature": "func (s *Struct) InternalMethod(in []byte)",
+              "Receiver": {
+                "IsPointer": true,
+                "Type": {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "Struct"
+                }
+              },
+              "FunctionCalls": [
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.11.3",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Unmarshal",
+                  "File": "cmd/serdes.go",
+                  "Line": 47,
+                  "StartOffset": 1107,
+                  "EndOffset": 1116,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "MethodCalls": [
+                {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct.CaseMethod",
+                  "File": "cmd/serdes.go",
+                  "Line": 50,
+                  "StartOffset": 1185,
+                  "EndOffset": 1195,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            },
+            "main": {
+              "Exported": false,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "main",
+              "File": "cmd/main.go",
+              "Line": 24,
+              "StartOffset": 667,
+              "EndOffset": 981,
+              "Content": "func main() {\n\tif len(os.Args) \u003c 2 {\n\t\tprintln(\"missing argument\")\n\t\tos.Exit(1)\n\t}\n\t// content, err := readFile(os.Args[1])\n\t// if err != nil {\n\t// \tprintln(err.Error())\n\t// \tos.Exit(1)\n\t// }\n\tcontent := []byte(\"{}\")\n\tInternalFunc(content)\n\tvar s = new(Struct)\n\ts.Field4 = InternalFunc\n\ts.InternalMethod(content)\n}",
+              "Signature": "func main()",
+              "FunctionCalls": [
+                {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "InternalFunc",
+                  "File": "cmd/main.go",
+                  "Line": 35,
+                  "StartOffset": 885,
+                  "EndOffset": 897,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "MethodCalls": [
+                {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "Struct.InternalMethod",
+                  "File": "cmd/main.go",
+                  "Line": 38,
+                  "StartOffset": 956,
+                  "EndOffset": 970,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ],
+              "Types": [
+                {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "Struct",
+                  "File": "cmd/main.go",
+                  "Line": 36,
+                  "StartOffset": 920,
+                  "EndOffset": 926
+                }
+              ]
+            },
+            "readFile": {
+              "Exported": false,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "readFile",
+              "File": "cmd/main.go",
+              "Line": 41,
+              "StartOffset": 983,
+              "EndOffset": 1181,
+              "Content": "func readFile(path string) ([]byte, error) {\n\tfile, err := os.Open(path)\n\tif err != nil {\n\t\treturn nil, errors.Wrap(err, \"failed to open file\")\n\t}\n\tdefer file.Close()\n\n\treturn ioutil.ReadAll(file)\n}",
+              "Signature": "func readFile(path string) ([]byte, error)",
+              "FunctionCalls": [
+                {
+                  "ModPath": "github.com/pkg/errors@v0.9.1",
+                  "PkgPath": "github.com/pkg/errors",
+                  "Name": "Wrap",
+                  "File": "cmd/main.go",
+                  "Line": 44,
+                  "StartOffset": 1094,
+                  "EndOffset": 1098,
+                  "Extra": {
+                    "IsInvoked": true
+                  }
+                }
+              ]
+            }
+          },
+          "Types": {
+            "Struct": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Struct",
+              "File": "cmd/serdes.go",
+              "Line": 39,
+              "StartOffset": 938,
+              "EndOffset": 1043,
+              "Content": "type Struct struct {\n\tField1 string\n\tField2 pkg.CaseStruct\n\tField3 sonic.Config\n\tField4 func(in []byte)\n}",
+              "SubStruct": [
+                {
+                  "ModPath": "../.@",
+                  "PkgPath": "a.b/c/pkg",
+                  "Name": "CaseStruct",
+                  "File": "cmd/serdes.go",
+                  "Line": 41,
+                  "StartOffset": 982,
+                  "EndOffset": 996
+                },
+                {
+                  "ModPath": "github.com/bytedance/sonic@v1.11.3",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config",
+                  "File": "cmd/serdes.go",
+                  "Line": 42,
+                  "StartOffset": 1005,
+                  "EndOffset": 1017
+                }
+              ],
+              "Methods": {
+                "DuplicateName": {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "Struct.DuplicateName"
+                },
+                "InternalMethod": {
+                  "ModPath": "a.b/c/cmdx",
+                  "PkgPath": "a.b/c/cmdx",
+                  "Name": "Struct.InternalMethod"
+                }
+              }
+            }
+          },
+          "Vars": {
+            "Con1": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Con1",
+              "File": "cmd/serdes.go",
+              "Line": 72,
+              "StartOffset": 1464,
+              "EndOffset": 1482,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped int"
+              },
+              "Content": "const Con1, Con2 = 1, \"\""
+            },
+            "Con2": {
+              "IsExported": true,
+              "IsConst": true,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Con2",
+              "File": "cmd/serdes.go",
+              "Line": 72,
+              "StartOffset": 1464,
+              "EndOffset": 1482,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "untyped string"
+              },
+              "Content": "const Con1, Con2 = 1, \"\""
+            },
+            "Var1": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Var1",
+              "File": "cmd/serdes.go",
+              "Line": 70,
+              "StartOffset": 1438,
+              "EndOffset": 1456,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var Var1, Var2 = 1, \"\""
+            },
+            "Var2": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "Var2",
+              "File": "cmd/serdes.go",
+              "Line": 70,
+              "StartOffset": 1438,
+              "EndOffset": 1456,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "string"
+              },
+              "Content": "var Var1, Var2 = 1, \"\""
+            },
+            "VarFunc": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "VarFunc",
+              "File": "cmd/serdes.go",
+              "Line": 64,
+              "StartOffset": 1359,
+              "EndOffset": 1376,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "io",
+                "Name": "Reader"
+              },
+              "Content": "var VarFunc io.Reader"
+            },
+            "VarInt": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "VarInt",
+              "File": "cmd/serdes.go",
+              "Line": 60,
+              "StartOffset": 1312,
+              "EndOffset": 1322,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "int"
+              },
+              "Content": "var VarInt = 1"
+            },
+            "VarSlice": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "VarSlice",
+              "File": "cmd/serdes.go",
+              "Line": 62,
+              "StartOffset": 1328,
+              "EndOffset": 1353,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "[]int"
+              },
+              "Content": "var VarSlice = []int{1, 2, 3}"
+            },
+            "VarString": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": true,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "VarString",
+              "File": "cmd/serdes.go",
+              "Line": 58,
+              "StartOffset": 1289,
+              "EndOffset": 1306,
+              "Type": {
+                "ModPath": "",
+                "PkgPath": "",
+                "Name": "*string"
+              },
+              "Content": "var VarString *string"
+            },
+            "VarStruct": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": true,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "VarStruct",
+              "File": "cmd/serdes.go",
+              "Line": 68,
+              "StartOffset": 1415,
+              "EndOffset": 1432,
+              "Type": {
+                "ModPath": "a.b/c/cmdx",
+                "PkgPath": "a.b/c/cmdx",
+                "Name": "Struct"
+              },
+              "Content": "var VarStruct *Struct"
+            },
+            "VarpkgStruct": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "a.b/c/cmdx",
+              "PkgPath": "a.b/c/cmdx",
+              "Name": "VarpkgStruct",
+              "File": "cmd/serdes.go",
+              "Line": 66,
+              "StartOffset": 1382,
+              "EndOffset": 1409,
+              "Type": {
+                "ModPath": "../.@",
+                "PkgPath": "a.b/c/pkg",
+                "Name": "CaseStruct"
+              },
+              "Content": "var VarpkgStruct pkg.CaseStruct"
+            }
+          }
+        }
+      },
+      "Dependencies": {
+        "a.b/c": "../.@",
+        "a.b/c/cmdx": "a.b/c/cmdx@7361f67ef606a7ab7dcf1b6d7ebcf1e0188b00f8",
+        "github.com/bytedance/sonic": "github.com/bytedance/sonic@v1.11.3",
+        "github.com/pkg/errors": "github.com/pkg/errors@v0.9.1",
+        "golang.org/x/arch": "golang.org/x/arch@v0.0.0-20210923205945-b76863e36670"
+      },
+      "Files": {
+        "cmd/go.mod": {
+          "Path": "cmd/go.mod"
+        },
+        "cmd/go.sum": {
+          "Path": "cmd/go.sum"
+        },
+        "cmd/main.go": {
+          "Path": "cmd/main.go",
+          "Imports": [
+            {
+              "Path": "\"io/ioutil\""
+            },
+            {
+              "Path": "\"os\""
+            },
+            {
+              "Path": "\"github.com/pkg/errors\""
+            }
+          ],
+          "Package": "a.b/c/cmdx"
+        },
+        "cmd/serdes.go": {
+          "Path": "cmd/serdes.go",
+          "Imports": [
+            {
+              "Path": "\"io\""
+            },
+            {
+              "Path": "\"a.b/c/pkg\""
+            },
+            {
+              "Path": "\"a.b/c/pkg/entity\""
+            },
+            {
+              "Path": "\"github.com/bytedance/sonic\""
+            }
+          ],
+          "Package": "a.b/c/cmdx"
+        }
+      }
+    },
+    "github.com/bytedance/sonic@v1.10.2": {
+      "Language": "go",
+      "Version": "v1.10.2",
+      "Name": "github.com/bytedance/sonic",
+      "Dir": "",
+      "Packages": {
+        "github.com/bytedance/sonic": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "github.com/bytedance/sonic",
+          "Functions": {
+            "Config.Froze": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Config.Froze",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/compat.go",
+              "Line": 35,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func (cfg Config) Froze() API {\n    api := \u0026frozenConfig{Config: cfg}\n    return api\n}",
+              "Receiver": {
+                "IsPointer": false,
+                "Type": {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config"
+                }
+              }
+            },
+            "Get": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Get",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/api.go",
+              "Line": 183,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func Get(src []byte, path ...interface{}) (ast.Node, error) {\n    return GetFromString(string(src), path...)\n}"
+            },
+            "Pretouch": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Pretouch",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/compat.go",
+              "Line": 128,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func Pretouch(vt reflect.Type, opts ...option.CompileOption) error {\n    return nil\n}"
+            },
+            "Unmarshal": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Unmarshal",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/compat.go",
+              "Line": 92,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func (cfg frozenConfig) Unmarshal(buf []byte, val interface{}) error {\n    return cfg.UnmarshalFromString(string(buf), val)\n}"
+            }
+          },
+          "Types": {
+            "Config": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Config",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/api.go",
+              "Line": 26,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type Config struct {\n    // EscapeHTML indicates encoder to escape all HTML characters \n    // after serializing into JSON (see https://pkg.go.dev/encoding/json#HTMLEscape).\n    // WARNING: This hurts performance A LOT, USE WITH CARE.\n    EscapeHTML                    bool\n\n    // SortMapKeys indicates encoder that the keys of a map needs to be sorted \n    // before serializing into JSON.\n    // WARNING: This hurts performance A LOT, USE WITH CARE.\n    SortMapKeys                   bool\n\n    // CompactMarshaler indicates encoder that the output JSON from json.Marshaler \n    // is always compact and needs no validation \n    CompactMarshaler              bool\n\n    // NoQuoteTextMarshaler indicates encoder that the output text from encoding.TextMarshaler \n    // is always escaped string and needs no quoting\n    NoQuoteTextMarshaler          bool\n\n    // NoNullSliceOrMap indicates encoder that all empty Array or Object are encoded as '[]' or '{}',\n    // instead of 'null'\n    NoNullSliceOrMap              bool\n\n    // UseInt64 indicates decoder to unmarshal an integer into an interface{} as an\n    // int64 instead of as a float64.\n    UseInt64                      bool\n\n    // UseNumber indicates decoder to unmarshal a number into an interface{} as a\n    // json.Number instead of as a float64.\n    UseNumber                     bool\n\n    // UseUnicodeErrors indicates decoder to return an error when encounter invalid\n    // UTF-8 escape sequences.\n    UseUnicodeErrors              bool\n\n    // DisallowUnknownFields indicates decoder to return an error when the destination\n    // is a struct and the input contains object keys which do not match any\n    // non-ignored, exported fields in the destination.\n    DisallowUnknownFields         bool\n\n    // CopyString indicates decoder to decode string values by copying instead of referring.\n    CopyString                    bool\n\n    // ValidateString indicates decoder and encoder to valid string values: decoder will return errors \n    // when unescaped control chars(\\u0000-\\u001f) in the string value of JSON.\n    ValidateString                bool\n\n    // NoValidateJSONMarshaler indicates that the encoder should not validate the output string\n    // after encoding the JSONMarshaler to JSON.\n    NoValidateJSONMarshaler       bool\n}",
+              "Methods": {
+                "Froze": {
+                  "ModPath": "github.com/bytedance/sonic@v1.10.2",
+                  "PkgPath": "github.com/bytedance/sonic",
+                  "Name": "Config.Froze"
+                }
+              }
+            },
+            "frozenConfig": {
+              "Exported": false,
+              "TypeKind": "",
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "frozenConfig",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/compat.go",
+              "Line": 39,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type frozenConfig struct{}"
+            }
+          },
+          "Vars": {
+            "ConfigStd": {
+              "IsExported": true,
+              "IsConst": false,
+              "IsPointer": false,
+              "ModPath": "github.com/bytedance/sonic@v1.10.2",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "ConfigStd",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.10.2/api.go",
+              "Line": 83,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "ConfigStd = Config{\n        EscapeHTML : true,\n        SortMapKeys: true,\n        CompactMarshaler: true,\n        CopyString : true,\n        ValidateString : true,\n    }.Froze()"
+            }
+          }
+        }
+      }
+    },
+    "github.com/bytedance/sonic@v1.11.3": {
+      "Language": "go",
+      "Version": "v1.11.3",
+      "Name": "github.com/bytedance/sonic",
+      "Dir": "",
+      "Packages": {
+        "github.com/bytedance/sonic": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "github.com/bytedance/sonic",
+          "Functions": {
+            "Unmarshal": {
+              "Exported": true,
+              "IsMethod": true,
+              "IsInterfaceMethod": false,
+              "ModPath": "github.com/bytedance/sonic@v1.11.3",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Unmarshal",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.11.3/compat.go",
+              "Line": 92,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func (cfg frozenConfig) Unmarshal(buf []byte, val interface{}) error {\n    return cfg.UnmarshalFromString(string(buf), val)\n}"
+            }
+          },
+          "Types": {
+            "Config": {
+              "Exported": true,
+              "TypeKind": "struct",
+              "ModPath": "github.com/bytedance/sonic@v1.11.3",
+              "PkgPath": "github.com/bytedance/sonic",
+              "Name": "Config",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/bytedance/sonic@v1.11.3/api.go",
+              "Line": 27,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "type Config struct {\n    // EscapeHTML indicates encoder to escape all HTML characters \n    // after serializing into JSON (see https://pkg.go.dev/encoding/json#HTMLEscape).\n    // WARNING: This hurts performance A LOT, USE WITH CARE.\n    EscapeHTML                    bool\n\n    // SortMapKeys indicates encoder that the keys of a map needs to be sorted \n    // before serializing into JSON.\n    // WARNING: This hurts performance A LOT, USE WITH CARE.\n    SortMapKeys                   bool\n\n    // CompactMarshaler indicates encoder that the output JSON from json.Marshaler \n    // is always compact and needs no validation \n    CompactMarshaler              bool\n\n    // NoQuoteTextMarshaler indicates encoder that the output text from encoding.TextMarshaler \n    // is always escaped string and needs no quoting\n    NoQuoteTextMarshaler          bool\n\n    // NoNullSliceOrMap indicates encoder that all empty Array or Object are encoded as '[]' or '{}',\n    // instead of 'null'\n    NoNullSliceOrMap              bool\n\n    // UseInt64 indicates decoder to unmarshal an integer into an interface{} as an\n    // int64 instead of as a float64.\n    UseInt64                      bool\n\n    // UseNumber indicates decoder to unmarshal a number into an interface{} as a\n    // json.Number instead of as a float64.\n    UseNumber                     bool\n\n    // UseUnicodeErrors indicates decoder to return an error when encounter invalid\n    // UTF-8 escape sequences.\n    UseUnicodeErrors              bool\n\n    // DisallowUnknownFields indicates decoder to return an error when the destination\n    // is a struct and the input contains object keys which do not match any\n    // non-ignored, exported fields in the destination.\n    DisallowUnknownFields         bool\n\n    // CopyString indicates decoder to decode string values by copying instead of referring.\n    CopyString                    bool\n\n    // ValidateString indicates decoder and encoder to valid string values: decoder will return errors \n    // when unescaped control chars(\\u0000-\\u001f) in the string value of JSON.\n    ValidateString                bool\n\n    // NoValidateJSONMarshaler indicates that the encoder should not validate the output string\n    // after encoding the JSONMarshaler to JSON.\n    NoValidateJSONMarshaler       bool\n    \n    // NoEncoderNewline indicates that the encoder should not add a newline after every message\n    NoEncoderNewline bool\n}"
+            }
+          },
+          "Vars": {}
+        }
+      }
+    },
+    "github.com/pkg/errors@v0.9.1": {
+      "Language": "go",
+      "Version": "v0.9.1",
+      "Name": "github.com/pkg/errors",
+      "Dir": "",
+      "Packages": {
+        "github.com/pkg/errors": {
+          "IsMain": false,
+          "IsTest": false,
+          "PkgPath": "github.com/pkg/errors",
+          "Functions": {
+            "Wrap": {
+              "Exported": true,
+              "IsMethod": false,
+              "IsInterfaceMethod": false,
+              "ModPath": "github.com/pkg/errors@v0.9.1",
+              "PkgPath": "github.com/pkg/errors",
+              "Name": "Wrap",
+              "File": "../../../../../../go/1.24.3/pkg/mod/github.com/pkg/errors@v0.9.1/errors.go",
+              "Line": 184,
+              "StartOffset": 0,
+              "EndOffset": 0,
+              "Content": "func Wrap(err error, message string) error {\n\tif err == nil {\n\t\treturn nil\n\t}\n\terr = \u0026withMessage{\n\t\tcause: err,\n\t\tmsg:   message,\n\t}\n\treturn \u0026withStack{\n\t\terr,\n\t\tcallers(),\n\t}\n}"
+            }
+          },
+          "Types": {},
+          "Vars": {}
+        }
+      }
+    }
+  },
+  "Graph": {}
+}

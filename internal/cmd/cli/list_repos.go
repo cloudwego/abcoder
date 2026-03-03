@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"github.com/bytedance/sonic"
-	"github.com/cloudwego/abcoder/llm/tool"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/maps"
 )
 
 func newListReposCmd() *cobra.Command {
@@ -40,9 +40,16 @@ The repositories are loaded from .repo_index.json or *.json files in the --asts-
 				return err
 			}
 
+			// 获取当前工作目录
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+
 			// 尝试从 .repo_index.json 读取映射
 			indexFile := filepath.Join(astsDir, ".repo_index.json")
 			var repoNames []string
+			var currentRepo string
 
 			if data, err := os.ReadFile(indexFile); err == nil {
 				// 解析 repo_index.json
@@ -50,37 +57,65 @@ The repositories are loaded from .repo_index.json or *.json files in the --asts-
 					Mappings map[string]string `json:"mappings"`
 				}
 				if err := json.Unmarshal(data, &index); err == nil && index.Mappings != nil {
-					for name := range index.Mappings {
+					for name, path := range index.Mappings {
 						repoNames = append(repoNames, name)
-					}
-				}
-			}
-
-			// 如果没有从 index 读取到，回退到扫描 JSON 文件，使用 sonic 快速读取 id
-			if len(repoNames) == 0 {
-				files, err := filepath.Glob(filepath.Join(astsDir, "*.json"))
-				if err != nil {
-					return err
-				}
-				for _, f := range files {
-					// 跳过 _repo_index.json
-					if strings.HasSuffix(f, "_repo_index.json") || strings.HasSuffix(f, ".repo_index.json") {
-						continue
-					}
-					// 使用 sonic 快速读取 id 字段，避免加载整个 JSON
-					if data, err := os.ReadFile(f); err == nil {
-						val, err := sonic.Get(data, "id")
-						if err == nil {
-							id, err := val.String()
-							if err == nil && id != "" {
-								repoNames = append(repoNames, id)
-							}
+						// 检查当前目录是否匹配
+						if path == cwd {
+							currentRepo = name
 						}
 					}
 				}
 			}
 
-			resp := tool.ListReposResp{RepoNames: repoNames}
+			// 扫描 JSON 文件，使用 sonic 快速读取
+			repoNamesMap := make(map[string]struct{})
+			files, err := filepath.Glob(filepath.Join(astsDir, "*.json"))
+			if err != nil {
+				return err
+			}
+			for _, f := range files {
+				// 跳过 _repo_index.json
+				if strings.HasSuffix(f, "_repo_index.json") || strings.HasSuffix(f, ".repo_index.json") {
+					continue
+				}
+				// 使用 sonic 快速读取 id 字段，避免加载整个 JSON
+				if data, err := os.ReadFile(f); err == nil {
+					val, err := sonic.Get(data, "id")
+					if err == nil {
+						id, err := val.String()
+						if err == nil && id != "" {
+							repoNamesMap[id] = struct{}{}
+						}
+					}
+					// 尝试读取 Path 字段，检查是否匹配当前目录
+					if currentRepo == "" {
+						val, err := sonic.Get(data, "Path")
+						if err == nil {
+							path, err := val.String()
+							if err == nil && path == cwd {
+								// 从 id 字段获取名称
+								val, err := sonic.Get(data, "id")
+								if err == nil {
+									id, err := val.String()
+									if err == nil && id != "" {
+										currentRepo = id
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			repoNames = maps.Keys(repoNamesMap)
+
+			type ListReposOutput struct {
+				RepoNames    []string `json:"repo_names"`
+				CurrentRepo  string   `json:"current_repo,omitempty"`
+			}
+			resp := ListReposOutput{
+				RepoNames:   repoNames,
+				CurrentRepo: currentRepo,
+			}
 			b, _ := json.MarshalIndent(resp, "", "  ")
 			fmt.Fprintf(os.Stdout, "%s\n", b)
 			return nil
