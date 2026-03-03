@@ -1033,6 +1033,10 @@ func (c *Collector) parserConfig() *java.ParserConfig {
 		config.Debug = true
 	}
 
+	if c.cli.LspOptions["java.home"] != "" {
+		config.JavaHome = c.cli.LspOptions["java.home"]
+	}
+
 	return config
 }
 

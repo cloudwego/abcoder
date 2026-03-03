@@ -119,13 +119,27 @@ func ParseRepositoryByIpc(ctx context.Context, repoPath string, config *ParserCo
 		java25Home := os.Getenv("JAVA_25_HOME_PATH")
 
 		analyzerConfig.ExtraConfig["maven.enabled"] = "true"
-		analyzerConfig.ExtraConfig["maven.m2RepositoryPath"] = m2RepositoryPath
-		analyzerConfig.ExtraConfig["maven.settingsFilePath"] = settingsFilePath
-		analyzerConfig.ExtraConfig["maven.java8Home"] = java8Home
-		analyzerConfig.ExtraConfig["maven.java11Home"] = java11Home
-		analyzerConfig.ExtraConfig["maven.java17Home"] = java17Home
-		analyzerConfig.ExtraConfig["maven.java21Home"] = java21Home
-		analyzerConfig.ExtraConfig["maven.java25Home"] = java25Home
+		if m2RepositoryPath != "" {
+			analyzerConfig.ExtraConfig["maven.m2RepositoryPath"] = m2RepositoryPath
+		}
+		if settingsFilePath != "" {
+			analyzerConfig.ExtraConfig["maven.settingsFilePath"] = settingsFilePath
+		}
+		if java8Home != "" {
+			analyzerConfig.ExtraConfig["maven.java8Home"] = java8Home
+		}
+		if java11Home != "" {
+			analyzerConfig.ExtraConfig["maven.java11Home"] = java11Home
+		}
+		if java17Home != "" {
+			analyzerConfig.ExtraConfig["maven.java17Home"] = java17Home
+		}
+		if java21Home != "" {
+			analyzerConfig.ExtraConfig["maven.java21Home"] = java21Home
+		}
+		if java25Home != "" {
+			analyzerConfig.ExtraConfig["maven.java25Home"] = java25Home
+		}
 		analyzerConfig.ExtraConfig["maven.timeoutSeconds"] = "600"
 		analyzerConfig.ExtraConfig["maven.includeScopes"] = "compile,runtime"
 		analyzerConfig.ExtraConfig["maven.excludeScopes"] = "test,provided"
