@@ -295,6 +295,7 @@ func (p *GoParser) ParseRepo() (Repository, error) {
 	}
 	p.associateStructWithMethods()
 	p.associateImplements()
+	p.buildNameToLocations()
 	fmt.Fprintf(os.Stderr, "total call packages.Load %d times\n", loadCount)
 	return p.getRepo(), nil
 }
@@ -360,6 +361,74 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 // Notice: To get completely parsed repo, you'd better call goParser.ParseRepo() before this
 func (p *GoParser) getRepo() Repository {
 	return p.repo
+}
+
+// buildNameToLocations 构建 name → files 反向索引
+// 解析完成后调用，一次遍历 Package 填充
+func (p *GoParser) buildNameToLocations() {
+	if p.repo.NameToLocations == nil {
+		p.repo.NameToLocations = make(map[string]NameLocations)
+	}
+
+	for _, mod := range p.repo.Modules {
+		for _, pkg := range mod.Packages {
+			// Functions
+			for name, fn := range pkg.Functions {
+				if fn.File == "" {
+					continue
+				}
+				loc := p.repo.NameToLocations[name]
+				// 去重
+				exists := false
+				for _, f := range loc.Files {
+					if f == fn.File {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					loc.Files = append(loc.Files, fn.File)
+				}
+				p.repo.NameToLocations[name] = loc
+			}
+			// Types
+			for name, t := range pkg.Types {
+				if t.FileLine.File == "" {
+					continue
+				}
+				loc := p.repo.NameToLocations[name]
+				exists := false
+				for _, f := range loc.Files {
+					if f == t.FileLine.File {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					loc.Files = append(loc.Files, t.FileLine.File)
+				}
+				p.repo.NameToLocations[name] = loc
+			}
+			// Vars
+			for name, v := range pkg.Vars {
+				if v.FileLine.File == "" {
+					continue
+				}
+				loc := p.repo.NameToLocations[name]
+				exists := false
+				for _, f := range loc.Files {
+					if f == v.FileLine.File {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					loc.Files = append(loc.Files, v.FileLine.File)
+				}
+				p.repo.NameToLocations[name] = loc
+			}
+		}
+	}
 }
 
 // ToABS converts a local package path to absolute path
