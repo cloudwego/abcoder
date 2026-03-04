@@ -86,14 +86,33 @@ Returns the symbol's code, type, line number, and relationship with other symbol
 				return err
 			}
 
-			// 按 Kind 分类
-			var deps, refsOnly []map[string]string
+			// 按 Kind 分类，并按 file_path 分组聚合
+			depMap := make(map[string][]string)
+			refMap := make(map[string][]string)
 			for _, r := range refs {
+				// 通过 ModPath + PkgPath + Name 反向查找 FilePath
+				filePath := findSymbolFile(data, r["mod_path"], r["pkg_path"], r["name"])
+
 				if r["kind"] == "Dependency" {
-					deps = append(deps, r)
+					depMap[filePath] = append(depMap[filePath], r["name"])
 				} else {
-					refsOnly = append(refsOnly, r)
+					refMap[filePath] = append(refMap[filePath], r["name"])
 				}
+			}
+
+			// 转换为 FileNodeID 格式（按 file_path 分组，names 为数组）
+			var deps, refsOnly []map[string]interface{}
+			for fp, names := range depMap {
+				deps = append(deps, map[string]interface{}{
+					"file_path": fp,
+					"names":     names,
+				})
+			}
+			for fp, names := range refMap {
+				refsOnly = append(refsOnly, map[string]interface{}{
+					"file_path": fp,
+					"names":     names,
+				})
 			}
 
 			node := map[string]interface{}{

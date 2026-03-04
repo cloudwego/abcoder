@@ -545,3 +545,37 @@ func getSymbolReferences(data []byte, modPath, pkgPath, symbolName string) ([]ma
 	}
 	return refs, nil
 }
+
+// findSymbolFile 通过 ModPath + PkgPath + Name 反向查找 FilePath
+// 路径格式: .Modules[ModPath].Packages[PkgPath].Functions[Name].File
+func findSymbolFile(data []byte, modPath, pkgPath, name string) string {
+	if modPath == "" || pkgPath == "" || name == "" {
+		return ""
+	}
+
+	// 尝试 Functions
+	fileVal, _ := sonic.Get(data, "Modules", modPath, "Packages", pkgPath, "Functions", name, "File")
+	if fileVal.Exists() {
+		if f, err := fileVal.String(); err == nil {
+			return f
+		}
+	}
+
+	// 尝试 Types
+	fileVal, _ = sonic.Get(data, "Modules", modPath, "Packages", pkgPath, "Types", name, "File")
+	if fileVal.Exists() {
+		if f, err := fileVal.String(); err == nil {
+			return f
+		}
+	}
+
+	// 尝试 Vars
+	fileVal, _ = sonic.Get(data, "Modules", modPath, "Packages", pkgPath, "Vars", name, "File")
+	if fileVal.Exists() {
+		if f, err := fileVal.String(); err == nil {
+			return f
+		}
+	}
+
+	return ""
+}
