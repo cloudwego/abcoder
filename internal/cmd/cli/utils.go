@@ -271,52 +271,60 @@ func findPkgPathByFile(data []byte, filePath string) (string, string, error) {
 		}
 	}
 
-	// 2. 兜底：遍历搜索
+	// 2. 全量加载：一次性加载 Modules.Packages，建立索引查找
 	if verbose {
-		fmt.Fprintf(os.Stderr, "[VERBOSE] fallback to findPkgPathByFileField\n")
+		fmt.Fprintf(os.Stderr, "[VERBOSE] fallback to findPkgPathByFileFullLoad\n")
 	}
-	return findPkgPathByFileField(data, filePath)
+	return findPkgPathByFileFullLoad(data, filePath)
 }
 
-// findPkgPathByFileField 兜底方案：遍历所有 mod/pkg，通过 File 字段定位
-func findPkgPathByFileField(data []byte, filePath string) (string, string, error) {
-	modsVal, err := sonic.Get(data, "Modules")
-	if err != nil {
-		return "", "", err
+// findPkgPathByFileFullLoad 全量加载方案：一次性加载 Modules.Packages，建立 file→{modPath,pkgPath} 索引
+func findPkgPathByFileFullLoad(data []byte, filePath string) (string, string, error) {
+	// 一次性反序列化 Modules.Packages（只加载 File 字段）
+	var result struct {
+		Modules map[string]struct {
+			Packages map[string]struct {
+				Functions map[string]struct {
+					File string `json:"File"`
+				} `json:"Functions"`
+				Types map[string]struct {
+					File string `json:"File"`
+				} `json:"Types"`
+				Vars map[string]struct {
+					File string `json:"File"`
+				} `json:"Vars"`
+			} `json:"Packages"`
+		} `json:"Modules"`
 	}
-	modsIter, err := modsVal.Properties()
-	if err != nil {
-		return "", "", err
+	if err := sonic.Unmarshal(data, &result); err != nil {
+		return "", "", fmt.Errorf("unmarshal failed: %w", err)
 	}
-	var modPair ast.Pair
 
-	for modsIter.Next(&modPair) {
-		modPath := modPair.Key
-
-		pkgsVal, err := sonic.Get(data, "Modules", modPath, "Packages")
-		if err != nil {
-			continue
-		}
-		pkgsIter, err := pkgsVal.Properties()
-		if err != nil {
-			continue
-		}
-		var pkgPair ast.Pair
-
-		for pkgsIter.Next(&pkgPair) {
-			pkgPath := pkgPair.Key
-
-			// 检查 Functions/Types/Vars 是否有该文件
-			if matched, _ := pkgHasFile(data, modPath, pkgPath, filePath, "", "Functions"); matched {
-				return modPath, pkgPath, nil
+	// 遍历建立 file → {modPath, pkgPath} 索引
+	fileIndex := make(map[string][2]string)
+	for modPath, mod := range result.Modules {
+		for pkgPath, pkg := range mod.Packages {
+			for _, fn := range pkg.Functions {
+				if fn.File != "" {
+					fileIndex[fn.File] = [2]string{modPath, pkgPath}
+				}
 			}
-			if matched, _ := pkgHasFile(data, modPath, pkgPath, filePath, "", "Types"); matched {
-				return modPath, pkgPath, nil
+			for _, t := range pkg.Types {
+				if t.File != "" {
+					fileIndex[t.File] = [2]string{modPath, pkgPath}
+				}
 			}
-			if matched, _ := pkgHasFile(data, modPath, pkgPath, filePath, "", "Vars"); matched {
-				return modPath, pkgPath, nil
+			for _, v := range pkg.Vars {
+				if v.File != "" {
+					fileIndex[v.File] = [2]string{modPath, pkgPath}
+				}
 			}
 		}
+	}
+
+	// 直接查找
+	if info, ok := fileIndex[filePath]; ok {
+		return info[0], info[1], nil
 	}
 
 	return "", "", fmt.Errorf("file not found: %s", filePath)
@@ -393,6 +401,7 @@ func getSymbolByFileFull(data []byte, modPath, pkgPath, filePath, symbolName str
 					continue
 				}
 				if fn["File"] == filePath {
+					fn["node_type"] = "FUNC"
 					return fn, nil
 				}
 			}
@@ -407,6 +416,7 @@ func getSymbolByFileFull(data []byte, modPath, pkgPath, filePath, symbolName str
 					continue
 				}
 				if t["File"] == filePath {
+					t["node_type"] = "TYPE"
 					return t, nil
 				}
 			}
@@ -421,6 +431,7 @@ func getSymbolByFileFull(data []byte, modPath, pkgPath, filePath, symbolName str
 					continue
 				}
 				if v["File"] == filePath {
+					v["node_type"] = "VAR"
 					return v, nil
 				}
 			}
