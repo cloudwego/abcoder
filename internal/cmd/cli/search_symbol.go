@@ -128,103 +128,70 @@ abcoder cli search_symbol myrepo "Get*"`,
 				return fmt.Errorf("repo not found: %s", repoName)
 			}
 
-			// 尝试加载索引
+			// 读取 JSON 文件
+			data, err := os.ReadFile(repoFile)
+			if err != nil {
+				return fmt.Errorf("failed to read repo file: %w", err)
+			}
+
+			var results = make(map[string]map[string][]string)
+
+			// 方式1: 使用 NameToLocations（新增字段，O(1)）
+			nameToLocsVal, err := sonic.Get(data, "NameToLocations")
+			if err == nil && nameToLocsVal.Exists() {
+				nameToLocs, err := nameToLocsVal.Map()
+				if err == nil {
+					if verbose {
+						fmt.Fprintf(os.Stderr, "[VERBOSE] using NameToLocations (new)\n")
+					}
+					for name := range nameToLocs {
+						if matchName(name, query) {
+							locVal := nameToLocsVal.Get(name)
+							filesVal := locVal.Get("Files")
+							if filesVal.Exists() {
+								files, _ := filesVal.Array()
+								for _, f := range files {
+									fileStr, _ := f.(string)
+									if results[fileStr] == nil {
+										results[fileStr] = map[string][]string{
+											"FUNC": {},
+											"TYPE": {},
+											"VAR":  {},
+										}
+									}
+									results[fileStr]["FUNC"] = append(results[fileStr]["FUNC"], name)
+								}
+							}
+						}
+					}
+
+					// 如果有结果，直接返回
+					if len(results) > 0 {
+						output := SearchResult{
+							RepoName: repoName,
+							Query:    query,
+							Results:  results,
+						}
+						b, _ := json.MarshalIndent(output, "", "  ")
+						fmt.Fprintf(os.Stdout, "%s\n", b)
+						return nil
+					}
+				}
+			}
+
+			// 方式2: 回退到 .idx 文件（旧逻辑）
+			if verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] fallback to .idx file\n")
+			}
 			idx, err := loadSymbolIndex(astsDir, repoName, repoFile)
 			if err != nil {
 				return fmt.Errorf("failed to load index: %w", err)
 			}
-
-			// 如果索引不存在或过期，需要从 JSON 构建
 			if idx == nil {
-				fmt.Fprintf(os.Stderr, "Index not found or outdated, rebuilding...\n")
-				data, err := os.ReadFile(repoFile)
-				if err != nil {
-					return fmt.Errorf("failed to read repo file: %w", err)
-				}
-
-				modsVal, err := sonic.Get(data, "Modules")
-				if err != nil {
-					return fmt.Errorf("failed to get modules: %w", err)
-				}
-
-				mods, err := modsVal.Map()
-				if err != nil {
-					return fmt.Errorf("failed to parse modules: %w", err)
-				}
-
-				indexData := make(map[string][]NameMatch)
-
-				for _, modVal := range mods {
-					mod, ok := modVal.(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					pkgs, ok := mod["Packages"].(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					for _, pkgVal := range pkgs {
-						pkg, ok := pkgVal.(map[string]interface{})
-						if !ok {
-							continue
-						}
-
-						// Functions
-						if fns, ok := pkg["Functions"].(map[string]interface{}); ok {
-							for _, fnVal := range fns {
-								fn, ok := fnVal.(map[string]interface{})
-								if !ok {
-									continue
-								}
-								name := fn["Name"].(string)
-								file := fn["File"].(string)
-								indexData[name] = append(indexData[name], NameMatch{File: file, Type: "FUNC"})
-							}
-						}
-
-						// Types
-						if types, ok := pkg["Types"].(map[string]interface{}); ok {
-							for _, typeVal := range types {
-								t, ok := typeVal.(map[string]interface{})
-								if !ok {
-									continue
-								}
-								name := t["Name"].(string)
-								file := t["File"].(string)
-								indexData[name] = append(indexData[name], NameMatch{File: file, Type: "TYPE"})
-							}
-						}
-
-						// Vars
-						if vars, ok := pkg["Vars"].(map[string]interface{}); ok {
-							for _, varVal := range vars {
-								v, ok := varVal.(map[string]interface{})
-								if !ok {
-									continue
-								}
-								name := v["Name"].(string)
-								file := v["File"].(string)
-								indexData[name] = append(indexData[name], NameMatch{File: file, Type: "VAR"})
-							}
-						}
-					}
-				}
-
-				// 保存索引
-				if err := saveSymbolIndex(astsDir, repoName, repoFile, indexData); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to save index: %v\n", err)
-				}
-
-				idx = &SymbolIndex{
-					Mtime: 0, // 临时使用
-					Data:  indexData,
-				}
+				return fmt.Errorf("no symbol index found for repo: %s", repoName)
 			}
 
 			// 搜索
-			results := make(map[string]map[string][]string)
 			for name, matches := range idx.Data {
 				if matchName(name, query) {
 					for _, m := range matches {

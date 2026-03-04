@@ -211,20 +211,15 @@ func iterSymbolNameFile(data []byte, modPath, pkgPath, category string) ([][]str
 	return results, nil
 }
 
-// findPkgPathByFile 通过 filePath 推导 pkgPath，验证该 pkg 包含该文件
+// findPkgPathByFile 通过 filePath 查找 pkgPath
 // 返回: modPath, pkgPath
-// 特点：只读取 package 的 file 列表验证，不读取完整内容（极致按需）
+// 使用 File.ModPath + File.PkgPath 实现 O(1) 查找
 func findPkgPathByFile(data []byte, filePath string) (string, string, error) {
-	derivedPkg := filepath.Dir(filePath)
-	if derivedPkg == "." {
-		derivedPkg = ""
-	}
-
 	if verbose {
-		fmt.Fprintf(os.Stderr, "[VERBOSE] findPkgPathByFile: filePath=%s, derivedPkg=%s\n", filePath, derivedPkg)
+		fmt.Fprintf(os.Stderr, "[VERBOSE] findPkgPathByFile: filePath=%s\n", filePath)
 	}
 
-	// 1. 遍历 mods，尝试直接定位
+	// 1. 遍历 Modules，尝试直接通过 Files[filePath] 找到 File
 	modsVal, err := sonic.Get(data, "Modules")
 	if err != nil {
 		return "", "", err
@@ -238,7 +233,55 @@ func findPkgPathByFile(data []byte, filePath string) (string, string, error) {
 	for modsIter.Next(&modPair) {
 		modPath := modPair.Key
 
-		// 拼接完整 pkgPath
+		// 直接查找 Module.Files[filePath]
+		fileVal, err := sonic.Get(data, "Modules", modPath, "Files", filePath)
+		if err != nil || !fileVal.Exists() {
+			continue
+		}
+
+		// 读取 File.ModPath 和 File.PkgPath（JSON 字段名是大写）
+		modPathVal, _ := fileVal.Get("ModPath").String()
+		pkgPathVal, _ := fileVal.Get("PkgPath").String()
+
+		if modPathVal != "" && pkgPathVal != "" {
+			if verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] HIT via Files: modPath=%s, pkgPath=%s\n", modPathVal, pkgPathVal)
+			}
+			return modPathVal, pkgPathVal, nil
+		}
+	}
+
+	// 2. 回退：使用旧的推导方式（兼容旧数据）
+	if verbose {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] fallback to derived path\n")
+	}
+	return findPkgPathByFileDerived(data, filePath)
+}
+
+// findPkgPathByFileDerived 通过推导查找 pkgPath（旧逻辑，兼容）
+func findPkgPathByFileDerived(data []byte, filePath string) (string, string, error) {
+	derivedPkg := filepath.Dir(filePath)
+	if derivedPkg == "." {
+		derivedPkg = ""
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] findPkgPathByFileDerived: filePath=%s, derivedPkg=%s\n", filePath, derivedPkg)
+	}
+
+	modsVal, err := sonic.Get(data, "Modules")
+	if err != nil {
+		return "", "", err
+	}
+	modsIter, err := modsVal.Properties()
+	if err != nil {
+		return "", "", err
+	}
+	var modPair ast.Pair
+
+	for modsIter.Next(&modPair) {
+		modPath := modPair.Key
+
 		var fullPkgPath string
 		if derivedPkg == "" {
 			fullPkgPath = modPath
@@ -250,7 +293,6 @@ func findPkgPathByFile(data []byte, filePath string) (string, string, error) {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] trying direct: modPath=%s, fullPkgPath=%s\n", modPath, fullPkgPath)
 		}
 
-		// 检查该 package 是否存在且包含该文件（只读 File 字段验证）
 		if matched, _ := pkgHasFile(data, modPath, fullPkgPath, filePath, "", "Functions"); matched {
 			if verbose {
 				fmt.Fprintf(os.Stderr, "[VERBOSE] HIT via direct: modPath=%s, fullPkgPath=%s\n", modPath, fullPkgPath)
@@ -271,7 +313,6 @@ func findPkgPathByFile(data []byte, filePath string) (string, string, error) {
 		}
 	}
 
-	// 2. 全量加载：一次性加载 Modules.Packages，建立索引查找
 	if verbose {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] fallback to findPkgPathByFileFullLoad\n")
 	}
