@@ -277,6 +277,9 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			if f.Package == "" {
 				f.Package = pkg.ID
 				f.Imports = imports.Origins
+				// [新增] 填充 ModPath 和 PkgPath
+				f.ModPath = mod.Name
+				f.PkgPath = pkg.ID
 			}
 			if err := p.parseFile(ctx, file); err != nil {
 				return err
