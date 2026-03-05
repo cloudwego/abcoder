@@ -124,7 +124,7 @@ The repositories are loaded from *.json files in the --asts-dir directory.`,
 
 			type ListReposOutput struct {
 				RepoNames    []string `json:"repo_names"`
-				CurrentRepos []string `json:"current_repos,omitempty"`
+				CurrentRepos []string `json:"current_repo,omitempty"`
 			}
 			resp := ListReposOutput{
 				RepoNames:    repoNames,
