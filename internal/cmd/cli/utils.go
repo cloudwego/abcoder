@@ -537,7 +537,7 @@ func getFileSymbolsByFile(data []byte, modPath, pkgPath, filePath string) ([]map
 	return nodes, nil
 }
 
-// getSymbolReferences 用 sonic 按需读取 Graph 节点的 Dependencies
+// getSymbolReferences 用 sonic 按需读取 Graph 节点的 Dependencies 和 References
 // Identity 格式: {ModPath}?{PkgPath}#{Name}
 func getSymbolReferences(data []byte, modPath, pkgPath, symbolName string) ([]map[string]string, error) {
 	// Graph key 格式: {ModPath}?{PkgPath}#{Name}
@@ -554,16 +554,34 @@ func getSymbolReferences(data []byte, modPath, pkgPath, symbolName string) ([]ma
 		return nil, nil // 没有 Graph 节点，返回空
 	}
 
-	// 尝试 Dependencies 或 References
+	var refs []map[string]string
+
+	// 读取 Dependencies（当前节点依赖的）
 	depsVal := nodeVal.Get("Dependencies")
-	if !depsVal.Exists() {
-		depsVal = nodeVal.Get("References")
-	}
-	if !depsVal.Exists() {
-		return nil, nil // 没有依赖
+	if depsVal.Exists() {
+		deps, err := parseRelationItems(*depsVal, "Dependency")
+		if err != nil {
+			return nil, err
+		}
+		refs = append(refs, deps...)
 	}
 
-	arr, err := depsVal.Array()
+	// 读取 References（引用当前节点的）
+	refsVal := nodeVal.Get("References")
+	if refsVal.Exists() {
+		refsItems, err := parseRelationItems(*refsVal, "Reference")
+		if err != nil {
+			return nil, err
+		}
+		refs = append(refs, refsItems...)
+	}
+
+	return refs, nil
+}
+
+// parseRelationItems 解析关系数组，添加 kind 来源标记
+func parseRelationItems(val ast.Node, kind string) ([]map[string]string, error) {
+	arr, err := val.Array()
 	if err != nil {
 		return nil, err
 	}
@@ -575,9 +593,8 @@ func getSymbolReferences(data []byte, modPath, pkgPath, symbolName string) ([]ma
 			continue
 		}
 		ref := make(map[string]string)
-		if v, ok := m["Kind"].(string); ok {
-			ref["kind"] = v
-		}
+		// 使用固定的 kind，不依赖 JSON 中的 Kind 字段
+		ref["kind"] = kind
 		if v, ok := m["Name"].(string); ok {
 			ref["name"] = v
 		}
