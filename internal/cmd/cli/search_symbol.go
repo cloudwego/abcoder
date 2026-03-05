@@ -33,6 +33,18 @@ type SearchResult struct {
 	Results  map[string]map[string][]string `json:"results"` // file -> type -> names
 }
 
+const indexDir = ".index"
+
+type SymbolIndex struct {
+	Mtime int64                  `json:"mtime"`
+	Data  map[string][]NameMatch `json:"data"` // name -> []NameMatch
+}
+
+type NameMatch struct {
+	File string `json:"file"`
+	Type string `json:"type"`
+}
+
 // loadSymbolIndex 加载符号索引
 func loadSymbolIndex(astsDir, repoName, repoFile string) (*SymbolIndex, error) {
 	idxPath := filepath.Join(astsDir, indexDir, repoName+".idx")
@@ -105,14 +117,17 @@ func matchName(name, query string) bool {
 }
 
 func newSearchSymbolCmd() *cobra.Command {
-	return &cobra.Command{
+	var pathFilter string
+
+	cmd := &cobra.Command{
 		Use:   "search_symbol <repo_name> <query>",
 		Short: "Search symbols by name",
 		Long: `Search symbols in a repository by name pattern.
 Supports substring match, prefix match (query*), suffix match (*query), and wildcard (*query*).`,
 		Example: `abcoder cli search_symbol myrepo GetUser
 abcoder cli search_symbol myrepo "*User"
-abcoder cli search_symbol myrepo "Get*"`,
+abcoder cli search_symbol myrepo "Get*"
+abcoder cli search_symbol myrepo "Graph" --path "src/main/java/com/uniast/parser"`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			astsDir, err := getASTsDir(cmd)
@@ -152,6 +167,10 @@ abcoder cli search_symbol myrepo "Get*"`,
 								files, _ := filesVal.Array()
 								for _, f := range files {
 									fileStr, _ := f.(string)
+									// path 前缀过滤
+									if pathFilter != "" && !strings.HasPrefix(fileStr, pathFilter) {
+										continue
+									}
 									if results[fileStr] == nil {
 										results[fileStr] = map[string][]string{
 											"FUNC": {},
@@ -179,30 +198,56 @@ abcoder cli search_symbol myrepo "Get*"`,
 				}
 			}
 
-			// 方式2: 回退到 .idx 文件（旧逻辑）
+			// 方式2: 没有 NameToLocations，构建并写回 JSON
 			if verbose {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] fallback to .idx file\n")
-			}
-			idx, err := loadSymbolIndex(astsDir, repoName, repoFile)
-			if err != nil {
-				return fmt.Errorf("failed to load index: %w", err)
-			}
-			if idx == nil {
-				return fmt.Errorf("no symbol index found for repo: %s", repoName)
+				fmt.Fprintf(os.Stderr, "[VERBOSE] building NameToLocations\n")
 			}
 
-			// 搜索
-			for name, matches := range idx.Data {
-				if matchName(name, query) {
-					for _, m := range matches {
-						if results[m.File] == nil {
-							results[m.File] = map[string][]string{
+			// 使用公共函数构建
+			nameToTypeFiles, err := buildNameToLocations(data, pathFilter)
+			if err != nil {
+				return err
+			}
+
+			// 写回 JSON（使用完整 path 构建，否则后续搜索会丢失数据）
+			fullNameToTypeFiles, err := buildNameToLocations(data, "")
+			if err == nil {
+				// 转换为 name -> []file 格式
+				fullNameToLocsMap := make(map[string][]string)
+				for name, typeFiles := range fullNameToTypeFiles {
+					fileSet := make(map[string]bool)
+					for _, files := range typeFiles {
+						for file := range files {
+							fileSet[file] = true
+						}
+					}
+					var fileList []string
+					for file := range fileSet {
+						fileList = append(fileList, file)
+					}
+					fullNameToLocsMap[name] = fileList
+				}
+				if err := saveNameToLocations(repoFile, fullNameToLocsMap); err != nil {
+					if verbose {
+						fmt.Fprintf(os.Stderr, "Warning: failed to save NameToLocations: %v\n", err)
+					}
+				} else if verbose {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] saved NameToLocations to %s\n", repoFile)
+				}
+			}
+
+			// 转换为输出格式（全部归为 FUNC，因为 JSON 里没存 type）
+			for name, typeFiles := range nameToTypeFiles {
+				for _, fileSet := range typeFiles {
+					for file := range fileSet {
+						if results[file] == nil {
+							results[file] = map[string][]string{
 								"FUNC": {},
 								"TYPE": {},
 								"VAR":  {},
 							}
 						}
-						results[m.File][m.Type] = append(results[m.File][m.Type], name)
+						results[file]["FUNC"] = append(results[file]["FUNC"], name)
 					}
 				}
 			}
@@ -218,4 +263,8 @@ abcoder cli search_symbol myrepo "Get*"`,
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&pathFilter, "path", "", "filter by file path prefix (e.g., src/main/java/com/uniast/parser)")
+
+	return cmd
 }

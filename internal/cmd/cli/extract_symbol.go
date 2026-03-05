@@ -18,65 +18,113 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 
 	"github.com/bytedance/sonic"
 	"github.com/cloudwego/abcoder/lang/utils"
+	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/spf13/cobra"
 )
 
-const indexDir = ".index"
-
-type SymbolIndex struct {
-	Mtime int64                  `json:"mtime"`
-	Data  map[string][]NameMatch `json:"data"` // name -> []NameMatch
-}
-
-type NameMatch struct {
-	File string `json:"file"`
-	Type string `json:"type"`
-}
-
-// saveSymbolIndex 保存符号索引到 ~/.asts/.index/{repo}.idx
-func saveSymbolIndex(astsDir, repoName, repoFile string, data map[string][]NameMatch) error {
-	// 获取 repo 文件的 mtime
-	info, err := os.Stat(repoFile)
-	if err != nil {
-		return fmt.Errorf("stat repo file: %w", err)
+// buildNameToLocations 从 JSON 数据构建 NameToLocations
+// 如果 pathFilter 不为空，则只收集匹配前缀的 file
+// 返回: name -> type -> fileSet (去重)
+func buildNameToLocations(data []byte, pathFilter string) (map[string]map[string]map[string]bool, error) {
+	// 一次性反序列化整个 Modules
+	var result struct {
+		Modules map[string]*uniast.Module `json:"modules"`
 	}
-	mtime := info.ModTime().UnixMilli()
+	if err := sonic.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
 
-	// 检查现有索引
-	idxPath := filepath.Join(astsDir, indexDir, repoName+".idx")
-	if _, err := os.Stat(idxPath); err == nil {
-		// 读取现有索引的 mtime
-		if oldData, err := os.ReadFile(idxPath); err == nil {
-			var oldIdx SymbolIndex
-			if json.Unmarshal(oldData, &oldIdx) == nil && oldIdx.Mtime == mtime {
-				return nil // mtime 一致，无需更新
+	// name -> type -> files (去重)
+	nameToTypeFiles := make(map[string]map[string]map[string]bool)
+
+	// 遍历所有模块
+	for _, mod := range result.Modules {
+		// 跳过外部模块
+		if mod.IsExternal() {
+			continue
+		}
+
+		// 遍历所有包
+		for _, pkg := range mod.Packages {
+			// 提取 Functions
+			for name, fn := range pkg.Functions {
+				if pathFilter != "" && !strings.HasPrefix(fn.File, pathFilter) {
+					continue
+				}
+				if nameToTypeFiles[name] == nil {
+					nameToTypeFiles[name] = make(map[string]map[string]bool)
+				}
+				if nameToTypeFiles[name]["FUNC"] == nil {
+					nameToTypeFiles[name]["FUNC"] = make(map[string]bool)
+				}
+				nameToTypeFiles[name]["FUNC"][fn.File] = true
+			}
+
+			// 提取 Types
+			for name, typ := range pkg.Types {
+				if pathFilter != "" && !strings.HasPrefix(typ.FileLine.File, pathFilter) {
+					continue
+				}
+				if nameToTypeFiles[name] == nil {
+					nameToTypeFiles[name] = make(map[string]map[string]bool)
+				}
+				if nameToTypeFiles[name]["TYPE"] == nil {
+					nameToTypeFiles[name]["TYPE"] = make(map[string]bool)
+				}
+				nameToTypeFiles[name]["TYPE"][typ.FileLine.File] = true
+			}
+
+			// 提取 Vars
+			for name, v := range pkg.Vars {
+				if pathFilter != "" && !strings.HasPrefix(v.FileLine.File, pathFilter) {
+					continue
+				}
+				if nameToTypeFiles[name] == nil {
+					nameToTypeFiles[name] = make(map[string]map[string]bool)
+				}
+				if nameToTypeFiles[name]["VAR"] == nil {
+					nameToTypeFiles[name]["VAR"] = make(map[string]bool)
+				}
+				nameToTypeFiles[name]["VAR"][v.FileLine.File] = true
 			}
 		}
 	}
 
-	// 创建索引
-	idx := SymbolIndex{
-		Mtime: mtime,
-		Data:  data,
+	return nameToTypeFiles, nil
+}
+
+// saveNameToLocations 写回 NameToLocations 到 JSON 文件
+func saveNameToLocations(repoFile string, nameToLocs map[string][]string) error {
+	data, err := os.ReadFile(repoFile)
+	if err != nil {
+		return err
+	}
+
+	// 使用标准库 JSON 反序列化
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	// 添加 NameToLocations
+	result["NameToLocations"] = nameToLocs
+
+	// 重新Marshal（保持缩进格式）
+	prettyJSON, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return err
 	}
 
 	// 写入 .tmp 再 rename
-	idxPathTmp := idxPath + ".tmp"
-	b, err := json.Marshal(idx)
-	if err != nil {
-		return fmt.Errorf("marshal index: %w", err)
+	tmpPath := repoFile + ".tmp"
+	if err := utils.MustWriteFile(tmpPath, prettyJSON); err != nil {
+		return err
 	}
-	if err := utils.MustWriteFile(idxPathTmp, b); err != nil {
-		return fmt.Errorf("write index: %w", err)
-	}
-	if err := os.Rename(idxPathTmp, idxPath); err != nil {
-		return fmt.Errorf("rename index: %w", err)
-	}
-	return nil
+	return os.Rename(tmpPath, repoFile)
 }
 
 type Symbol struct {
@@ -116,84 +164,98 @@ Only extracts filepath + name (no content), for use with search_node.`,
 				return fmt.Errorf("failed to read repo file: %w", err)
 			}
 
-			// 获取所有 mod keys（只遍历 keys）
-			modKeys, err := getModuleKeys(data)
+			// 方式1: 优先用 sonic 读取 NameToLocations
+			nameToLocsVal, err := sonic.Get(data, "NameToLocations")
+			if err == nil && nameToLocsVal.Exists() {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] using existing NameToLocations\n")
+				}
+
+				// 获取所有 name keys
+				nameToLocsMap, _ := nameToLocsVal.Map()
+
+				// 转换为输出格式: file -> type -> names
+				files := make(map[string]map[string][]string)
+				for name := range nameToLocsMap {
+					filesVal, _ := sonic.Get(data, "NameToLocations", name, "Files")
+					if filesVal.Exists() {
+						fileList, err := filesVal.Array()
+						if err == nil {
+							for _, f := range fileList {
+								fileStr, _ := f.(string)
+								if files[fileStr] == nil {
+									files[fileStr] = map[string][]string{
+										"FUNC": {},
+										"TYPE": {},
+										"VAR":  {},
+									}
+								}
+								// NameToLocations 不区分类型，都归为 FUNC
+								files[fileStr]["FUNC"] = append(files[fileStr]["FUNC"], name)
+							}
+						}
+					}
+				}
+
+				result := ExtractResult{
+					RepoName: repoName,
+					Files:    files,
+				}
+				b, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Fprintf(os.Stdout, "%s\n", b)
+				return nil
+			}
+
+			// 方式2: 没有 NameToLocations，遍历提取并写回 JSON
+			if verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] building NameToLocations\n")
+			}
+
+			// 使用公共函数构建
+			nameToTypeFiles, err := buildNameToLocations(data, "")
 			if err != nil {
 				return err
 			}
 
-			var files = make(map[string]map[string][]string)
-			var indexData = make(map[string][]NameMatch)
-
-			// 遍历所有模块
-			for _, modPath := range modKeys {
-				// 跳过外部模块
-				isExtVal, _ := sonic.Get(data, "Modules", modPath, "IsExternal")
-				if isExt, _ := isExtVal.Bool(); isExt {
-					continue
-				}
-
-				// 获取所有 package keys（只遍历 keys）
-				pkgKeys, err := getPackageKeys(data, modPath)
-				if err != nil {
-					continue
-				}
-
-				// 遍历所有包
-				for _, pkgPath := range pkgKeys {
-					// 提取 Functions: 只读取 Name + File（极致按需）
-					if results, err := iterSymbolNameFile(data, modPath, pkgPath, "Functions"); err == nil {
-						for _, r := range results {
-							name, file := r[0], r[1]
-							if files[file] == nil {
-								files[file] = map[string][]string{
-									"FUNC": {},
-									"TYPE": {},
-									"VAR":  {},
-								}
-							}
-							files[file]["FUNC"] = append(files[file]["FUNC"], name)
-							indexData[name] = append(indexData[name], NameMatch{File: file, Type: "FUNC"})
-						}
-					}
-
-					// 提取 Types
-					if results, err := iterSymbolNameFile(data, modPath, pkgPath, "Types"); err == nil {
-						for _, r := range results {
-							name, file := r[0], r[1]
-							if files[file] == nil {
-								files[file] = map[string][]string{
-									"FUNC": {},
-									"TYPE": {},
-									"VAR":  {},
-								}
-							}
-							files[file]["TYPE"] = append(files[file]["TYPE"], name)
-							indexData[name] = append(indexData[name], NameMatch{File: file, Type: "TYPE"})
-						}
-					}
-
-					// 提取 Vars
-					if results, err := iterSymbolNameFile(data, modPath, pkgPath, "Vars"); err == nil {
-						for _, r := range results {
-							name, file := r[0], r[1]
-							if files[file] == nil {
-								files[file] = map[string][]string{
-									"FUNC": {},
-									"TYPE": {},
-									"VAR":  {},
-								}
-							}
-							files[file]["VAR"] = append(files[file]["VAR"], name)
-							indexData[name] = append(indexData[name], NameMatch{File: file, Type: "VAR"})
-						}
+			// 转换为 NameToLocations 格式: name -> []file
+			// 拍平 type，只保留 files
+			nameToLocsMap := make(map[string][]string)
+			for name, typeFiles := range nameToTypeFiles {
+				fileSet := make(map[string]bool)
+				for _, files := range typeFiles {
+					for file := range files {
+						fileSet[file] = true
 					}
 				}
+				var fileList []string
+				for file := range fileSet {
+					fileList = append(fileList, file)
+				}
+				nameToLocsMap[name] = fileList
 			}
 
-			// 保存索引文件
-			if err := saveSymbolIndex(astsDir, repoName, repoFile, indexData); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to save index: %v\n", err)
+			// 写回 JSON
+			if err := saveNameToLocations(repoFile, nameToLocsMap); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to save NameToLocations: %v\n", err)
+			} else if verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] saved NameToLocations to %s\n", repoFile)
+			}
+
+			// 转换为输出格式: file -> type -> names
+			files := make(map[string]map[string][]string)
+			for name, typeFiles := range nameToTypeFiles {
+				for typ, fileSet := range typeFiles {
+					for file := range fileSet {
+						if files[file] == nil {
+							files[file] = map[string][]string{
+								"FUNC": {},
+								"TYPE": {},
+								"VAR":  {},
+							}
+						}
+						files[file][typ] = append(files[file][typ], name)
+					}
+				}
 			}
 
 			// 过滤掉空的 TYPE 和 VAR
@@ -204,7 +266,6 @@ Only extracts filepath + name (no content), for use with search_node.`,
 				if len(types["VAR"]) == 0 {
 					delete(types, "VAR")
 				}
-				// 如果 FUNC 也空，删除整个文件
 				if len(types["FUNC"]) == 0 {
 					delete(files, file)
 				}
