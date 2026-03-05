@@ -102,6 +102,7 @@ func loadRepoModules(repoFile string) (map[string]interface{}, error) {
 }
 
 // pathMatchesCwd 检查 mappings 中的文件名对应的 json 文件的 Path 字段是否匹配 cwd
+// 支持前缀匹配：cwd 以 path 开头（支持 monorepo 场景）
 func pathMatchesCwd(astsDir, filename, cwd string) bool {
 	repoFile := filepath.Join(astsDir, filename)
 	data, err := os.ReadFile(repoFile)
@@ -116,7 +117,8 @@ func pathMatchesCwd(astsDir, filename, cwd string) bool {
 	if err != nil {
 		return false
 	}
-	return path == cwd
+	// 前缀匹配：cwd 以 path 开头
+	return strings.HasPrefix(cwd, path)
 }
 
 // loadRepoFileData 读取整个 repo JSON 文件，返回 raw data 供后续 sonic.Get 按需读取

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/bytedance/sonic"
@@ -32,7 +33,7 @@ func newListReposCmd() *cobra.Command {
 		Short: "List available repositories",
 		Long: `List all available repositories in the AST directory.
 
-The repositories are loaded from .repo_index.json or *.json files in the --asts-dir directory.`,
+The repositories are loaded from *.json files in the --asts-dir directory.`,
 		Example: `abcoder cli list-repos`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			astsDir, err := getASTsDir(cmd)
@@ -45,77 +46,89 @@ The repositories are loaded from .repo_index.json or *.json files in the --asts-
 			if err != nil {
 				return err
 			}
-
-			// 尝试从 .repo_index.json 读取映射
-			indexFile := filepath.Join(astsDir, ".repo_index.json")
-			var repoNames []string
-			var currentRepo string
-
-			if data, err := os.ReadFile(indexFile); err == nil {
-				// 用 sonic 解析 mappings
-				mappingsVal, err := sonic.Get(data, "mappings")
-				if err == nil {
-					mappings, err := mappingsVal.Map()
-					if err == nil {
-						for name, v := range mappings {
-							repoNames = append(repoNames, name)
-							// 检查当前目录是否匹配 (mappings value 是文件名，需要检查对应的 json 文件)
-							if pathMatchesCwd(astsDir, v.(string), cwd) {
-								currentRepo = name
-							}
-						}
-					}
-				}
+			if verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] cwd: %s\n", cwd)
 			}
 
-			// 扫描 JSON 文件，使用 sonic 快速读取
+			// 扫描所有 JSON 文件，读取 id 和 path
 			repoNamesMap := make(map[string]struct{})
+			var currentRepos []string
+			type pathItem struct {
+				id   string
+				path string
+			}
+			var pathItems []pathItem
+
 			files, err := filepath.Glob(filepath.Join(astsDir, "*.json"))
 			if err != nil {
 				return err
+			}
+			if verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] found %d json files\n", len(files))
 			}
 			for _, f := range files {
 				// 跳过 _repo_index.json
 				if strings.HasSuffix(f, "_repo_index.json") || strings.HasSuffix(f, ".repo_index.json") {
 					continue
 				}
-				// 使用 sonic 快速读取 id 字段，避免加载整个 JSON
+				// 使用 sonic 快速读取 id 和 path 字段
 				if data, err := os.ReadFile(f); err == nil {
-					val, err := sonic.Get(data, "id")
-					if err == nil {
-						id, err := val.String()
-						if err == nil && id != "" {
-							repoNamesMap[id] = struct{}{}
-						}
+					// 读取 id
+					idVal, err := sonic.Get(data, "id")
+					if err != nil {
+						continue
 					}
-					// 尝试读取 Path 字段，检查是否匹配当前目录
-					if currentRepo == "" {
-						val, err := sonic.Get(data, "Path")
-						if err == nil {
-							path, err := val.String()
-							if err == nil && path == cwd {
-								// 从 id 字段获取名称
-								val, err := sonic.Get(data, "id")
-								if err == nil {
-									id, err := val.String()
-									if err == nil && id != "" {
-										currentRepo = id
-									}
-								}
-							}
+					id, err := idVal.String()
+					if err != nil || id == "" {
+						continue
+					}
+					repoNamesMap[id] = struct{}{}
+
+					// 读取 path
+					pathVal, err := sonic.Get(data, "Path")
+					if err == nil {
+						path, err := pathVal.String()
+						if err == nil && path != "" {
+							pathItems = append(pathItems, pathItem{id: id, path: path})
 						}
 					}
 				}
 			}
-			repoNames = maps.Keys(repoNamesMap)
+
+			// 按 path 排序，用于前缀匹配时提前退出
+			sort.Slice(pathItems, func(i, j int) bool {
+				return pathItems[i].path < pathItems[j].path
+			})
+
+			// 查找 cwd 前缀匹配的 repo
+			for _, item := range pathItems {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] checking: id=%s, path=%s\n", item.id, item.path)
+				}
+				// 如果 path 比 cwd 短，不可能匹配，提前退出
+				if len(item.path) < len(cwd) {
+					if verbose {
+						fmt.Fprintf(os.Stderr, "[VERBOSE] early exit: path shorter than cwd\n")
+					}
+					continue
+				}
+				if strings.HasPrefix(item.path, cwd) {
+					currentRepos = append(currentRepos, item.id)
+					if verbose {
+						fmt.Fprintf(os.Stderr, "[VERBOSE] MATCH: id=%s, path=%s\n", item.id, item.path)
+					}
+				}
+			}
+
+			repoNames := maps.Keys(repoNamesMap)
 
 			type ListReposOutput struct {
 				RepoNames    []string `json:"repo_names"`
-				CurrentRepo  string   `json:"current_repo,omitempty"`
+				CurrentRepos []string `json:"current_repos,omitempty"`
 			}
 			resp := ListReposOutput{
-				RepoNames:   repoNames,
-				CurrentRepo: currentRepo,
+				RepoNames:    repoNames,
+				CurrentRepos: currentRepos,
 			}
 			b, _ := json.MarshalIndent(resp, "", "  ")
 			fmt.Fprintf(os.Stdout, "%s\n", b)
