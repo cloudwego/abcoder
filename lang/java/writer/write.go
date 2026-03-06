@@ -360,7 +360,13 @@ func (w *Writer) writePom(mod *uniast.Module, outDir string) error {
 
 	if len(mod.Dependencies) > 0 {
 		sb.WriteString("\n    <dependencies>\n")
-		for name, dep := range mod.Dependencies {
+		depNames := make([]string, 0, len(mod.Dependencies))
+		for name := range mod.Dependencies {
+			depNames = append(depNames, name)
+		}
+		sort.Strings(depNames)
+		for _, name := range depNames {
+			dep := mod.Dependencies[name]
 			depParts := strings.SplitN(name, ":", 2)
 			depGroupId := depParts[0]
 			depArtifactId := ""

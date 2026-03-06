@@ -55,7 +55,47 @@ detect_project_info() {
     return 0
   fi
 
-  # 4. 未检测到目标语言
+  # 4. 检测 Java 项目（Maven / Gradle，支持 monorepo）
+  # 4.1 Maven：根目录有 pom.xml
+  if [[ -f "${target_dir}/pom.xml" ]]; then
+    local artifact_id=$(grep -m1 '<artifactId>' "${target_dir}/pom.xml" | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | tr -d '[:space:]')
+    if [[ -n "$artifact_id" ]]; then
+      echo "java|${artifact_id}"
+      return 0
+    fi
+    echo "java|$(get_basename "$target_dir")"
+    return 0
+  fi
+
+  # 4.2 Gradle：settings.gradle(.kts) 表示多模块项目
+  if [[ -f "${target_dir}/settings.gradle" || -f "${target_dir}/settings.gradle.kts" ]]; then
+    local settings_file="${target_dir}/settings.gradle"
+    if [[ ! -f "$settings_file" ]]; then
+      settings_file="${target_dir}/settings.gradle.kts"
+    fi
+    local root_name=$(grep -oP "rootProject\.name\s*=\s*['\"]\\K[^'\"]+" "$settings_file" 2>/dev/null)
+    if [[ -n "$root_name" ]]; then
+      echo "java|${root_name}"
+      return 0
+    fi
+    echo "java|$(get_basename "$target_dir")"
+    return 0
+  fi
+
+  # 4.3 Gradle 单模块（仅 build.gradle 无 settings）
+  if [[ -f "${target_dir}/build.gradle" || -f "${target_dir}/build.gradle.kts" ]]; then
+    echo "java|$(get_basename "$target_dir")"
+    return 0
+  fi
+
+  # 4.4 Maven/Gradle monorepo fallback：根目录无构建文件但子目录有
+  local java_build_file=$(find "${target_dir}" -maxdepth 2 -type f \( -name "pom.xml" -o -name "build.gradle" -o -name "build.gradle.kts" \) | head -1)
+  if [[ -n "$java_build_file" ]]; then
+    echo "java|$(get_basename "$target_dir")"
+    return 0
+  fi
+
+  # 5. 未检测到目标语言
   echo "unknown|$(get_basename "$target_dir")"
   return 1
 }
@@ -155,7 +195,7 @@ if [[ "$project_lang" != "unknown" ]]; then
 
     jq -n --arg code "$exit_code" --arg err "$error_msg" --arg lang "$project_lang" --arg repo "$project_identifier" '{
           "decision": "block",
-          "reason": ("abcoder parse 失败（语言：" + $lang + "，仓库：" + $repo + "，退出码: " + $code + "）。错误信息：\n" + $err + "\n\n可能的原因：\n1. 项目配置文件有问题（Go: go.mod；TS: tsconfig.json）\n2. 缺少依赖包\n3. 代码语法错误\n\n建议：\n- Go 项目：运行 'go mod tidy' 和 'go build' 检查\n- TS 项目：运行 'npm install' 和 'tsc --noEmit' 检查"),
+          "reason": ("abcoder parse 失败（语言：" + $lang + "，仓库：" + $repo + "，退出码: " + $code + "）。错误信息：\n" + $err + "\n\n可能的原因：\n1. 项目配置文件有问题（Go: go.mod；TS: tsconfig.json；Java: pom.xml/build.gradle）\n2. 缺少依赖包\n3. 代码语法错误\n\n建议：\n- Go 项目：运行 'go mod tidy' 和 'go build' 检查\n- TS 项目：运行 'npm install' 和 'tsc --noEmit' 检查\n- Java 项目：运行 'mvn compile' 或 'gradle build' 检查"),
           "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "additionalContext": "解析失败，需要修复后重试"
@@ -169,7 +209,7 @@ else
   # 当前目录不是支持的项目，返回空对象
   jq -n '{
     "decision": "block",
-    "reason": "当前目录未检测到支持的语言（仅支持 Go 和 TypeScript），请确保项目是 Go 或 TypeScript 类型"
+    "reason": "当前目录未检测到支持的语言（支持 Go、TypeScript、Java），请确保项目包含对应的构建文件（go.mod / package.json / tsconfig.json / pom.xml / build.gradle）"
   }'
 fi
 
