@@ -67,6 +67,7 @@ Returns a list of functions, types, and variables defined in the file.`,
 				Name      string `json:"name"`
 				Line     int    `json:"line"`
 				Signature string `json:"signature,omitempty"`
+				TypeKind  string `json:"typeKind,omitempty"` // class, typedef, struct, enum, interface
 			}
 
 			var nodes []Node
@@ -77,6 +78,10 @@ Returns a list of functions, types, and variables defined in the file.`,
 				}
 				if sig, ok := sym["Signature"].(string); ok {
 					n.Signature = sig
+				}
+				// 添加 TypeKind (class, typedef, struct, enum, interface)
+				if tk, ok := sym["TypeKind"].(string); ok && tk != "" {
+					n.TypeKind = tk
 				}
 				nodes = append(nodes, n)
 			}

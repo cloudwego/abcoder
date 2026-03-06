@@ -161,10 +161,19 @@ abcoder cli search_symbol myrepo "Graph" --path "src/main/java/com/uniast/parser
 					}
 					for name := range nameToLocs {
 						if matchName(name, query) {
+							// 支持两种格式：
+							// 1. 数组格式: {"GetUser": ["src/user.rs"]}
+							// 2. 对象格式: {"GetUser": {"Files": ["src/user.rs"]}}
 							locVal := nameToLocsVal.Get(name)
+							var files []interface{}
 							filesVal := locVal.Get("Files")
 							if filesVal.Exists() {
-								files, _ := filesVal.Array()
+								files, _ = filesVal.Array()
+							} else {
+								// 尝试数组格式
+								files, _ = locVal.Array()
+							}
+							if len(files) > 0 {
 								for _, f := range files {
 									fileStr, _ := f.(string)
 									// path 前缀过滤
@@ -184,17 +193,15 @@ abcoder cli search_symbol myrepo "Graph" --path "src/main/java/com/uniast/parser
 						}
 					}
 
-					// 如果有结果，直接返回
-					if len(results) > 0 {
-						output := SearchResult{
-							RepoName: repoName,
-							Query:    query,
-							Results:  results,
-						}
-						b, _ := json.MarshalIndent(output, "", "  ")
-						fmt.Fprintf(os.Stdout, "%s\n", b)
-						return nil
+					// 无论是否有结果都直接返回
+					output := SearchResult{
+						RepoName: repoName,
+						Query:    query,
+						Results:  results,
 					}
+					b, _ := json.MarshalIndent(output, "", "  ")
+					fmt.Fprintf(os.Stdout, "%s\n", b)
+					return nil
 				}
 			}
 
