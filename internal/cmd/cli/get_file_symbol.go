@@ -93,7 +93,8 @@ Returns the symbol's code, type, line number, and relationship with other symbol
 				// 通过 ModPath + PkgPath + Name 反向查找 FilePath
 				filePath := findSymbolFile(data, r["mod_path"], r["pkg_path"], r["name"])
 
-				if r["kind"] == "Dependency" {
+				// Dependency, Inherit, Implement 都视为依赖关系
+			if r["kind"] == "Dependency" || r["kind"] == "Inherit" || r["kind"] == "Implement" {
 					depMap[filePath] = append(depMap[filePath], r["name"])
 				} else {
 					refMap[filePath] = append(refMap[filePath], r["name"])
