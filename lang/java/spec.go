@@ -44,29 +44,54 @@ type JavaPkg struct {
 
 func NewJavaSpec(reop string) *JavaSpec {
 	rootPomPath := filepath.Join(reop, "pom.xml")
-	rootModule, err := javaparser.ParseMavenProject(rootPomPath)
-	if err != nil {
+	if rootModule, err := javaparser.ParseMavenProject(rootPomPath); err == nil {
+		nameToMod := javaparser.GetModuleStructMap(rootModule)
 		return &JavaSpec{
 			repo:      reop,
 			rootMod:   rootModule,
-			nameToMod: make(map[string]*javaparser.ModuleInfo),
+			nameToMod: nameToMod,
 			dirToPkg:  make(map[string]JavaPkg),
 		}
 	}
-	nameToMod := javaparser.GetModuleStructMap(rootModule)
-
+	if rootModule, err := javaparser.ParseGradleProject(reop); err == nil {
+		nameToMod := javaparser.GetModuleStructMap(rootModule)
+		return &JavaSpec{
+			repo:      reop,
+			rootMod:   rootModule,
+			nameToMod: nameToMod,
+			dirToPkg:  make(map[string]JavaPkg),
+		}
+	}
 	return &JavaSpec{
 		repo:      reop,
-		rootMod:   rootModule,
-		nameToMod: nameToMod,
+		nameToMod: make(map[string]*javaparser.ModuleInfo),
 		dirToPkg:  make(map[string]JavaPkg),
 	}
-
 }
 
 func (c *JavaSpec) FileImports(content []byte) ([]uniast.Import, error) {
-	//   Java import parsing by tree-setting
-	panic("Java import parsing by tree-setting")
+	var imports []uniast.Import
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "import ") {
+			continue
+		}
+		// parse "import [static] com.example.Foo;"
+		s := strings.TrimPrefix(trimmed, "import ")
+		s = strings.TrimSuffix(s, ";")
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if strings.HasPrefix(s, "static ") {
+			path := strings.TrimSpace(strings.TrimPrefix(s, "static "))
+			alias := "static"
+			imports = append(imports, uniast.Import{Path: path, Alias: &alias})
+		} else {
+			imports = append(imports, uniast.Import{Path: s})
+		}
+	}
+	return imports, nil
 }
 
 func (c *JavaSpec) WorkSpace(root string) (map[string]string, error) {

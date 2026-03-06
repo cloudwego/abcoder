@@ -214,9 +214,17 @@ func extractPackageFromPath(filePath string) string {
 	// Remove file extension and convert path separators to dots
 	dir := filepath.Dir(filePath)
 
-	// Try to find src/main/java or src/ prefix
-	if idx := strings.Index(dir, "src/main/java/"); idx != -1 {
-		return strings.ReplaceAll(dir[idx+len("src/main/java/"):], "/", ".")
+	// Try standard Maven/Gradle source directory prefixes
+	prefixes := []string{
+		"src/main/java/",
+		"src/test/java/",
+		"src/main/kotlin/",
+		"src/test/kotlin/",
+	}
+	for _, prefix := range prefixes {
+		if idx := strings.Index(dir, prefix); idx != -1 {
+			return strings.ReplaceAll(dir[idx+len(prefix):], "/", ".")
+		}
 	}
 	if idx := strings.Index(dir, "src/"); idx != -1 {
 		return strings.ReplaceAll(dir[idx+len("src/"):], "/", ".")

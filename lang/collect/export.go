@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cloudwego/abcoder/lang/log"
@@ -295,6 +296,15 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		if method.Kind == SKMethod && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
 			receivers[rec.Method.Receiver.Symbol] = append(receivers[rec.Method.Receiver.Symbol], method)
 		}
+	}
+	// Sort methods within each receiver by source location for deterministic output
+	for _, methods := range receivers {
+		sort.Slice(methods, func(i, j int) bool {
+			if methods[i].Location.Range.Start.Line != methods[j].Location.Range.Start.Line {
+				return methods[i].Location.Range.Start.Line < methods[j].Location.Range.Start.Line
+			}
+			return methods[i].Location.Range.Start.Character < methods[j].Location.Range.Start.Character
+		})
 	}
 
 	switch k := symbol.Kind; k {
