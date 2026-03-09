@@ -103,43 +103,51 @@ export class TypeScriptStructureAnalyzer {
 
 
   private analyzePackages(module: ModuleInfo, options: { noDist?: boolean, srcPatterns?: string[] } = {}): PackageInfo[] {
-    const packages: PackageInfo[] = [];
-    const sourceDirs = this.findSourceDirectories(module, options);
-
-    for (const sourceDir of sourceDirs) {
-      const packageInfos = this.createPackagesFromDirectory(module, sourceDir, options);
-      packages.push(...packageInfos);
-    }
-
-    return packages;
+    const sourceFiles = this.findSourceFiles(module, options);
+    return sourceFiles.map(file => this.createPackageFromFile(module, file));
   }
 
-  private findSourceDirectories(module: ModuleInfo, options: { noDist?: boolean, srcPatterns?: string[] } = {}): string[] {
-    // Handle srcPatterns if provided
-    if (options.srcPatterns && options.srcPatterns.length > 0) {
-      return this.findDirectoriesByPatterns(module.path, options.srcPatterns, options);
+  private findSourceFiles(module: ModuleInfo, options: { noDist?: boolean, srcPatterns?: string[] } = {}): string[] {
+    // Handle default srcPatterns if not provided
+    if (!options.srcPatterns || options.srcPatterns.length === 0) {
+      options.srcPatterns = ['**/*.ts', '**/*.js'];
     }
 
-    // Original behavior when no srcPatterns provided
-    const dirs: string[] = [];
+    const allFiles = new Set<string>();
 
+    // 1. Handle srcPatterns if provided
+    if (options.srcPatterns && options.srcPatterns.length > 0) {
+      // For now, if patterns are provided, we search the entire module for matching files
+      // In a more complex implementation, we might want to support actual glob matching
+      // Here we reuse findTypeScriptFiles which already finds .ts/.js files
+      const files = this.findTypeScriptFiles(module.path, options);
+      files.forEach(f => allFiles.add(f));
+      return Array.from(allFiles);
+    }
+
+    // 2. Original behavior fallback
     // Get tsconfig.json configuration
     const config = this.tsConfigCache.getTsConfig(module.path);
 
-    // Default: all directories in tsconfig.json
+    // Default: all files in tsconfig.json
     if(config.fileNames && config.fileNames.length > 0) {
-      const dirSet = new Set<string>();
-      config.fileNames.forEach(file => { dirSet.add(path.dirname(file)); });
-      dirs.push(...Array.from(dirSet));
-      return dirs.filter(dir => fs.existsSync(dir));
+      config.fileNames.forEach(file => {
+        if (fs.existsSync(file)) {
+          allFiles.add(file);
+        }
+      });
+      if (allFiles.size > 0) {
+        return Array.from(allFiles);
+      }
     }
     
     // Fallback to rootDir and outDir
+    const searchDirs: string[] = [];
     if (config.rootDir) {
-      dirs.push(path.join(module.path, config.rootDir));
+      searchDirs.push(path.join(module.path, config.rootDir));
     }
     if (config.outDir && !(options.noDist && config.outDir === 'dist')) {
-      dirs.push(path.join(module.path, config.outDir));
+      searchDirs.push(path.join(module.path, config.outDir));
     }
 
     // Default source directories
@@ -151,67 +159,44 @@ export class TypeScriptStructureAnalyzer {
     for (const dir of defaultDirs) {
       const dirPath = path.join(module.path, dir);
       if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-        dirs.push(dirPath);
+        searchDirs.push(dirPath);
       }
     }
 
-    // Remove duplicates and ensure paths exist
-    return [...new Set(dirs)].filter(dir => fs.existsSync(dir));
-  }
-
-  private findDirectoriesByPatterns(modulePath: string, patterns: string[], options: { noDist?: boolean }): string[] {
-    const matchedDirs = new Set<string>();
-    
-    for (const pattern of patterns) {
-      // Assuming patterns are relative to modulePath
-      const fullPath = path.join(modulePath, pattern);
-      
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        // Check if the directory matches the noDist option
-        if (options.noDist && path.basename(fullPath) === 'dist') {
-          continue;
-        }
-        
-        matchedDirs.add(fullPath);
+    // Find all files in the collected directories
+    for (const dir of [...new Set(searchDirs)]) {
+      if (fs.existsSync(dir)) {
+        const files = this.findTypeScriptFiles(dir, options);
+        files.forEach(f => allFiles.add(f));
       }
     }
-    
-    return Array.from(matchedDirs);
+
+    return Array.from(allFiles);
   }
 
-  private createPackagesFromDirectory(module: ModuleInfo, sourceDir: string, options: { noDist?: boolean } = {}): PackageInfo[] {
-    const packages: PackageInfo[] = [];
+  private createPackageFromFile(module: ModuleInfo, file: string): PackageInfo {
+    // Calculate file path relative to the package root (module path)
+    const relativeFilePath = path.relative(module.path, file);
+    const pkgPath = relativeFilePath.replace(/\\/g, '/');
 
-    // Find all TypeScript files
-    const tsFiles = this.findTypeScriptFiles(sourceDir, options);
+    // Check if this is a main file (index or main)
+    const baseName = path.basename(file, path.extname(file));
+    const isMain = baseName === 'index' || baseName === 'main';
 
-    // Each file becomes a separate package
-    for (const file of tsFiles) {
-      // Calculate file path relative to the package root (module path)
-      const relativeFilePath = path.relative(module.path, file);
-      const pkgPath = relativeFilePath.replace(/\\/g, '/');
+    // Check if this is a test file
+    const isTest = relativeFilePath.includes('test') ||
+                   relativeFilePath.includes('__tests__') ||
+                   file.includes('.test.') ||
+                   file.includes('.spec.');
 
-      // Check if this is a main file (index or main)
-      const baseName = path.basename(file, path.extname(file));
-      const isMain = baseName === 'index' || baseName === 'main';
-
-      // Check if this is a test file
-      const isTest = relativeFilePath.includes('test') ||
-                     relativeFilePath.includes('__tests__') ||
-                     file.includes('.test.') ||
-                     file.includes('.spec.');
-
-      packages.push({
-        pkgPath,
-        moduleName: module.name,
-        isMain,
-        isTest,
-        files: [file], // Each package contains only one file
-        imports: [] // Will be populated during parsing
-      });
-    }
-
-    return packages;
+    return {
+      pkgPath,
+      moduleName: module.name,
+      isMain,
+      isTest,
+      files: [file], // Each package contains only one file
+      imports: [] // Will be populated during parsing
+    };
   }
 
   private findTypeScriptFiles(dir: string, options: { noDist?: boolean, srcPatterns?: string[] } = {}): string[] {
