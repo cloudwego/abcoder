@@ -318,14 +318,21 @@ func isUpperCase(c byte) bool {
 	return c >= 'A' && c <= 'Z'
 }
 
+var commitHashCache sync.Map
+
 func getCommitHash(dir string) (string, error) {
+	if val, ok := commitHashCache.Load(dir); ok {
+		return val.(string), nil
+	}
 	cmd := exec.Command("git", "rev-parse", "HEAD")
 	cmd.Dir = dir
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit hash: %v", err)
 	}
-	return strings.TrimSpace(string(output)), nil
+	hash := strings.TrimSpace(string(output))
+	commitHashCache.Store(dir, hash)
+	return hash, nil
 }
 
 type workFile struct {
