@@ -112,6 +112,13 @@ func (pc *PackageCache) IsStandardPackage(path string) bool {
 		return isStd
 	}
 
+	// Optimization: if the first segment of the path contains a dot, it's likely a domain name (e.g. github.com),
+	// so it's not a standard package. This avoids expensive build.Import calls.
+	if parts := strings.SplitN(path, "/", 2); len(parts) > 0 && strings.Contains(parts[0], ".") {
+		pc.set(path, false)
+		return false
+	}
+
 	pkg, err := build.Import(path, "", build.FindOnly)
 	if err != nil {
 		// Cannot find the package, assume it's not a standard package
