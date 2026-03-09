@@ -18,13 +18,13 @@ import (
 	"container/list"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/types"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -112,27 +112,27 @@ func (pc *PackageCache) IsStandardPackage(path string) bool {
 		return isStd
 	}
 
-	// Optimization: if the first segment of the path contains a dot, it's likely a domain name (e.g. github.com),
-	// so it's not a standard package. This avoids expensive build.Import calls.
-	if parts := strings.SplitN(path, "/", 2); len(parts) > 0 && strings.Contains(parts[0], ".") {
-		pc.set(path, false)
-		return false
-	}
-
-	pkg, err := build.Import(path, "", build.FindOnly)
-	if err != nil {
-		// Cannot find the package, assume it's not a standard package
-		pc.set(path, false)
-		return false
-	}
-
-	isStd := pkg.Goroot
+	isStd := IsStandardLibrary(path)
 	pc.set(path, isStd)
 	return isStd
 }
 
+func IsStandardLibrary(pkgPath string) bool {
+
+	goroot := runtime.GOROOT()
+	if goroot == "" {
+		return false
+	}
+
+	dir := filepath.Join(goroot, "src", pkgPath)
+	info, err := os.Stat(dir)
+	isStd := err == nil && info.IsDir()
+
+	return isStd
+}
+
 // stdlibCache 缓存 importPath 是否是 system package, 10000 个缓存
-var stdlibCache = NewPackageCache(10000)
+var stdlibCache = NewPackageCache(100000)
 
 func isSysPkg(importPath string) bool {
 	return stdlibCache.IsStandardPackage(importPath)
