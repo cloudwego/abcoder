@@ -185,22 +185,20 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		Mode: baseOpts,
 		Fset: fset,
 		Dir:  dir,
+		Env:  append(os.Environ(), "GOSUMDB=off"),
 	}
 
 	if p.opts.NeedTest {
 		cfg.Tests = true
 	}
 
-	pkgs, err := packages.Load(cfg, pkgPath)
-	if err != nil {
-		return fmt.Errorf("load path '%s' failed: %v", dir, err)
-	}
-
 	hasCGO := false
 	if len(p.cgoPkgs) > 0 {
 		hasCGO = true
 	}
-	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s, hasCGO: %v\n", mod.Name, dir, pkgPath, hasCGO)
+
+	var pkgs []*packages.Package
+
 	if hasCGO {
 		baseOpts |= packages.NeedCompiledGoFiles
 		cfg.Mode = baseOpts
@@ -208,7 +206,14 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		if err != nil {
 			return fmt.Errorf("load path '%s' with CGO failed: %v", dir, err)
 		}
+	} else {
+		pkgs, err = packages.Load(cfg, pkgPath)
+		if err != nil {
+			return fmt.Errorf("load path '%s' failed: %v", dir, err)
+		}
 	}
+
+	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s, hasCGO: %v\n", mod.Name, dir, pkgPath, hasCGO)
 
 	for _, pkg := range pkgs {
 		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
