@@ -114,6 +114,16 @@ export class TypeScriptStructureAnalyzer {
     }
 
     const allFiles = new Set<string>();
+    const isNodeModules = (filePath: string) => {
+      const relativePath = path.relative(module.path, filePath);
+      return relativePath.split(path.sep).includes('node_modules');
+    };
+
+    const addFileIfAllowed = (filePath: string) => {
+      if (!isNodeModules(filePath)) {
+        allFiles.add(filePath);
+      }
+    };
 
     // 1. Handle srcPatterns if provided
     if (options.srcPatterns && options.srcPatterns.length > 0) {
@@ -121,53 +131,51 @@ export class TypeScriptStructureAnalyzer {
       // In a more complex implementation, we might want to support actual glob matching
       // Here we reuse findTypeScriptFiles which already finds .ts/.js files
       const files = this.findTypeScriptFiles(module.path, options);
-      files.forEach(f => allFiles.add(f));
-      return Array.from(allFiles);
-    }
+      files.forEach(f => addFileIfAllowed(f));
+    } else {
+      // 2. Original behavior fallback
+      // Get tsconfig.json configuration
+      const config = this.tsConfigCache.getTsConfig(module.path);
 
-    // 2. Original behavior fallback
-    // Get tsconfig.json configuration
-    const config = this.tsConfigCache.getTsConfig(module.path);
-
-    // Default: all files in tsconfig.json
-    if(config.fileNames && config.fileNames.length > 0) {
-      config.fileNames.forEach(file => {
-        if (fs.existsSync(file)) {
-          allFiles.add(file);
+      // Default: all files in tsconfig.json
+      if(config.fileNames && config.fileNames.length > 0) {
+        config.fileNames.forEach(file => {
+          if (fs.existsSync(file)) {
+            addFileIfAllowed(file);
+          }
+        });
+      }
+      
+      if (allFiles.size === 0) {
+        // Fallback to rootDir and outDir
+        const searchDirs: string[] = [];
+        if (config.rootDir) {
+          searchDirs.push(path.join(module.path, config.rootDir));
         }
-      });
-      if (allFiles.size > 0) {
-        return Array.from(allFiles);
-      }
-    }
-    
-    // Fallback to rootDir and outDir
-    const searchDirs: string[] = [];
-    if (config.rootDir) {
-      searchDirs.push(path.join(module.path, config.rootDir));
-    }
-    if (config.outDir && !(options.noDist && config.outDir === 'dist')) {
-      searchDirs.push(path.join(module.path, config.outDir));
-    }
+        if (config.outDir && !(options.noDist && config.outDir === 'dist')) {
+          searchDirs.push(path.join(module.path, config.outDir));
+        }
 
-    // Default source directories
-    const defaultDirs = ['src', 'lib'];
-    if (!options.noDist) {
-      defaultDirs.push('dist');
-    }
-    
-    for (const dir of defaultDirs) {
-      const dirPath = path.join(module.path, dir);
-      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-        searchDirs.push(dirPath);
-      }
-    }
+        // Default source directories
+        const defaultDirs = ['src', 'lib'];
+        if (!options.noDist) {
+          defaultDirs.push('dist');
+        }
+        
+        for (const dir of defaultDirs) {
+          const dirPath = path.join(module.path, dir);
+          if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+            searchDirs.push(dirPath);
+          }
+        }
 
-    // Find all files in the collected directories
-    for (const dir of [...new Set(searchDirs)]) {
-      if (fs.existsSync(dir)) {
-        const files = this.findTypeScriptFiles(dir, options);
-        files.forEach(f => allFiles.add(f));
+        // Find all files in the collected directories
+        for (const dir of [...new Set(searchDirs)]) {
+          if (fs.existsSync(dir)) {
+            const files = this.findTypeScriptFiles(dir, options);
+            files.forEach(f => addFileIfAllowed(f));
+          }
+        }
       }
     }
 
@@ -202,7 +210,12 @@ export class TypeScriptStructureAnalyzer {
   private findTypeScriptFiles(dir: string, options: { noDist?: boolean, srcPatterns?: string[] } = {}): string[] {
     const files: string[] = [];
     
-    function traverse(currentDir: string) {
+    // Safety check: if the starting directory itself is node_modules, skip it
+    if (path.basename(dir) === 'node_modules') {
+      return [];
+    }
+
+    const traverse = (currentDir: string) => {
       if (!fs.existsSync(currentDir)) return;
       
       const entries = fs.readdirSync(currentDir, { withFileTypes: true });
@@ -228,7 +241,7 @@ export class TypeScriptStructureAnalyzer {
           }
         }
       }
-    }
+    };
 
     traverse(dir);
     return files;
