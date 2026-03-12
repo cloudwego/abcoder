@@ -346,17 +346,35 @@ func NewIdentity(mod, pkg, name string) Identity {
 }
 
 func NewIdentityFromString(str string) (ret Identity) {
-	sp := strings.Split(str, "?")
-	if len(sp) == 2 {
-		ret.ModPath = sp[0]
-		str = sp[1]
+	// Identity format: ModPath?PkgPath#Name
+	//
+	// We parse LAST '#' AND FIRST '?' to isolate ModPath, PkgPath, and Name.
+	// 1. Locate the LAST '#' to isolate the Name. This is crucial for Java where the Name
+	//    itself may contain '?' (e.g., generic wildcards like List<?>).
+	// 2. Locate the FIRST '?' in the remaining part to separate ModPath and PkgPath.
+	//    Using the first '?' is more robust if PkgPath is a URL containing query parameters.
+
+	// Step 1: Separate PkgPath and Name using the last '#'
+	hashIdx := strings.LastIndex(str, "#")
+	if hashIdx != -1 {
+		ret.Name = str[hashIdx+1:]
+		str = str[:hashIdx]
+	} else {
+		// If no '#', the entire string is treated as the Name
+		ret.Name = str
+		return ret
 	}
-	sp = strings.Split(str, "#")
-	if len(sp) == 2 {
-		ret.PkgPath = sp[0]
-		str = sp[1]
+
+	// Step 2: Separate ModPath and PkgPath using the first '?'
+	questionIdx := strings.Index(str, "?")
+	if questionIdx != -1 {
+		ret.ModPath = str[:questionIdx]
+		ret.PkgPath = str[questionIdx+1:]
+	} else {
+		// If no '?', the remaining part is the PkgPath
+		ret.PkgPath = str
 	}
-	ret.Name = str
+
 	return ret
 }
 
@@ -374,7 +392,14 @@ func (i Identity) CallName() string {
 }
 
 func (i Identity) Full() string {
-	return i.ModPath + "?" + i.PkgPath + "#" + i.Name
+	builder := strings.Builder{}
+	builder.Grow(len(i.ModPath) + len(i.PkgPath) + len(i.Name) + 2)
+	builder.WriteString(i.ModPath)
+	builder.WriteString("?")
+	builder.WriteString(i.PkgPath)
+	builder.WriteString("#")
+	builder.WriteString(i.Name)
+	return builder.String()
 }
 
 // GetFunction the function identified by id.
