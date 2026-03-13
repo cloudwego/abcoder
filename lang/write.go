@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/abcoder/lang/golang/writer"
+	javawriter "github.com/cloudwego/abcoder/lang/java/writer"
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
@@ -42,6 +43,8 @@ func Write(ctx context.Context, repo *uniast.Repository, args WriteOptions) erro
 		switch m.Language {
 		case uniast.Golang:
 			w = writer.NewWriter(writer.Options{CompilerPath: args.Compiler})
+		case uniast.Java:
+			w = javawriter.NewWriter(javawriter.Options{})
 		default:
 			return fmt.Errorf("unsupported language: %s", m.Language)
 		}

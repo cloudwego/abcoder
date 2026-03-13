@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"github.com/cloudwego/abcoder/lang/golang/writer"
+	javawriter "github.com/cloudwego/abcoder/lang/java/writer"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
@@ -236,6 +237,8 @@ func (p *Patcher) getLangWriter(lang uniast.Language) uniast.Writer {
 	switch lang {
 	case uniast.Golang:
 		return writer.NewWriter(writer.Options{})
+	case uniast.Java:
+		return javawriter.NewWriter(javawriter.Options{})
 	default:
 		return nil
 	}

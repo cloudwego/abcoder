@@ -17,12 +17,15 @@ Claude Code 钩子系统，用于自动化 ABCoder 代码分析工作流。
 
 **功能**: 自动检测项目语言并生成最新 AST 到 `~/.asts/` 目录（ `~/.claude.json` 需要配置abcoder目录 `abcoder mcp ${HOME}/.asts` ）
 
-- 自动检测 Go/TypeScript 项目
-- 执行 `abcoder parse go/ts . -o ~/.asts/repo.json` 生成 AST 文件
+- 自动检测 Go/TypeScript/Java 项目
+- 执行 `abcoder parse go/ts/java . -o ~/.asts/repo.json` 生成 AST 文件
 
 **检测规则**:
 - Go: 存在 `go.mod` 或 `main.go`
 - TypeScript: 存在 `package.json`, `tsconfig.json` 或 `.ts/.tsx` 文件
+- Java (Maven): 存在 `pom.xml`
+- Java (Gradle): 存在 `settings.gradle(.kts)` 或 `build.gradle(.kts)`
+- Java (Monorepo): 根目录无构建文件时，向下搜索 2 层查找 `pom.xml` / `build.gradle(.kts)`
 
 ### 2. prompt.sh (PostToolUse)
 

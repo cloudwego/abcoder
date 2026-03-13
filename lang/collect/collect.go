@@ -474,7 +474,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 	// Module paths (same as ScannerByTreeSitter)
 	modulePaths := []string{c.repo}
 	rootPomPath := filepath.Join(c.repo, "pom.xml")
-	if rootModule, err := parser.ParseMavenProject(rootPomPath); err == nil && rootModule != nil {
+	rootModule, pomErr := parser.ParseMavenProject(rootPomPath)
+	if pomErr != nil {
+		rootModule, pomErr = parser.ParseGradleProject(c.repo)
+	}
+	if pomErr == nil && rootModule != nil {
 		modulePaths = parser.GetModulePaths(rootModule)
 		if len(modulePaths) == 0 {
 			modulePaths = []string{c.repo}
@@ -883,11 +887,16 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		}
 	}
 	// Fallback: any remaining local file not under modulePaths
-	for fp, cls := range fileToClasses {
-		if visitedFile[fp] {
-			continue
+	var remainingFiles []string
+	for fp := range fileToClasses {
+		if !visitedFile[fp] {
+			remainingFiles = append(remainingFiles, fp)
 		}
+	}
+	sort.Strings(remainingFiles)
+	for _, fp := range remainingFiles {
 		visitedFile[fp] = true
+		cls := fileToClasses[fp]
 		if len(cls) == 0 {
 			continue
 		}
@@ -999,6 +1008,10 @@ func (c *Collector) ScannerByTreeSitter(ctx context.Context) ([]*DocumentSymbol,
 	if c.Language == uniast.Java {
 		rootPomPath := filepath.Join(c.repo, "pom.xml")
 		rootModule, err := parser.ParseMavenProject(rootPomPath)
+		if err != nil {
+			// Try Gradle
+			rootModule, err = parser.ParseGradleProject(c.repo)
+		}
 		if err != nil {
 			// 尝试直接遍历文件
 			modulePaths = append(modulePaths, c.repo)

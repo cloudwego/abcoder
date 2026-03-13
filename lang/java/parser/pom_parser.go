@@ -19,6 +19,7 @@ import (
 	"log"
 	"path/filepath"
 	"regexp"
+	"sort"
 
 	"github.com/vifraa/gopom"
 )
@@ -195,6 +196,7 @@ func GetModulePaths(root *ModuleInfo) []string {
 	for _, path := range moduleMap {
 		paths = append(paths, path)
 	}
+	sort.Strings(paths)
 	return paths
 }
 
