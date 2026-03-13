@@ -18,13 +18,13 @@ import (
 	"container/list"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/types"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -112,20 +112,27 @@ func (pc *PackageCache) IsStandardPackage(path string) bool {
 		return isStd
 	}
 
-	pkg, err := build.Import(path, "", build.FindOnly)
-	if err != nil {
-		// Cannot find the package, assume it's not a standard package
-		pc.set(path, false)
-		return false
-	}
-
-	isStd := pkg.Goroot
+	isStd := IsStandardLibrary(path)
 	pc.set(path, isStd)
 	return isStd
 }
 
+func IsStandardLibrary(pkgPath string) bool {
+
+	goroot := runtime.GOROOT()
+	if goroot == "" {
+		return false
+	}
+
+	dir := filepath.Join(goroot, "src", pkgPath)
+	info, err := os.Stat(dir)
+	isStd := err == nil && info.IsDir()
+
+	return isStd
+}
+
 // stdlibCache 缓存 importPath 是否是 system package, 10000 个缓存
-var stdlibCache = NewPackageCache(10000)
+var stdlibCache = NewPackageCache(100000)
 
 func isSysPkg(importPath string) bool {
 	return stdlibCache.IsStandardPackage(importPath)
@@ -311,14 +318,21 @@ func isUpperCase(c byte) bool {
 	return c >= 'A' && c <= 'Z'
 }
 
+var commitHashCache sync.Map
+
 func getCommitHash(dir string) (string, error) {
+	if val, ok := commitHashCache.Load(dir); ok {
+		return val.(string), nil
+	}
 	cmd := exec.Command("git", "rev-parse", "HEAD")
 	cmd.Dir = dir
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit hash: %v", err)
 	}
-	return strings.TrimSpace(string(output)), nil
+	hash := strings.TrimSpace(string(output))
+	commitHashCache.Store(dir, hash)
+	return hash, nil
 }
 
 type workFile struct {

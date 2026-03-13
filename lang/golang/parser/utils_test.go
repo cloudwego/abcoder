@@ -20,6 +20,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
 	"slices"
 	"sync"
 	"testing"
@@ -284,4 +285,24 @@ func Test_isSysPkg(t *testing.T) {
 		_, foundOs := stdlibCache.get("os")
 		assert.False(t, foundOs, "os should have been evicted from the cache")
 	})
+}
+
+func Test_getCommitHash(t *testing.T) {
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
+	// First call, should execute git command
+	hash1, err := getCommitHash(wd)
+	require.NoError(t, err)
+	require.NotEmpty(t, hash1)
+
+	// Second call, should come from cache
+	hash2, err := getCommitHash(wd)
+	require.NoError(t, err)
+	require.Equal(t, hash1, hash2)
+
+	// Check cache directly
+	cached, ok := commitHashCache.Load(wd)
+	require.True(t, ok)
+	require.Equal(t, hash1, cached)
 }
