@@ -112,14 +112,18 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	// not allow local symbols inside another symbol
 	log.Info("Export: filtering local symbols...\n")
 
-	c.filterLocalSymbols()
-	//c.filterLocalSymbolsByCache()
+	//c.filterLocalSymbols()
+	c.filterLocalSymbolsByCache()
 
 	// Pre-compute receivers map to avoid O(N^2) complexity in exportSymbol recursion
 	log.Info("Export: pre-computing receivers map...\n")
 	c.receivers = make(map[*DocumentSymbol][]*DocumentSymbol, len(c.funcs)/4)
 	for method, rec := range c.funcs {
 		if (method.Kind == SKMethod) && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
+			c.receivers[rec.Method.Receiver.Symbol] = append(c.receivers[rec.Method.Receiver.Symbol], method)
+		}
+
+		if (method.Kind == SKFunction && c.Language == uniast.Java) && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
 			c.receivers[rec.Method.Receiver.Symbol] = append(c.receivers[rec.Method.Receiver.Symbol], method)
 		}
 	}
