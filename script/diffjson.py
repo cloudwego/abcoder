@@ -154,14 +154,17 @@ def process_directory_comparison(
     Compares JSON files across two directories and prints results in a list format.
     """
     results: dict[str, list[str]] = {"OK": [], "BAD": [], "MISS": [], "NEW": []}
+    diffs: dict[str, DeepDiff] = {}
     old_files = {p.name for p in old_dir.glob("*.json")}
     new_files = {p.name for p in new_dir.glob("*.json")}
 
     for filename in sorted(old_files.intersection(new_files)):
-        status, _ = compare_json_files(
+        status, diff = compare_json_files(
             old_dir / filename, new_dir / filename, ignore_fields
         )
         results["BAD" if status != "OK" else "OK"].append(filename)
+        if diff:
+            diffs[filename] = diff
 
     for filename in sorted(old_files - new_files):
         results["MISS"].append(filename)
@@ -175,6 +178,10 @@ def process_directory_comparison(
         print(f"[NEW ]  {filename}")
     for filename in results["BAD"]:
         print(f"[BAD ]  {filename}", file=sys.stderr)
+        if filename in diffs:
+            custom_output = format_diff_custom(diffs[filename])
+            print(custom_output, file=sys.stderr)
+            print("-" * 40, file=sys.stderr)
     for filename in results["MISS"]:
         print(f"[MISS]  {filename}", file=sys.stderr)
 
