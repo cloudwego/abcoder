@@ -95,9 +95,9 @@ func (c *JavaSpec) NameSpace(path string, file *uniast.File) (string, string, er
 		// External library: determine module based on path prefix
 		var modName string
 		switch {
-		case strings.Contains("abcoder-jdk", path):
+		case strings.Contains(path, "abcoder-jdk"):
 			modName = "jdk"
-		case strings.Contains("abcoder-unknown", path):
+		case strings.Contains(path, "abcoder-unknown"):
 			modName = "unknown"
 		default:
 			modName = "external"
