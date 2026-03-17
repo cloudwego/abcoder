@@ -38,6 +38,7 @@ const (
 	Java       Language = "java"
 	Unknown    Language = ""
 	Kotlin     Language = "kotlin"
+	Cpp        Language = "cpp"
 )
 
 func (l Language) String() string {
@@ -70,6 +71,8 @@ func NewLanguage(lang string) (l Language) {
 		return Rust
 	case "cxx":
 		return Cxx
+	case "cpp":
+		return Cpp
 	case "python":
 		return Python
 	case "ts", "typescript", "javascript", "js":
