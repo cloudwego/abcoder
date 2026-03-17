@@ -1,15 +1,18 @@
 # Language server 安装
 为了解析仓库中符号之间的依赖，abcoder parser 需要使用各语言的 language server。
 运行 parser 之前请安装对应的 language server。
+多数语言都能自动安装 language server。如果自动安装失败，可以按以下步骤手动安装。
 
 语言和 language server 的对应关系如下
 
-| 语言   | Language server              | 可执行文件    |
-| ---    | ---                          | ---           |
-| Go     | 不使用 LSP，使用内置 parser  | /             |
-| Rust   | rust-analyzer                | rust-analyzer |
-| Python | (修改后的) python-lsp-server | pylsp         |
-| C      | clangd-18                    | clangd-18     |
+| 语言       | Language server                                                | 必要运行环境   |
+| ---------- | -------------------------------------------------------------- | -------------- |
+| Go         | NA                                                             | golang 1.23+   |
+| TypeScript | NA                                                             | node.js 20+    |
+| Rust       | rust-analyzer (官方)                                           | rust-toolchain |
+| Python     | pylsp ([修改](https://github.com/Hoblovski/python-lsp-server)) | python 3.9+    |
+| C          | clangd-18 (官方)                                               | clang 18+      |
+| Java       | eclipse-jdtls (官方)                                           | java 17+       |
 
 按如下教程完成安装后，在运行 abcoder 前请确保 PATH 中有对应可执行文件
 
@@ -23,14 +26,13 @@
 
 ## Python
 * 安装 Python 3.9+
-* 从 git submodule 安装 pylsp
+* 安装 pylsp
   ```bash
-  $ git submodule init
-  $ git submodule update
-  $ cd pylsp
-  $ pip install -e .  # 可以考虑在单独的 conda/venv 环境中执行
-  $ export PATH=$(realpath ./bin):$PATH  # 放到 .rc 文件里，或每次运行 abcoder 前都设置一下
-  $ pylsp --version  # 验证安装成功
+  $ git clone https://github.com/Hoblovski/python-lsp-server.git -b abc
+  $ cd python-lsp-server
+  $ pip install .
+  $ export PATH=$(realpath ./bin):$PATH
+  $ pylsp --version
   ```
 
 ## C

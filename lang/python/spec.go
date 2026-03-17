@@ -35,6 +35,10 @@ type PythonSpec struct {
 	sysPaths      []string
 }
 
+func (c *PythonSpec) ProtectedSymbolKinds() []lsp.SymbolKind {
+	return []lsp.SymbolKind{}
+}
+
 func NewPythonSpec() *PythonSpec {
 	cmd := exec.Command("python", "-c", "import sys ; print('\\n'.join(sys.path))")
 	output, err := cmd.Output()
@@ -85,7 +89,7 @@ func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
 }
 
 // returns: modName, pkgPath, error
-func (c *PythonSpec) NameSpace(path string) (string, string, error) {
+func (c *PythonSpec) NameSpace(path string, file *uniast.File) (string, string, error) {
 	if strings.HasPrefix(path, c.topModulePath) {
 		// internal module
 		modName := c.topModuleName
@@ -100,10 +104,8 @@ func (c *PythonSpec) NameSpace(path string) (string, string, error) {
 	}
 
 	for _, sysPath := range c.sysPaths {
-		log.Error("PythonSpec: path %s sysPath %s\n", path, sysPath)
 		if strings.HasPrefix(path, sysPath) {
 			relPath, err := filepath.Rel(sysPath, path)
-			log.Error("PythonSpec: matched relPath %s, sysPath %s\n", relPath, sysPath)
 			if err != nil {
 				return "", "", err
 			}

@@ -17,10 +17,12 @@ package lsp
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
@@ -36,23 +38,26 @@ type LSPClient struct {
 	tokenModifiers         []string
 	hasSemanticTokensRange bool
 	files                  map[DocumentURI]*TextDocumentItem
+	provider               LanguageServiceProvider
 	ClientOptions
+	LspOptions map[string]string
 }
 
 type ClientOptions struct {
 	Server string
 	uniast.Language
-	Verbose bool
+	Verbose               bool
+	InitializationOptions interface{}
 }
 
 func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientOptions) (*LSPClient, error) {
 	// launch golang LSP server
-	svr, err := startLSPSever(opts.Server)
+	svr, err := startLSPSever(opts.Server, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	cli, err := initLSPClient(context.Background(), svr, NewURI(repo), opts.Verbose)
+	cli, err := initLSPClient(context.Background(), svr, NewURI(repo), opts.Verbose, opts.Language, opts.InitializationOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -60,27 +65,14 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 	cli.ClientOptions = opts
 	cli.files = make(map[DocumentURI]*TextDocumentItem)
 
+	cli.provider = GetProvider(opts.Language)
+	cli.Verbose = opts.Verbose
+
 	if openfile != "" {
 		_, err := cli.DidOpen(context.Background(), NewURI(openfile))
 		if err != nil {
 			return nil, err
 		}
-
-		// wait for "textDocument/publishDiagnostics" notification
-		// 	resp := cli.WaitFirstNotify("textDocument/publishDiagnostics")
-		// again:
-		// 	var diagnostics lsp.PublishDiagnosticsParams
-		// 	if err := json.Unmarshal(*resp.Params, &diagnostics); err != nil {
-		// 		logger.Fatalf("Failed to unmarshal diagnostics: %v", err)
-		// 	}
-		// 	if len(diagnostics.Diagnostics) > 0 {
-		// 		// wait again
-		// 		resp = cli.WaitFirstNotify("textDocument/publishDiagnostics")
-		// 		if retry > 0 {
-		// 			retry--
-		// 			goto again
-		// 		}
-		// 	}
 	}
 
 	time.Sleep(wait)
@@ -91,6 +83,19 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 func (c *LSPClient) Close() error {
 	c.lspHandler.Close()
 	return c.Conn.Close()
+}
+
+// Extra wrapper around json rpc to
+// 1. implement a transparent, generic cache
+func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}, opts ...jsonrpc2.CallOption) error {
+	var raw json.RawMessage
+	if err := cli.Conn.Call(ctx, method, params, &raw); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, result); err != nil {
+		return err
+	}
+	return nil
 }
 
 type initializeParams struct {
@@ -112,7 +117,13 @@ type initializeResult struct {
 	Capabilities interface{} `json:"capabilities,omitempty"`
 }
 
-func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI, verbose bool) (*LSPClient, error) {
+func (c *LSPClient) InitFiles() {
+	if c.files == nil {
+		c.files = make(map[DocumentURI]*TextDocumentItem)
+	}
+}
+
+func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI, verbose bool, language uniast.Language, InitializationOptions interface{}) (*LSPClient, error) {
 	h := newLSPHandler()
 	stream := jsonrpc2.NewBufferedStream(svr, jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, h)
@@ -126,18 +137,29 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 
 	// NOTICE: some features need to be enabled explicitly
 	cs := map[string]interface{}{
-		"documentSymbol": map[string]interface{}{
-			"hierarchicalDocumentSymbolSupport": true,
+		"workspace": map[string]interface{}{
+			"symbol": map[string]interface{}{
+				"dynamicRegistration": true,
+			},
+		},
+		"textDocument": map[string]interface{}{
+			"documentSymbol": map[string]interface{}{
+				// Java uses tree-sitter instead of hierarchical symbols
+				// Golang stays the same as older versions. ABCoder do not use gopls, so don't play with it.
+				"hierarchicalDocumentSymbolSupport": (language != uniast.Java && language != uniast.Golang),
+			},
 		},
 	}
 
 	initParams := initializeParams{
-		ProcessID:    os.Getpid(),
-		RootURI:      lsp.DocumentURI(dir),
-		Capabilities: cs,
-		Trace:        lsp.Trace(trace),
-		ClientInfo:   lsp.ClientInfo{Name: "vscode"},
+		ProcessID:             os.Getpid(),
+		RootURI:               lsp.DocumentURI(dir),
+		Capabilities:          cs,
+		Trace:                 lsp.Trace(trace),
+		ClientInfo:            lsp.ClientInfo{Name: "vscode"},
+		InitializationOptions: InitializationOptions,
 	}
+
 	var initResult initializeResult
 	if err := conn.Call(ctx, "initialize", initParams, &initResult); err != nil {
 		return nil, err
@@ -217,9 +239,16 @@ func (rwc rwc) Close() error {
 }
 
 // start a LSP process and return its io
-func startLSPSever(path string) (io.ReadWriteCloser, error) {
-	// Launch rust-analyzer
-	cmd := exec.Command(path)
+func startLSPSever(path string, opts ClientOptions) (io.ReadWriteCloser, error) {
+
+	var cmd *exec.Cmd
+	if uniast.Java == opts.Language {
+		parts := strings.Fields(path)
+		cmd = exec.Command(parts[0], parts[1:]...)
+	} else {
+		// Launch rust-analyzer
+		cmd = exec.Command(path)
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

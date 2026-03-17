@@ -25,6 +25,99 @@ see [UniAST Specification](docs/uniast-zh.md)
 
 
 # Quick Start
+
+## Claude Code Integration
+
+ABCoder provides deep integration with [Claude Code](https://claude.ai/code) through the AST-Driven Coding workflow, enabling hallucination-free code analysis and precise execution. Check [Claude Code Specification](docs/claude-code-spec.md) for more details.
+
+### Setup
+
+Use the `init-spec` command to automatically configure Claude Code integration for your project:
+
+```bash
+# Install ABCoder
+go install github.com/cloudwego/abcoder@latest
+
+# Run init-spec in your project directory (optional: specify target path)
+cd /path/to/your/project
+abcoder init-spec
+```
+
+The `init-spec` command will:
+1. Copy `.claude` directory to your project root
+2. Configure MCP servers in `~/.claude.json`:
+   - `abcoder`: for code analysis using AST
+   - `sequential-thinking`: for complex problem decomposition
+3. Replace all `{{CLAUDE_HOME_PATH}}` placeholders with actual project paths
+
+### Start Coding with Claude Code
+
+Once setup, you can start coding with Claude Code:
+
+1. Start Claude Code in your project directory
+2. Use slash common `/abcoder:schedule <problem_desc>` to address your feature/requirement/issue, and ABCoder will help you analyze the codebase and design a technical solution.
+3. Once all questions are set, use slash common `/abcoder:task <task_name>` to create a coding task(specification)
+4. Recheck the task using `/abcoder:recheck <task_name>` before real implementation
+5. Begin coding! Claude Code will process the task step by step according to the specification, leveraging the power of AST-driven analysis.
+
+### AST-Driven Coding Workflow
+
+[`.claude/hooks`](internal/cmd/assets/.claude/hooks) provide a 4-layer analysis chain from repository to node details:
+
+```
+list_repos → get_repo_structure → get_package_structure → get_file_structure → get_ast_node
+     │              │                      │                       │                    │
+     └── repo_name  └── mod/pkg list       └── file list           └── node list        └── dependencies/references
+```
+
+### Claude Code Slash Commands
+
+[`.claude/commands`](internal/cmd/assets/.claude/commands) provide three custom slash commands to streamline development:
+
+| Command | Function | Description |
+|---------|----------|-------------|
+| [`/abcoder:schedule` <task_desc>](internal/cmd/assets/.claude/commands/abcoder/schedule.md) | Design implementation | Analyze codebase by using ABCoder, design technical solution |
+| [`/abcoder:task <name>`](internal/cmd/assets/.claude/commands/abcoder/task.md) | Create coding task | Generate standardized CODE_TASK document |
+| [`/abcoder:recheck <task>`](internal/cmd/assets/.claude/commands/abcoder/recheck.md) | Verify solution | Critically check CODE_TASK feasibility, useful when a CODE_TASK contains external dependencies |
+
+### Workflow
+
+```
+User Request
+    │
+    ▼
+/abcoder:schedule ──────────→ Design Solution (ABCoder Analysis)
+    │                          │
+    ▼                          ▼
+/abcoder:task ─────────→ CODE_TASK (with Technical Specs, including accurate `get_ast_node` call args)
+    │                          │
+    ▼                          ▼
+/abcoder:recheck ────→ Verify Solution (ABCoder Validation. After `/abcoder:task` Claude Code will tell you what the external dependencies CODE_TASK contains, use `/abcoder:recheck` to analyze external ast_node and technical detail with ABCoder)
+    │                          │
+    ▼                          ▼
+Start coding(sub-agent) ─────────→ Execute Implementation
+```
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| [`CLAUDE.md`](internal/cmd/assets/.claude/CLAUDE.md) | Core AST-Driven Coder role definition |
+| [`settings.json`](internal/cmd/assets/.claude/settings.json) | Hooks and permissions configuration |
+| [`hooks/`](internal/cmd/assets/.claude/hooks/) | Automation scripts (parse/prompt/reminder) |
+| [`commands/`](internal/cmd/assets/.claude/commands/) | Slash command definitions (abcoder:task/abcoder:schedule/abcoder:recheck) |
+| [`tmpls/ABCODER_CODE_TASK.md`](internal/cmd/assets/.claude/tmpls/ABCODER_CODE_TASK.md) | Coding task template |
+
+### Dependencies
+
+- Claude Code CLI
+- ABCoder MCP server (provides `mcp__abcoder` tools)
+- Sequential-thinking MCP server (provides `mcp__sequential_thinking` tools, automatically configured by init-spec)
+
+> For detailed configuration, see [claude-code-spec.md](docs/claude-code-spec.md)
+
+> Watch the demo video [here](https://github.com/cloudwego/abcoder/pull/141)
+
 ## Use ABCoder as a MCP server
 
 1. Install ABCoder:
@@ -36,8 +129,11 @@ see [UniAST Specification](docs/uniast-zh.md)
 2. Use ABCoder to parse a repository to UniAST (JSON)
 
     ```bash
-    abcoder parse {language} {repo-path} > xxx.json
+    abcoder parse {language} {repo-path} -o xxx.json
     ```
+
+    ABCoder will try to install any dependency automatically.
+    In case of failure (or if you want to customize installation), refer to the [docs](./docs/lsp-installation-en.md).
 
     For example, to parse a Go repository:
 
@@ -46,7 +142,6 @@ see [UniAST Specification](docs/uniast-zh.md)
     abcoder parse go localsession -o /abcoder-asts/localsession.json
     ```
 
-    To parse repositories in other languages, [install the corresponding language server first](./docs/lsp-installation-en.md).
 
 3. Integrate ABCoder's MCP tools into your AI agent.
 
@@ -77,10 +172,10 @@ see [UniAST Specification](docs/uniast-zh.md)
 
     
 ## Tips:
-    
+
 - You can add more repo ASTs into the AST directory without restarting abcoder MCP server.
     
-- Try to use [the recommened prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
+- Try to use [the recommended prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
 
 
 ## Use ABCoder as an Agent (WIP)
@@ -117,12 +212,14 @@ $ exit
 
 ABCoder currently supports the following languages:
 
-| Language | Parser      | Writer      |
-| -------- | ----------- | ----------- |
-| Go       | ✅          | ✅          |
-| Rust     | ✅          | Coming Soon |
-| C        | ✅          | Coming Soon |
-| Python   | ✅          | Coming Soon |
+| Language | Parser | Writer      |
+| -------- | ------ | ----------- |
+| Go       | ✅      | ✅           |
+| Rust     | ✅      | Coming Soon |
+| C        | ✅      | Coming Soon |
+| Python   | ✅      | Coming Soon |
+| JS/TS    | ✅      | Coming Soon |
+| Java     | ✅      | Coming Soon |
 
 
 # Getting Involved
@@ -141,6 +238,10 @@ project, kindly check out our guide:
 
 &ensp;&ensp;&ensp; <img src="images/lark_group_zh.png" alt="LarkGroup" width="200"/>
 
+# Contributors
+Thank you for your contribution to ABCoder!
+
+[![Contributors](https://contrib.rocks/image?repo=cloudwego/abcoder)](https://github.com/cloudwego/abcoder/graphs/contributors)
 
 # License
 This project is licensed under the [Apache-2.0 License](LICENSE-APACHE).

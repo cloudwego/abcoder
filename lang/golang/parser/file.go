@@ -26,16 +26,14 @@ import (
 	. "github.com/cloudwego/abcoder/lang/uniast"
 )
 
+const (
+	ExtraKey_IsInvoked          = "IsInvoked"
+	ExtraKey_AnonymousFunctions = "AnonymousFunctions"
+)
+
 func (p *GoParser) parseFile(ctx *fileContext, f *ast.File) error {
 	cont := true
 	ast.Inspect(f, func(node ast.Node) bool {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "panic: %v in %s:%d\n", r, ctx.filePath, ctx.fset.Position(node.Pos()).Line)
-				cont = false
-				return
-			}
-		}()
 		if funcDecl, ok := node.(*ast.FuncDecl); ok {
 			// parse funcs
 			_, ct := p.parseFunc(ctx, funcDecl)
@@ -114,15 +112,23 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			// igore anonymous var
 			continue
 		}
-		if vspec.Values != nil {
-			val = &vspec.Values[i]
+		val = nil
+		if len(vspec.Values) > 0 {
+			// In this case:	_, b, _, _ = runtime.Caller(0), vspec.Values only has one element
+			if len(vspec.Values) == 1 && i > 0 {
+				val = &vspec.Values[0]
+			} else if i < len(vspec.Values) {
+				val = &vspec.Values[i]
+			}
 		}
 		v = p.newVar(ctx.module.Name, ctx.pkgPath, name.Name, isConst)
 		v.FileLine = ctx.FileLine(vspec)
 
-		// always collect value's dependencies
+		// collect func value dependencies, in case of var a = func() {...}
 		if val != nil && !isConst {
-			collects := collectInfos{}
+			collects := collectInfos{
+				directCalls: map[FileLine]bool{},
+			}
 			ast.Inspect(*val, func(n ast.Node) bool {
 				return p.parseASTNode(ctx, n, &collects)
 			})
@@ -138,6 +144,16 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			for _, dep := range collects.tys {
 				v.Dependencies = InsertDependency(v.Dependencies, dep)
 			}
+			if len(collects.directCalls) > 0 {
+				for i, dep := range v.Dependencies {
+					if collects.directCalls[dep.FileLine] {
+						v.Dependencies[i].SetExtra(ExtraKey_IsInvoked, true)
+					}
+				}
+			}
+			if len(collects.anonymousFunctions) > 0 {
+				v.SetExtra(ExtraKey_AnonymousFunctions, collects.anonymousFunctions)
+			}
 		}
 
 		if vspec.Type != nil {
@@ -148,9 +164,35 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(vspec.Type)))
 			}
 		} else if val != nil {
+			// Handle function call returning multiple values. For example: _, b, _, _ = runtime.Caller(0)
+			// If no these logic, the type of b is (pc uintptr, file string, line int, ok bool)
+			if _, ok := (*val).(*ast.CallExpr); ok {
+				// Get function signature type
+				if tinfo, ok := ctx.pkgTypeInfo.Types[*val]; ok {
+					if results, ok := tinfo.Type.(*types.Tuple); ok {
+						// Ensure index is valid
+						if i < results.Len() {
+							// Get the specific result type for this index
+							resultType := results.At(i).Type()
+							// Get type info for this specific result type
+							ti := ctx.getTypeinfo(resultType)
+							v.Type = &ti.Id
+							v.IsPointer = ti.IsPointer
+							for _, dep := range ti.Deps {
+								v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(*val)))
+							}
+							continue
+						}
+					}
+				}
+			}
+			// Fallback to original behavior if not a function call or index invalid
 			ti := ctx.GetTypeInfo(*val)
 			v.Type = &ti.Id
 			v.IsPointer = ti.IsPointer
+			for _, dep := range ti.Deps {
+				v.Dependencies = InsertDependency(v.Dependencies, NewDependency(dep, ctx.FileLine(*val)))
+			}
 		} else {
 			v.Type = typ
 		}
@@ -159,37 +201,12 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 		if isConst && v.Type == nil {
 			v.Type = lastType
 		}
-		var varType string
-		if v.Type != nil {
-			if v.Type.PkgPath == ctx.pkgPath {
-				varType = v.Type.Name
-			} else {
-				varType = v.Type.CallName()
-			}
-			if v.IsPointer {
-				varType = "*" + varType
-			}
-		}
 
 		if !isConst {
-			v.Content = fmt.Sprintf("var %s %s", name.Name, varType)
+			v.Content = "var " + string(ctx.GetRawContent(vspec))
 		} else {
-			if varType != "" {
-				v.Content = fmt.Sprintf("const %s %s", name.Name, varType)
-			} else {
-				v.Content = fmt.Sprintf("const %s", name.Name)
-			}
+			v.Content = "const " + string(ctx.GetRawContent(vspec))
 		}
-
-		var comment string
-		if ctx.collectComment && doc != nil {
-			comment += string(ctx.GetRawContent(doc)) + "\n"
-		}
-		if ctx.collectComment && vspec.Doc != nil {
-			comment += string(ctx.GetRawContent(vspec.Doc)) + "\n"
-			v.FileLine.StartOffset = ctx.fset.Position(vspec.Pos()).Offset
-		}
-		v.Content = comment + v.Content
 
 		var finalVal string
 		if val != nil {
@@ -204,6 +221,7 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 								continue
 							}
 							id := NewIdentity(mod, path, sel.Sel.Name)
+							v.Dependencies = InsertDependency(v.Dependencies, NewDependency(id, ctx.FileLine(*val)))
 							// refer val's define
 							if err := p.referCodes(ctx, &id, p.opts.ReferCodeDepth); err != nil {
 								fmt.Fprintf(os.Stderr, "failed to get refer code for %s: %v\n", id.Name, err)
@@ -229,10 +247,19 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 			lastValue = &tmp
 			finalVal = strconv.FormatFloat(tmp, 'f', -1, 64)
 		}
-
-		if finalVal != "" {
+		if finalVal != "" && !strings.Contains(v.Content, " = ") {
 			v.Content += " = " + finalVal
 		}
+
+		var comment string
+		if ctx.collectComment && doc != nil {
+			comment += string(ctx.GetRawContent(doc)) + "\n"
+		}
+		if ctx.collectComment && vspec.Doc != nil {
+			comment += string(ctx.GetRawContent(vspec.Doc)) + "\n"
+			v.FileLine.StartOffset = ctx.fset.Position(vspec.Pos()).Offset
+		}
+		v.Content = comment + v.Content
 
 		typ = v.Type
 	}
@@ -241,7 +268,14 @@ func (p *GoParser) parseVar(ctx *fileContext, vspec *ast.ValueSpec, isConst bool
 
 // newFunc allocate a function in the repo
 func (p *GoParser) newFunc(mod, pkg, name string) *Function {
-	ret := &Function{Identity: NewIdentity(mod, pkg, name), Exported: isUpperCase(name[0])}
+	var exported bool
+	if ind := strings.LastIndexByte(name, '.'); ind != -1 && ind+1 < len(name) {
+		exported = isUpperCase(name[ind+1])
+	} else {
+		exported = isUpperCase(name[0])
+	}
+
+	ret := &Function{Identity: NewIdentity(mod, pkg, name), Exported: exported}
 	return p.repo.SetFunction(ret.Identity, ret)
 }
 
@@ -354,7 +388,7 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 		// callName := string(ctx.GetRawContent(expr))
 		// get receiver type name
 		// var rname string
-		rev := ctx.getTypeinfo(sel.Recv())
+		rev := ctx.getTypeinfo(m.Signature().Recv().Type())
 		// if rev == nil {
 		// 	rname = extractName(sel.Recv().String())
 		// } else {
@@ -375,12 +409,19 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 type collectInfos struct {
 	functionCalls, methodCalls []Dependency
 	tys, globalVars            []Dependency
+
+	directCalls        map[FileLine]bool
+	anonymousFunctions []FileLine // record anonymous function
 }
 
 func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collectInfos) bool {
 	switch expr := node.(type) {
 	case *ast.SelectorExpr:
 		return p.parseSelector(ctx, expr, collect)
+	case *ast.CallExpr:
+		p.parseCall(ctx, expr, collect)
+	case *ast.FuncLit:
+		collect.anonymousFunctions = append(collect.anonymousFunctions, ctx.FileLine(expr))
 	case *ast.Ident:
 		callName := expr.Name
 		// println("[parseFunc] ast.Ident:", callName)
@@ -403,7 +444,15 @@ func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collec
 		// 	return false
 		// }
 		if use, ok := ctx.pkgTypeInfo.Uses[expr]; ok {
-			id := NewIdentity(ctx.module.Name, ctx.pkgPath, callName)
+			pkg := use.Pkg()
+			if pkg == nil {
+				return true
+			}
+			mod, err := ctx.GetMod(pkg.Path())
+			if err != nil {
+				return true
+			}
+			id := NewIdentity(mod, pkg.Path(), use.Name())
 			dep := NewDependency(id, ctx.FileLine(expr))
 			// type name
 			if _, isNamed := use.(*types.TypeName); isNamed {
@@ -437,25 +486,42 @@ func (p *GoParser) parseASTNode(ctx *fileContext, node ast.Node, collect *collec
 	return true
 }
 
+// parseCall collect direct call info
+func (p *GoParser) parseCall(ctx *fileContext, expr *ast.CallExpr, collect *collectInfos) {
+	var ident *ast.Ident
+
+	switch idt := expr.Fun.(type) {
+	case *ast.Ident:
+		ident = idt
+	case *ast.SelectorExpr:
+		ident = idt.Sel
+	}
+
+	if ident != nil {
+		collect.directCalls[ctx.FileLine(ident)] = true
+	}
+}
+
 // parseFunc parses all function declaration in one file
 func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Function, bool) {
 	// method receiver
 	var receiver *Receiver
-	isMethod := funcDecl.Recv != nil
-	if strings.HasSuffix(ctx.filePath, "cmds/life_stat/main.go") && funcDecl.Name.Name == "init" {
-
-	}
+	var tparams []Dependency
+	isMethod := funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0
 	if isMethod {
-		// TODO: reserve the pointer message?
-		ti := ctx.GetTypeInfo(funcDecl.Recv.List[0].Type)
-		// name := "self"
-		// if len(funcDecl.Recv.List[0].Names) > 0 {
-		// 	name = funcDecl.Recv.List[0].Names[0].Name
-		// }
+		rt := funcDecl.Recv.List[0].Type
+		ti := ctx.GetTypeInfo(rt)
 		receiver = &Receiver{
 			Type:      ti.Id,
 			IsPointer: ti.IsPointer,
 			// Name:      name,
+		}
+		// collect receiver's type params
+		for _, d := range ti.Deps {
+			tparams = append(tparams, Dependency{
+				Identity: d,
+				FileLine: ctx.FileLine(rt), // FIXME: location is not accurate, try parse Index AST to get it.
+			})
 		}
 	}
 
@@ -474,6 +540,10 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	if funcDecl.Type.Results != nil {
 		ctx.collectFields(funcDecl.Type.Results.List, &results)
 	}
+	// collect type params
+	if funcDecl.Type.TypeParams != nil {
+		ctx.collectFields(funcDecl.Type.TypeParams.List, &tparams)
+	}
 
 	// collect signature
 	sig := ctx.GetRawContent(funcDecl.Type)
@@ -481,7 +551,9 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	// collect content
 	content := string(ctx.GetRawContent(funcDecl))
 
-	collects := collectInfos{}
+	collects := collectInfos{
+		directCalls: map[FileLine]bool{},
+	}
 	if funcDecl.Body == nil {
 		goto set_func
 	}
@@ -491,7 +563,6 @@ func (p *GoParser) parseFunc(ctx *fileContext, funcDecl *ast.FuncDecl) (*Functio
 	})
 
 set_func:
-
 	if fname == "init" && p.repo.GetFunction(NewIdentity(ctx.module.Name, ctx.pkgPath, fname)) != nil {
 		// according to https://go.dev/ref/spec#Program_initialization_and_execution,
 		// duplicated init() is allowed and never be referenced, thus add a subfix
@@ -510,7 +581,26 @@ set_func:
 	f.Results = results
 	f.GlobalVars = collects.globalVars
 	f.Types = collects.tys
+	for _, t := range tparams {
+		f.Types = InsertDependency(f.Types, t)
+	}
 	f.Signature = string(sig)
+
+	if len(collects.directCalls) > 0 {
+		for i, dep := range f.FunctionCalls {
+			if collects.directCalls[dep.FileLine] {
+				f.FunctionCalls[i].SetExtra(ExtraKey_IsInvoked, true)
+			}
+		}
+		for i, dep := range f.MethodCalls {
+			if collects.directCalls[dep.FileLine] {
+				f.MethodCalls[i].SetExtra(ExtraKey_IsInvoked, true)
+			}
+		}
+	}
+	if len(collects.anonymousFunctions) > 0 {
+		f.SetExtra(ExtraKey_AnonymousFunctions, collects.anonymousFunctions)
+	}
 	return f, false
 }
 
@@ -532,6 +622,10 @@ func (p *GoParser) parseType(ctx *fileContext, typDecl *ast.TypeSpec, doc *ast.C
 				p.types[t] = st.Identity
 			}
 		}
+	}
+
+	if typDecl.TypeParams != nil {
+		ctx.collectFields(typDecl.TypeParams.List, &st.SubStruct)
 	}
 
 	st.FileLine = ctx.FileLine(typDecl)
@@ -600,7 +694,7 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 		// 	// Fixme: join names?
 		// 	fieldname = fieldDecl.Names[0].Name
 		// }
-		if _, ok := fieldDecl.Type.(*ast.FuncType); ok {
+		if ft, ok := fieldDecl.Type.(*ast.FuncType); ok {
 			// method decl
 			id := NewIdentity(ctx.module.Name, ctx.pkgPath, name.Name+"."+fieldDecl.Names[0].Name)
 			if st.Methods == nil {
@@ -613,6 +707,23 @@ func (p *GoParser) parseInterface(ctx *fileContext, name *ast.Ident, decl *ast.I
 			fn.IsMethod = true
 			fn.IsInterfaceMethod = true
 			fn.Signature = string(ctx.GetRawContent(fieldDecl))
+			// collect func signature deps
+			ty := ctx.GetTypeInfo(fieldDecl.Type)
+			for _, dep := range ty.Deps {
+				fn.Types = InsertDependency(fn.Types, NewDependency(dep, ctx.FileLine(fieldDecl)))
+			}
+			// collect parameters
+			var params []Dependency
+			if ft.Params != nil {
+				ctx.collectFields(ft.Params.List, &params)
+			}
+			// collect results
+			var results []Dependency
+			if ft.Results != nil {
+				ctx.collectFields(ft.Results.List, &results)
+			}
+			fn.Params = params
+			fn.Results = results
 		}
 		p.collectTypes(ctx, fieldDecl.Type, st, inlined)
 	}

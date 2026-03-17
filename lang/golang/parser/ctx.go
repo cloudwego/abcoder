@@ -86,7 +86,15 @@ func (p *GoParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 	if pkg == nil {
 		return fmt.Errorf("cannot find package %s", id.PkgPath)
 	}
-	for _, fpath := range pkg.GoFiles {
+
+	var files []string
+	if len(p.cgoPkgs) > 0 {
+		files = pkg.CompiledGoFiles
+	} else {
+		files = pkg.GoFiles
+	}
+
+	for _, fpath := range files {
 		bs := p.getFileBytes(fpath)
 		file, err := parser.ParseFile(pkg.Fset, fpath, bs, parser.ParseComments)
 		if err != nil {
@@ -113,7 +121,7 @@ func (p *GoParser) getFileBytes(path string) []byte {
 	}
 	bs, err := os.ReadFile(path)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("read file %s failed: %v", path, err))
 	}
 	p.files[path] = bs
 	return bs
@@ -141,6 +149,14 @@ func (ctx *fileContext) GetMod(impt string) (string, error) {
 	}
 	if isSysPkg(impt) {
 		return "", errSysImport
+	}
+
+	// fileContext 中的 import 信息只有**当前文件的引用路径**，但是存在一种场景就是实际调用的节点在另外的一个Package，导致漏解析
+	// 常见于"链式调用"、"另一个 pkg 的全局变量的类型在另外一个 pkg 下"
+	if ctx.module != nil && ctx.module.Packages != nil {
+		if _, exist := ctx.module.Packages[impt]; exist {
+			return ctx.module.Name, nil
+		}
 	}
 	for _, ims := range ctx.imports.ProjectImports {
 		if ims == impt {
@@ -233,7 +249,16 @@ func GetRawContent(fset *token.FileSet, file []byte, node ast.Node, collectComme
 			doc.WriteByte('\n')
 		}
 	}
-	doc.Write(file[fset.Position(node.Pos()).Offset:fset.Position(node.End()).Offset])
+	pos := fset.Position(node.Pos())
+	endPos := fset.Position(node.End())
+	if endPos.Offset < pos.Offset {
+		var funcName string
+		if fn, ok := node.(*ast.FuncDecl); ok {
+			funcName = fn.Name.Name
+		}
+		fmt.Fprintf(os.Stderr, "end < begin, file: %s, function: %s, possibly because file compilation failed\n", pos.Filename, funcName)
+	}
+	doc.Write(file[pos.Offset:endPos.Offset])
 	return doc.Bytes()
 }
 
@@ -483,7 +508,11 @@ func (ctx *fileContext) getTypeinfo(typ types.Type) (ti typeInfo) {
 		ti.IsStdOrBuiltin = true
 	}
 	// collect sub Named type here
-	for i := 1; i < len(tobjs); i++ {
+	i := 0
+	if isNamed {
+		i = 1
+	}
+	for ; i < len(tobjs); i++ {
 		tobj := tobjs[i]
 		if isGoBuiltins(tobj.Name()) {
 			continue

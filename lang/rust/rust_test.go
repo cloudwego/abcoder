@@ -68,7 +68,7 @@ func TestRustSpec_NameSpaceInternal(t *testing.T) {
 			}
 			// Namespace
 			for _, ns := range tt.nameSpace {
-				gotMod, gotPkg, err := c.NameSpace(tt.args.root + ns.relPath)
+				gotMod, gotPkg, err := c.NameSpace(tt.args.root+ns.relPath, nil)
 				if err != nil {
 					t.Errorf("RustSpec.NameSpace() error = %v", err)
 					return

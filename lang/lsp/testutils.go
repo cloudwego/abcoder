@@ -40,6 +40,6 @@ func InitLSPForFirstTest(lang uniast.Language, server string) (*LSPClient, strin
 		return nil, "", err
 	}
 	clients[lang] = client
-	time.Sleep(3 * time.Second) // wait for LSP server to be ready
+	time.Sleep(5 * time.Second) // wait for LSP server to be ready
 	return client, testdata, nil
 }

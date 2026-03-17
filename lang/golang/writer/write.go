@@ -35,6 +35,7 @@ import (
 )
 
 var _ uniast.Writer = (*Writer)(nil)
+var testPkgPathRegex = regexp.MustCompile(`^(.+?) \[(.+)\]$`)
 
 type Options struct {
 	// RepoDir   string
@@ -81,6 +82,22 @@ func (w *Writer) WriteRepo(repo *uniast.Repository, outDir string) error {
 	return nil
 }
 
+// sanitizePkgPath sanitize the package path, remove the suffix in brackets
+func sanitizePkgPath(pkgPath string) string {
+	matches := testPkgPathRegex.FindStringSubmatch(pkgPath)
+	// matches should be 3 elements:
+	// 1. The full string
+	// 2. The package name
+	// 3. The content inside the brackets
+	if len(matches) == 3 {
+		packageName := matches[1]
+		testName := matches[2]
+		if testName == packageName+".test" {
+			return packageName
+		}
+	}
+	return pkgPath
+}
 func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir string) error {
 	mod := repo.Modules[modPath]
 	if mod == nil {
@@ -94,7 +111,9 @@ func (w *Writer) WriteModule(repo *uniast.Repository, modPath string, outDir str
 
 	outdir := filepath.Join(outDir, mod.Dir)
 	for dir, pkg := range w.visited {
-		rel := strings.TrimPrefix(dir, mod.Name)
+		// sanitize the package path
+		cleanDir := sanitizePkgPath(dir)
+		rel := strings.TrimPrefix(cleanDir, mod.Name)
 		pkgDir := filepath.Join(outdir, rel)
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			return fmt.Errorf("mkdir %s failed: %v", pkgDir, err)

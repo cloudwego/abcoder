@@ -28,11 +28,14 @@ import (
 	"github.com/cloudwego/abcoder/lang/collect"
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/golang/parser"
+	"github.com/cloudwego/abcoder/lang/java/pb"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/python"
+	"github.com/cloudwego/abcoder/lang/register"
 	"github.com/cloudwego/abcoder/lang/rust"
 	"github.com/cloudwego/abcoder/lang/uniast"
+	"github.com/cloudwego/abcoder/version"
 )
 
 // ParseOptions is the options for parsing the repo.
@@ -44,13 +47,26 @@ type ParseOptions struct {
 	collect.CollectOption
 	// specify the repo id
 	RepoID string
+
+	LspOptions map[string]string
+
+	// TS options
+	// tsconfig string
+	TSParseOptions
+}
+
+type TSParseOptions struct {
+	// tsconfig path
+	TSConfig string
+	// srcDir path
+	TSSrcDir []string
 }
 
 func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	if !filepath.IsAbs(uri) {
 		uri, _ = filepath.Abs(uri)
 	}
-	l, lspPath, err := checkLSP(args.Language, args.LSP)
+	l, lspPath, err := checkLSP(args.Language, args.LSP, args)
 	if err != nil {
 		return nil, err
 	}
@@ -59,16 +75,19 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		return nil, err
 	}
 
-	var client *lsp.LSPClient
+	var client = &lsp.LSPClient{ClientOptions: lsp.ClientOptions{Language: args.Language}, LspOptions: args.LspOptions}
 	if lspPath != "" {
 		// Initialize the LSP client
 		log.Info("start initialize LSP server %s...\n", lspPath)
+		register.RegisterProviders()
 		var err error
 		client, err = lsp.NewLSPClient(uri, openfile, opentime, lsp.ClientOptions{
-			Server:   lspPath,
-			Language: l,
-			Verbose:  args.Verbose,
+			Server:                lspPath,
+			Language:              l,
+			Verbose:               args.Verbose,
+			InitializationOptions: args.LspOptions,
 		})
+		client.LspOptions = args.LspOptions
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)
 			return nil, err
@@ -88,6 +107,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 	}
 
 	repo.ASTVersion = uniast.Version
+	repo.ToolVersion = version.Version
 
 	out, err := json.Marshal(repo)
 	if err != nil {
@@ -109,6 +129,8 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		openfile, wait = cxx.CheckRepo(repoPath)
 	case uniast.Python:
 		openfile, wait = python.CheckRepo(repoPath)
+	case uniast.Java:
+		openfile, wait = pb.CheckRepo(repoPath)
 	default:
 		openfile = ""
 		wait = 0
@@ -118,39 +140,35 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 	return
 }
 
-func checkLSP(language uniast.Language, lspPath string) (l uniast.Language, s string, err error) {
-	switch language {
-	case uniast.Rust:
-		l, s = rust.GetDefaultLSP()
-	case uniast.Cxx:
-		l, s = cxx.GetDefaultLSP()
-	case uniast.Python:
-		l, s = python.GetDefaultLSP()
-	case uniast.Golang:
-		l = uniast.Golang
-		s = ""
-		if _, err := exec.LookPath("go"); err != nil {
-			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
-				log.Error("Go compiler not found, please make it excutable!\n", lspPath)
-				return uniast.Unknown, "", err
-			}
-		}
-		return
-	default:
-		return uniast.Unknown, "", fmt.Errorf("unsupported language: %s", language)
-	}
-	// check if lsp excutable
+func checkLSP(language uniast.Language, lspPath string, args ParseOptions) (l uniast.Language, s string, err error) {
 	if lspPath != "" {
-		if _, err := exec.LookPath(lspPath); err != nil {
-			if _, err := os.Stat(lspPath); os.IsNotExist(err) {
-				log.Error("Language server %s not found, please make it excutable!\n", lspPath)
-				return uniast.Unknown, "", err
-			}
-		}
+		// designated LSP
+		l = language
 		s = lspPath
+	} else {
+		// default LSP
+		switch language {
+		case uniast.Rust:
+			l, s = rust.GetDefaultLSP()
+		case uniast.Cxx:
+			l, s = cxx.GetDefaultLSP()
+		case uniast.Python:
+			l, s = python.GetDefaultLSP()
+		case uniast.Java:
+			l, s = pb.GetDefaultLSP(args.LspOptions)
+		case uniast.Golang:
+			if _, err := exec.LookPath("go"); err != nil {
+				if _, err := os.Stat(lspPath); os.IsNotExist(err) {
+					log.Error("Go compiler not found, please make it excutable!\n", lspPath)
+					return uniast.Unknown, "", err
+				}
+			}
+			return uniast.Golang, "", nil
+		default:
+			return uniast.Unknown, "", fmt.Errorf("unsupported language: %s", language)
+		}
 	}
-
-	return
+	return l, s, nil
 }
 
 func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opts collect.CollectOption) (repo *uniast.Repository, err error) {

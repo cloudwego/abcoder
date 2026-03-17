@@ -34,6 +34,10 @@ type RustSpec struct {
 	crates []Module // path => name
 }
 
+func (c *RustSpec) ProtectedSymbolKinds() []lsp.SymbolKind {
+	return []lsp.SymbolKind{}
+}
+
 type Module struct {
 	Name string
 	Path string
@@ -327,7 +331,7 @@ func (c *RustSpec) ShouldSkip(path string) bool {
 	return false
 }
 
-func (c *RustSpec) NameSpace(path string) (string, string, error) {
+func (c *RustSpec) NameSpace(path string, file *uniast.File) (string, string, error) {
 	// external lib
 	if !strings.HasPrefix(path, c.repo) {
 		crate, mod := getCrateAndMod(path)

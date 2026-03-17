@@ -73,9 +73,10 @@ testdata/repos
 testdata/jsons
 
 src/lang/testdata
-*.json
+!ts-parser/**/*.json
 
 tools
-abcoder
 
 !testdata/asts/*.json
+
+.claude/

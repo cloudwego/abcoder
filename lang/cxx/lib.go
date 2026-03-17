@@ -15,6 +15,7 @@
 package cxx
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -22,6 +23,10 @@ import (
 )
 
 const MaxWaitDuration = 5 * time.Minute
+
+func InstallLanguageServer() (string, error) {
+	return "", fmt.Errorf("please install clangd-18 manually. See https://releases.llvm.org/ (clangd is in clang-extra)")
+}
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
 	return uniast.Cxx, "clangd-18"

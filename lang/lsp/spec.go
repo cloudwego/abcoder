@@ -26,7 +26,7 @@ type LanguageSpec interface {
 	// give an absolute file path and returns its module name and package path
 	// external path should alse be supported
 	// FIXEM: some language (like rust) may have sub-mods inside a file, but we still consider it as a unity mod here
-	NameSpace(path string) (string, string, error)
+	NameSpace(path string, file *uniast.File) (string, string, error)
 
 	// tells if a file belang to language AST
 	ShouldSkip(path string) bool
@@ -67,4 +67,6 @@ type LanguageSpec interface {
 
 	// Handle a unloaded internal symbol, like `lazy_static!` in rust
 	GetUnloadedSymbol(from Token, define Location) (string, error)
+	// some language may allow local symbols inside another symbol
+	ProtectedSymbolKinds() []SymbolKind
 }

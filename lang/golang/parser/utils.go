@@ -15,18 +15,18 @@
 package parser
 
 import (
-	"bufio"
-	"bytes"
+	"container/list"
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"go/types"
-	"io"
 	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Knetic/govaluate"
 	. "github.com/cloudwego/abcoder/lang/uniast"
@@ -51,35 +51,95 @@ func (c cache) Visited(val interface{}) bool {
 	return ok
 }
 
-func hasMain(file []byte) bool {
-	if !bytes.Contains(file, []byte("package main")) || !bytes.Contains(file, []byte("func main()")) {
-		return false
-	}
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "any.go", file, parser.SkipObjectResolution)
-	if err != nil {
-		return false
-	}
-	if f.Name.Name != "main" {
-		return false
-	}
-	for _, decl := range f.Decls {
-		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-			if funcDecl.Name.Name == "main" {
-				return true
-			}
-		}
-	}
-	return false
+type cacheEntry struct {
+	key   string
+	value bool
 }
 
+// PackageCache 缓存 importPath 是否是 system package
+type PackageCache struct {
+	lock        sync.Mutex
+	cache       map[string]*list.Element
+	lru         *list.List
+	lruCapacity int
+}
+
+func NewPackageCache(lruCapacity int) *PackageCache {
+	return &PackageCache{
+		cache:       make(map[string]*list.Element),
+		lru:         list.New(),
+		lruCapacity: lruCapacity,
+	}
+}
+
+// get retrieves a value from the cache.
+func (pc *PackageCache) get(key string) (bool, bool) {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+	if elem, ok := pc.cache[key]; ok {
+		pc.lru.MoveToFront(elem)
+		return elem.Value.(*cacheEntry).value, true
+	}
+	return false, false
+}
+
+// set adds a value to the cache.
+func (pc *PackageCache) set(key string, value bool) {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+
+	if elem, ok := pc.cache[key]; ok {
+		pc.lru.MoveToFront(elem)
+		elem.Value.(*cacheEntry).value = value
+		return
+	}
+
+	if pc.lru.Len() >= pc.lruCapacity {
+		oldest := pc.lru.Back()
+		if oldest != nil {
+			pc.lru.Remove(oldest)
+			delete(pc.cache, oldest.Value.(*cacheEntry).key)
+		}
+	}
+
+	elem := pc.lru.PushFront(&cacheEntry{key: key, value: value})
+	pc.cache[key] = elem
+}
+
+// IsStandardPackage 检查一个包是否为标准库，并使用内部缓存。
+func (pc *PackageCache) IsStandardPackage(path string) bool {
+	if isStd, found := pc.get(path); found {
+		return isStd
+	}
+
+	isStd := IsStandardLibrary(path)
+	pc.set(path, isStd)
+	return isStd
+}
+
+func IsStandardLibrary(pkgPath string) bool {
+
+	goroot := runtime.GOROOT()
+	if goroot == "" {
+		return false
+	}
+
+	dir := filepath.Join(goroot, "src", pkgPath)
+	info, err := os.Stat(dir)
+	isStd := err == nil && info.IsDir()
+
+	return isStd
+}
+
+// stdlibCache 缓存 importPath 是否是 system package, 10000 个缓存
+var stdlibCache = NewPackageCache(100000)
+
 func isSysPkg(importPath string) bool {
-	return !strings.Contains(strings.Split(importPath, "/")[0], ".")
+	return stdlibCache.IsStandardPackage(importPath)
 }
 
 var (
 	verReg = regexp.MustCompile(`/v\d+$`)
-	litReg = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
 
 func getPackageAlias(importPath string) string {
@@ -98,61 +158,27 @@ func getPackageAlias(importPath string) string {
 	return alias
 }
 
-func splitVersion(module string) (string, string) {
-	if strings.Contains(module, "@") {
-		parts := strings.Split(module, "@")
-		return parts[0], parts[1]
+func hasNoDeps(modFilePath string) bool {
+	content, err := os.ReadFile(modFilePath)
+	if err != nil {
+		return false
 	}
-	return module, ""
+
+	modf, err := modfile.Parse(modFilePath, content, nil)
+	if err != nil {
+		return false
+	}
+
+	return len(modf.Require) == 0
 }
 
-func getModuleName(modFilePath string) (string, []byte, error) {
-	file, err := os.Open(modFilePath)
+func getModuleName(modFilePath string) (string, error) {
+	content, err := os.ReadFile(modFilePath)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to open file: %v", err)
-	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to read file: %v", err)
-	}
-	scanner := bufio.NewScanner(bytes.NewBuffer(data))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "module") {
-			// Assuming 'module' keyword is followed by module name
-			parts := strings.Split(line, " ")
-			if len(parts) > 1 {
-				return parts[1], data, nil
-			}
-		}
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return "", data, fmt.Errorf("failed to scan file: %v", err)
-	}
-
-	return "", data, nil
-}
-
-// parse go.mod and get a map of module name to module_path@version
-func parseModuleFile(data []byte) (map[string]string, error) {
-	ast, err := modfile.Parse("go.mod", data, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse go.mod file: %v", err)
-	}
-	modules := make(map[string]string)
-	for _, req := range ast.Require {
-		// if req.Indirect {
-		// 	continue
-		// }
-		modules[req.Mod.Path] = req.Mod.Path + "@" + req.Mod.Version
-	}
-	// replaces
-	for _, replace := range ast.Replace {
-		modules[replace.Old.Path] = replace.New.Path + "@" + replace.New.Version
-	}
-	return modules, nil
+	return modfile.ModulePath(content), nil
 }
 
 func isGoBuiltins(name string) bool {
@@ -218,6 +244,18 @@ func getNamedTypes(typ types.Type, visited map[types.Type]bool) (tys []types.Obj
 	case *types.Named:
 		tys = append(tys, t.Obj())
 		isNamed = true
+		if targs := t.TypeArgs(); targs != nil {
+			for i := 0; i < targs.Len(); i++ {
+				typs, _, _ := getNamedTypes(targs.At(i), visited)
+				tys = append(tys, typs...)
+			}
+		}
+		if tparams := t.TypeParams(); tparams != nil {
+			for i := 0; i < tparams.Len(); i++ {
+				typs, _, _ := getNamedTypes(tparams.At(i), visited)
+				tys = append(tys, typs...)
+			}
+		}
 	case *types.Struct:
 		for i := 0; i < t.NumFields(); i++ {
 			typs, _, _ := getNamedTypes(t.Field(i).Type(), visited)
@@ -252,13 +290,6 @@ func getNamedTypes(typ types.Type, visited map[types.Type]bool) (tys []types.Obj
 	return
 }
 
-func extractName(typ string) string {
-	if strings.Contains(typ, ".") {
-		return strings.Split(typ, ".")[1]
-	}
-	return typ
-}
-
 func parseExpr(expr string) (interface{}, error) {
 	// Create a map of parameters to pass to the expression evaluator.
 	parameters := map[string]interface{}{
@@ -285,4 +316,75 @@ func newIdentity(mod, pkg, name string) Identity {
 
 func isUpperCase(c byte) bool {
 	return c >= 'A' && c <= 'Z'
+}
+
+var commitHashCache sync.Map
+
+func getCommitHash(dir string) (string, error) {
+	if val, ok := commitHashCache.Load(dir); ok {
+		return val.(string), nil
+	}
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit hash: %v", err)
+	}
+	hash := strings.TrimSpace(string(output))
+	commitHashCache.Store(dir, hash)
+	return hash, nil
+}
+
+type workFile struct {
+	Dir      string
+	UseDirs  []string
+	Replaces []workReplace
+}
+
+type workReplace struct {
+	OldPath string
+	NewPath string
+}
+
+func parseGoWork(workFilePath string) (*workFile, error) {
+	content, err := os.ReadFile(workFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read go.work file: %w", err)
+	}
+
+	wf, err := modfile.ParseWork(workFilePath, content, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse go.work file: %w", err)
+	}
+
+	workDir := filepath.Dir(workFilePath)
+	result := &workFile{
+		Dir:      workDir,
+		UseDirs:  make([]string, 0, len(wf.Use)),
+		Replaces: make([]workReplace, 0, len(wf.Replace)),
+	}
+
+	for _, use := range wf.Use {
+		if use.Path == "" {
+			continue
+		}
+		usePath := use.Path
+		if !filepath.IsAbs(usePath) {
+			usePath = filepath.Join(workDir, usePath)
+		}
+		absPath, err := filepath.Abs(usePath)
+		if err != nil {
+			continue
+		}
+		result.UseDirs = append(result.UseDirs, absPath)
+	}
+
+	for _, rep := range wf.Replace {
+		result.Replaces = append(result.Replaces, workReplace{
+			OldPath: rep.Old.Path,
+			NewPath: rep.New.Path,
+		})
+	}
+
+	return result, nil
 }

@@ -159,7 +159,17 @@ func (r *Repository) AllNodesSetRepo() {
 }
 
 func (r *Repository) BuildGraph() error {
-	r.Graph = make(map[string]*Node)
+	// Optimization: Pre-calculate total number of internal nodes to pre-allocate Graph map
+	var totalNodes int
+	for _, mod := range r.Modules {
+		if mod.IsExternal() {
+			continue
+		}
+		for _, pkg := range mod.Packages {
+			totalNodes += len(pkg.Functions) + len(pkg.Types) + len(pkg.Vars)
+		}
+	}
+	r.Graph = make(map[string]*Node, totalNodes)
 	for _, mod := range r.Modules {
 		if mod.IsExternal() {
 			continue
@@ -167,6 +177,14 @@ func (r *Repository) BuildGraph() error {
 		for _, pkg := range mod.Packages {
 			for _, f := range pkg.Functions {
 				n := r.SetNode(f.Identity, FUNC)
+				// Pre-allocate Dependencies
+				capDeps := len(f.Params) + len(f.Results) + len(f.FunctionCalls) + len(f.MethodCalls) + len(f.Types) + len(f.GlobalVars)
+				if f.Receiver != nil {
+					capDeps++
+				}
+				if n.Dependencies == nil && capDeps > 0 {
+					n.Dependencies = make([]Relation, 0, capDeps)
+				}
 				for _, dep := range f.Params {
 					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
@@ -193,6 +211,16 @@ func (r *Repository) BuildGraph() error {
 
 			for _, t := range pkg.Types {
 				n := r.SetNode(t.Identity, TYPE)
+				// Pre-allocate Dependencies, Inherits, Implements
+				if n.Dependencies == nil && len(t.SubStruct) > 0 {
+					n.Dependencies = make([]Relation, 0, len(t.SubStruct))
+				}
+				if n.Inherits == nil && len(t.InlineStruct) > 0 {
+					n.Inherits = make([]Relation, 0, len(t.InlineStruct))
+				}
+				if n.Implements == nil && len(t.Implements) > 0 {
+					n.Implements = make([]Relation, 0, len(t.Implements))
+				}
 				for _, dep := range t.SubStruct {
 					r.AddRelation(n, dep.Identity, dep.FileLine, DEPENDENCY)
 				}
@@ -206,6 +234,17 @@ func (r *Repository) BuildGraph() error {
 
 			for _, v := range pkg.Vars {
 				n := r.SetNode(v.Identity, VAR)
+				// Pre-allocate Dependencies and Groups
+				capDeps := len(v.Dependencies)
+				if v.Type != nil {
+					capDeps++
+				}
+				if n.Dependencies == nil && capDeps > 0 {
+					n.Dependencies = make([]Relation, 0, capDeps)
+				}
+				if n.Groups == nil && len(v.Groups) > 0 {
+					n.Groups = make([]Relation, 0, len(v.Groups))
+				}
 				if v.Type != nil {
 					r.AddRelation(n, *v.Type, v.FileLine, DEPENDENCY)
 				}

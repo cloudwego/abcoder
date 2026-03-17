@@ -42,3 +42,17 @@ func TestRepository_BuildGraph(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkRepository_BuildGraph(b *testing.B) {
+	astFile := testutils.GetTestAstFile("large_ast")
+	r, err := LoadRepo(astFile)
+	if err != nil {
+		b.Fatalf("failed to load repo: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := r.BuildGraph(); err != nil {
+			b.Fatalf("failed to build graph: %v", err)
+		}
+	}
+}

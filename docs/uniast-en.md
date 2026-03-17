@@ -1,4 +1,4 @@
-# Universal Abstract-Syntax-Tree Specification (v0.1.3)
+# Universal Abstract-Syntax-Tree Specification (v0.1.5)
 
 Universal Abstract-Syntax-Tree is a LLM-friendly, language-agnostic code context data structure established by ABCoder. It represents a unified abstract syntax tree of a repository's code, collecting definitions of language entities (functions, types, constants/variables) and their interdependencies for subsequent AI understanding and coding-workflow development.
 
@@ -81,7 +81,10 @@ A repository consists of entity Modules and relationship Graph
 
 ```json
 {
-    "Identity": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "id": "/Users/bytedance/golang/work/abcoder/tmp/localsession",
+    "ASTVersion": "xx",
+    "ToolVersion": "yy",
+    "Path": "/a/b/localsession",
     "Modules": {
         "github.com/bytedance/gopkg@v0.0.0-20230728082804-614d0af6619b": {},
         "github.com/cloudwego/localsession": {}
@@ -90,7 +93,7 @@ A repository consists of entity Modules and relationship Graph
 }
 ```
 
-- Identity: The unique name of the repo. Since the abcoder parser does not currently retrieve repository git information, the absolute path where it is currently located is generally used as the Identity
+- id: The unique name of the repo. Since the abcoder parser does not currently retrieve repository git information, the absolute path where it is currently located is generally used as the Identity
 
 
 - Modules: Contains submodules, a dictionary of {ModPath}: {Module AST}. Both repository modules and external dependency modules can appear in Modules, but need to be distinguished by ModulePath.
@@ -104,7 +107,10 @@ A repository consists of entity Modules and relationship Graph
 
 - Path: The file directory of the repository, usually should be an absolute path
 
-- ASTVersion: The UniAST version used to parse
+- ASTVersion: The UniAST version spefication when the repository is parsed
+
+- ToolVersion: The abcoder version used to parse
+
 
 ### Module
 
@@ -148,7 +154,7 @@ An independent code compilation unit, corresponding to ModPath in Identity, cont
 - Dependencies: Dictionary of third-party dependency modules for module building {ModName}: {ModPath}
 
 
-- Packages: Contains subpackages, {PkgPath}: {Pacakge AST} dictionary
+- Packages: Contains subpackages, {PkgPath}: {Package AST} dictionary
 
 
 - Files: Module file information, where the key is the **path relative to the repo**. It is recommended to include all repository files here to facilitate writer rewriting
@@ -364,6 +370,23 @@ Function type AST Node entity, corresponding to [NodeType] as FUNC, including fu
 
 - Vars: Global variables referenced within the current function, including variables and constants
 
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
+    - AnonymousFunctions: Anonymous functions defined in the function, each element is the FileLine of the corresponding function
+
+
+        - File: The filename where it is located
+
+
+        - Line: **Line number of the starting position in the file (starting from 1)**
+
+
+        - StartOffset: **Byte offset of the code starting position relative to the file header**
+
+
+        - EndOffset: **Byte offset of the code ending position relative to the file header**
+
 
 ###### Dependency
 
@@ -378,7 +401,10 @@ Represents a dependency relationship, containing the dependent node Id, dependen
     "File": "manager.go",
     "Line": 140,
     "StartOffset": 3547,
-    "EndOffset": 3564
+    "EndOffset": 3564,
+    "Extra": {
+        "IsInvoked": true
+    }
 }
 ```
 
@@ -401,6 +427,12 @@ Represents a dependency relationship, containing the dependent node Id, dependen
 
 
 - EndOffset: Offset of the ending position of the dependency point (not the dependent node) token relative to the code file
+
+
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
+    - IsInvoked: For function/method dependencies, whether it is invoked or just referenced (not executed).
 
 
 ##### Type
@@ -484,6 +516,9 @@ Type definition, [NodeType] is TYPE, including type definitions in specific lang
 - Implements: Which interfaces this type implements Identity
 
 
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
 ##### Var
 
 Global variables, including variables and constants, **but must be global**
@@ -545,6 +580,24 @@ var x = getx(y db.Data) int {
 中的 `db.Data` 和 `model.Var2`
 
 - Groups: Group definitions, such as `const( A=1, B=2, C=3)` in Go, Groups would be `[C=3, B=2]` (assuming A is the variable itself)
+
+
+- Extra: Additional information for storing language-specific details or extra metadata
+
+
+    - AnonymousFunctions: Anonymous functions defined in the initialization function of the current variable. Each element is the FileLine of the corresponding function
+
+
+        - File: The filename where it is located
+
+
+        - Line: **Line number of the starting position in the file (starting from 1)**
+
+
+        - StartOffset: **Byte offset of the code starting position relative to the file header**
+
+
+        - EndOffset: **Byte offset of the code ending position relative to the file header**
 
 
 ### Graph
@@ -632,7 +685,7 @@ const (
     FUNC
     // Struct、TypeAlias、Enum...
     TYPE
-    // Global Varable or Global Const
+    // Global Variable or Global Const
     VAR
 )
 ```

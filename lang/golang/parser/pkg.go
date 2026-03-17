@@ -36,6 +36,11 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 	ret := &importInfo{}
 	for _, imp := range impts {
 		importPath, _ := strconv.Unquote(imp.Path.Value) // remove the quotes
+		// skip CGO import path
+		if importPath == "C" {
+			continue
+		}
+
 		importAlias := ""
 		// Check if user has defined an alias for current import
 		if imp.Name != nil {
@@ -54,7 +59,7 @@ func (p *GoParser) parseImports(fset *token.FileSet, file []byte, mod *Module, i
 			match, path := matchMod(importPath, mod.Dependencies)
 			if match == "" {
 				if !strings.HasPrefix(importPath, mod.Name) {
-					return nil, fmt.Errorf("package %s not found mod", importPath)
+					fmt.Fprintf(os.Stderr, "package %s not found mod", importPath)
 				}
 				projectImports[importAlias] = importPath
 			} else {
@@ -167,24 +172,49 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s\n", mod.Name, dir, pkgPath)
 	fset := token.NewFileSet()
 	loadCount++
-	// slow-path: load packages in the dir, including sub pakcages
-	opts := packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
-	cfg := &packages.Config{
-		Mode: opts,
-		Fset: fset,
-		Dir:  dir,
-	}
+
+	baseOpts := packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
 	if p.opts.ReferCodeDepth != 0 {
-		opts |= packages.NeedDeps
+		baseOpts |= packages.NeedDeps
 	}
 	if p.opts.NeedTest {
-		opts |= packages.NeedForTest
+		baseOpts |= packages.NeedForTest
+	}
+
+	cfg := &packages.Config{
+		Mode: baseOpts,
+		Fset: fset,
+		Dir:  dir,
+		Env:  append(os.Environ(), "GOSUMDB=off"),
+	}
+
+	if p.opts.NeedTest {
 		cfg.Tests = true
 	}
-	pkgs, err := packages.Load(cfg, pkgPath)
-	if err != nil {
-		return fmt.Errorf("load path '%s' failed: %v", dir, err)
+
+	hasCGO := false
+	if len(p.cgoPkgs) > 0 {
+		hasCGO = true
 	}
+
+	var pkgs []*packages.Package
+
+	if hasCGO {
+		baseOpts |= packages.NeedCompiledGoFiles
+		cfg.Mode = baseOpts
+		pkgs, err = packages.Load(cfg, pkgPath)
+		if err != nil {
+			return fmt.Errorf("load path '%s' with CGO failed: %v", dir, err)
+		}
+	} else {
+		pkgs, err = packages.Load(cfg, pkgPath)
+		if err != nil {
+			return fmt.Errorf("load path '%s' failed: %v", dir, err)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s, hasCGO: %v\n", mod.Name, dir, pkgPath, hasCGO)
+
 	for _, pkg := range pkgs {
 		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
 			continue
@@ -192,18 +222,33 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 		if pp, ok := mod.Packages[pkg.ID]; ok && pp != nil {
 			continue
 		}
-	next_file:
 		for idx, file := range pkg.Syntax {
-			if idx >= len(pkg.GoFiles) {
-				fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
-				continue
+			var filePath string
+			if hasCGO {
+				// Cgo file path is tmp file path, like:  /Users/bytedance/Library/Caches/go-build/61/6150fdadd44b9dca151737e261abf95697ba13b799e8dbdd464c0c27b443792a-d.
+				// We should get it through CompiledGoFiles
+				if idx >= len(pkg.CompiledGoFiles) {
+					fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
+					continue
+				}
+				filePath = pkg.CompiledGoFiles[idx]
+			} else {
+				filePath = fset.Position(file.Pos()).Filename
+				if filePath == "" {
+					fmt.Fprintf(os.Stderr, "filename is empty, pkg: %s\n", pkg.ID)
+					continue
+				}
 			}
-			filePath := pkg.GoFiles[idx]
+			var skip bool
 			for _, exclude := range p.exclues {
 				if exclude.MatchString(filePath) {
 					fmt.Fprintf(os.Stderr, "skip file %s\n", filePath)
-					continue next_file
+					skip = true
+					break
 				}
+			}
+			if skip {
+				continue
 			}
 			bs := p.getFileBytes(filePath)
 			ctx := &fileContext{
@@ -252,6 +297,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				delete(mod.Packages, obj.PkgPath)
 			}
 		}
+		mod.LoadErrors = append(mod.LoadErrors, pkg.Errors...)
 	}
 	return
 }

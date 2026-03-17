@@ -26,7 +26,7 @@ import (
 func TestMCPClient(t *testing.T) {
 	cli, err := NewMCPClient(MCPConfig{
 		Type:   MCPTypeStdio,
-		Comand: "npx",
+		Command: "npx",
 		Args: []string{
 			"-y",
 			"@modelcontextprotocol/server-sequential-thinking",

@@ -1,0 +1,13 @@
+node_modules/
+
+dist/
+
+.vscode/
+
+temp/
+
+output.json
+
+output/
+
+package-lock.json

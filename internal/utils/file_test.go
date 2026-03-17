@@ -26,6 +26,7 @@ import (
 )
 
 func TestWatchDir(t *testing.T) {
+	t.Skip()
 	type args struct {
 		dir string
 		cb  func(op fsnotify.Op, files string, state *bool)

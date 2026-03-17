@@ -22,16 +22,22 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/bytedance/sonic"
+	"golang.org/x/tools/go/packages"
 )
 
 type Language string
 
 const (
-	Golang  Language = "go"
-	Rust    Language = "rust"
-	Cxx     Language = "cxx"
-	Python  Language = "python"
-	Unknown Language = ""
+	Golang     Language = "go"
+	Rust       Language = "rust"
+	Cxx        Language = "cxx"
+	Python     Language = "python"
+	TypeScript Language = "typescript"
+	Java       Language = "java"
+	Unknown    Language = ""
+	Kotlin     Language = "kotlin"
 )
 
 func (l Language) String() string {
@@ -44,6 +50,8 @@ func (l Language) String() string {
 		return "cxx"
 	case Python:
 		return "python"
+	case Java:
+		return "java"
 	default:
 		return string(l)
 	}
@@ -64,6 +72,12 @@ func NewLanguage(lang string) (l Language) {
 		return Cxx
 	case "python":
 		return Python
+	case "ts", "typescript", "javascript", "js":
+		return TypeScript
+	case "java":
+		return Java
+	case "kotlin":
+		return Kotlin
 	default:
 		return Unknown
 	}
@@ -75,11 +89,12 @@ type NodeGraph map[string]*Node
 
 // Repository
 type Repository struct {
-	ASTVersion string
-	Name       string             `json:"id"` // module name
-	Path       string             // repo path
-	Modules    map[string]*Module // module name => module
-	Graph      NodeGraph          // node id => node
+	Name        string             `json:"id"` // module name
+	ASTVersion  string             // uniast version
+	ToolVersion string             // abcoder version
+	Path        string             // repo absolute path
+	Modules     map[string]*Module // module name => module
+	Graph       NodeGraph          // node id => node
 }
 
 func (r Repository) ID() string {
@@ -184,6 +199,7 @@ type Module struct {
 	Packages     map[PkgPath]*Package // pkage import path => Package
 	Dependencies map[string]string    `json:",omitempty"`              // module name => module_path@version
 	Files        map[string]*File     `json:",omitempty"`              // relative path => file info
+	LoadErrors   []packages.Error     `json:"load_errors,omitempty"`   // packages.Load error
 	CompressData *string              `json:"compress_data,omitempty"` // module compress info
 }
 
@@ -330,17 +346,35 @@ func NewIdentity(mod, pkg, name string) Identity {
 }
 
 func NewIdentityFromString(str string) (ret Identity) {
-	sp := strings.Split(str, "?")
-	if len(sp) == 2 {
-		ret.ModPath = sp[0]
-		str = sp[1]
+	// Identity format: ModPath?PkgPath#Name
+	//
+	// We parse LAST '#' AND FIRST '?' to isolate ModPath, PkgPath, and Name.
+	// 1. Locate the LAST '#' to isolate the Name. This is crucial for Java where the Name
+	//    itself may contain '?' (e.g., generic wildcards like List<?>).
+	// 2. Locate the FIRST '?' in the remaining part to separate ModPath and PkgPath.
+	//    Using the first '?' is more robust if PkgPath is a URL containing query parameters.
+
+	// Step 1: Separate PkgPath and Name using the last '#'
+	hashIdx := strings.LastIndex(str, "#")
+	if hashIdx != -1 {
+		ret.Name = str[hashIdx+1:]
+		str = str[:hashIdx]
+	} else {
+		// If no '#', the entire string is treated as the Name
+		ret.Name = str
+		return ret
 	}
-	sp = strings.Split(str, "#")
-	if len(sp) == 2 {
-		ret.PkgPath = sp[0]
-		str = sp[1]
+
+	// Step 2: Separate ModPath and PkgPath using the first '?'
+	questionIdx := strings.Index(str, "?")
+	if questionIdx != -1 {
+		ret.ModPath = str[:questionIdx]
+		ret.PkgPath = str[questionIdx+1:]
+	} else {
+		// If no '?', the remaining part is the PkgPath
+		ret.PkgPath = str
 	}
-	ret.Name = str
+
 	return ret
 }
 
@@ -358,7 +392,14 @@ func (i Identity) CallName() string {
 }
 
 func (i Identity) Full() string {
-	return i.ModPath + "?" + i.PkgPath + "#" + i.Name
+	builder := strings.Builder{}
+	builder.Grow(len(i.ModPath) + len(i.PkgPath) + len(i.Name) + 2)
+	builder.WriteString(i.ModPath)
+	builder.WriteString("?")
+	builder.WriteString(i.PkgPath)
+	builder.WriteString("#")
+	builder.WriteString(i.Name)
+	return builder.String()
 }
 
 // GetFunction the function identified by id.
@@ -495,11 +536,14 @@ type Function struct {
 
 	// func llm compress result
 	CompressData *string `json:"compress_data,omitempty"`
+
+	Extra *ExtraInfo `json:",omitempty"`
 }
 
 type Dependency struct {
 	Identity
 	FileLine `json:",omitempty"`
+	Extra    *ExtraInfo `json:",omitempty"`
 }
 
 func (d Dependency) Id() Identity {
@@ -592,6 +636,9 @@ type Type struct {
 	// FieldFunctions map[string]string
 
 	CompressData *string `json:"compress_data,omitempty"` // struct llm compress result
+
+	// extra data
+	Extra *ExtraInfo `json:",omitempty"`
 }
 
 type Var struct {
@@ -608,4 +655,95 @@ type Var struct {
 	Groups []Identity `json:",omitempty"`
 
 	CompressData *string `json:"compress_data,omitempty"`
+
+	// extra data
+	Extra *ExtraInfo `json:",omitempty"`
+}
+
+type ExtraInfo struct {
+	data map[string]any
+}
+
+func (e *ExtraInfo) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(e.data)
+}
+
+func (e *ExtraInfo) UnmarshalJSON(data []byte) error {
+	return sonic.Unmarshal(data, &e.data)
+}
+
+func (t *Type) GetExtra(key string) any {
+	if t.Extra == nil {
+		return nil
+	}
+	if v, ok := t.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (e *Type) SetExtra(key string, value any) {
+	if e.Extra == nil {
+		e.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	e.Extra.data[key] = value
+}
+
+func (v *Var) GetExtra(key string) any {
+	if v.Extra == nil {
+		return nil
+	}
+	if v, ok := v.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (v *Var) SetExtra(key string, value any) {
+	if v.Extra == nil {
+		v.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	v.Extra.data[key] = value
+}
+
+func (f *Function) GetExtra(key string) any {
+	if f.Extra == nil {
+		return nil
+	}
+	if v, ok := f.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (f *Function) SetExtra(key string, value any) {
+	if f.Extra == nil {
+		f.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	f.Extra.data[key] = value
+}
+
+func (d *Dependency) GetExtra(key string) any {
+	if d.Extra == nil {
+		return nil
+	}
+	if v, ok := d.Extra.data[key]; ok {
+		return v
+	}
+	return nil
+}
+
+func (d *Dependency) SetExtra(key string, value any) {
+	if d.Extra == nil {
+		d.Extra = &ExtraInfo{
+			data: make(map[string]any),
+		}
+	}
+	d.Extra.data[key] = value
 }
