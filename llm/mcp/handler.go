@@ -26,8 +26,14 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// NewTool creates a new MCP tool with the given name, description, schema, and handler function.
+// The handler is automatically wrapped to ensure concurrency safety:
+//   - Each request receives an isolated context.Context instance
+//   - No context values are shared between concurrent requests
+//   - The handler can be safely invoked concurrently
+// For details on concurrency safety, see CONCURRENCY.md
 func NewTool[R any, T any](name string, desc string, schema json.RawMessage, handler func(ctx context.Context, req R) (*T, error)) Tool {
-	return Tool{ // get_repo_structure
+	return Tool{
 		Tool: mcp.NewToolWithRawSchema(name, desc, schema),
 		Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			var req R
