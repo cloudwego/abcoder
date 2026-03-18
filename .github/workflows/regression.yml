@@ -64,6 +64,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup clangd
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clangd-18
+
       - name: Compile both binaries
         run: |
           (cd main_repo && go build -o ../abcoder_old)
