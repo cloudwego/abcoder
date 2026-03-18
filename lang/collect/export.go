@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cloudwego/abcoder/lang/log"
@@ -41,20 +42,33 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 		rel = filepath.Base(loc.URI.File())
 	}
 	fileURI := string(loc.URI)
-	if c.cli == nil {
-		return uniast.FileLine{File: rel, Line: loc.Range.Start.Line + 1}
-	}
-	f := c.cli.GetFile(loc.URI)
+	filePath := loc.URI.File()
+
 	text := ""
-	if f != nil {
-		text = f.Text
-	} else {
-		fd, err := os.ReadFile(loc.URI.File())
+	// 1. Try LSP client files
+	if c.cli != nil {
+		if f := c.cli.GetFile(loc.URI); f != nil {
+			text = f.Text
+		}
+	}
+
+	// 2. Try internal cache
+	if text == "" {
+		if cached, ok := c.fileContentCache[filePath]; ok {
+			text = cached
+		}
+	}
+
+	// 3. Fallback to OS ReadFile and update cache
+	if text == "" {
+		fd, err := os.ReadFile(filePath)
 		if err != nil {
 			return uniast.FileLine{File: rel, Line: loc.Range.Start.Line + 1}
 		}
 		text = string(fd)
+		c.fileContentCache[filePath] = text
 	}
+
 	return uniast.FileLine{
 		File:        rel,
 		Line:        loc.Range.Start.Line + 1,
@@ -96,14 +110,32 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	}
 
 	// not allow local symbols inside another symbol
-	c.filterLocalSymbols()
+	log.Info("Export: filtering local symbols...\n")
+
+	//c.filterLocalSymbols()
+	c.filterLocalSymbolsByCache()
+
+	// Pre-compute receivers map to avoid O(N^2) complexity in exportSymbol recursion
+	log.Info("Export: pre-computing receivers map...\n")
+	c.receivers = make(map[*DocumentSymbol][]*DocumentSymbol, len(c.funcs)/4)
+	for method, rec := range c.funcs {
+		if (method.Kind == SKMethod) && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
+			c.receivers[rec.Method.Receiver.Symbol] = append(c.receivers[rec.Method.Receiver.Symbol], method)
+		}
+
+		if (method.Kind == SKFunction && c.Language == uniast.Java) && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
+			c.receivers[rec.Method.Receiver.Symbol] = append(c.receivers[rec.Method.Receiver.Symbol], method)
+		}
+	}
 
 	// export symbols
+	log.Info("Export: exporting %d symbols...\n", len(c.syms))
 	visited := make(map[*DocumentSymbol]*uniast.Identity)
 	for _, symbol := range c.syms {
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
 	}
 
+	log.Info("Export: connecting files to packages...\n")
 	for fp, f := range c.files {
 		rel, err := filepath.Rel(c.repo, fp)
 		if err != nil {
@@ -162,6 +194,69 @@ func (c *Collector) filterLocalSymbols() {
 	}
 }
 
+func (c *Collector) filterLocalSymbolsByCache() {
+	if len(c.syms) == 0 {
+		return
+	}
+
+	// Group symbols by file URI to reduce comparison scope
+	symsByFile := make(map[DocumentURI][]*DocumentSymbol)
+	for loc, sym := range c.syms {
+		symsByFile[loc.URI] = append(symsByFile[loc.URI], sym)
+	}
+
+	for _, fileSyms := range symsByFile {
+		if len(fileSyms) <= 1 {
+			continue
+		}
+
+		// Sort symbols in the same file:
+		// 1. By start offset (ascending)
+		// 2. By end offset (descending) - larger range first
+		// This ensures that if symbol A contains symbol B, A appears before B.
+		sort.Slice(fileSyms, func(i, j int) bool {
+			locI, locJ := fileSyms[i].Location, fileSyms[j].Location
+			if locI.Range.Start.Line != locJ.Range.Start.Line {
+				return locI.Range.Start.Line < locJ.Range.Start.Line
+			}
+			if locI.Range.Start.Character != locJ.Range.Start.Character {
+				return locI.Range.Start.Character < locJ.Range.Start.Character
+			}
+			if locI.Range.End.Line != locJ.Range.End.Line {
+				return locI.Range.End.Line > locJ.Range.End.Line
+			}
+			return locI.Range.End.Character > locJ.Range.End.Character
+		})
+
+		// Use a stack-like approach or simple active parent tracking
+		// Since we sorted by start ASC and end DESC, a candidate parent always comes first.
+		var activeParents []*DocumentSymbol
+		for _, sym := range fileSyms {
+			isNested := false
+			// Check if current symbol is nested within any of the active parents
+			// We only need to check the most recent ones that could still contain it
+			for i := len(activeParents) - 1; i >= 0; i-- {
+				parent := activeParents[i]
+				if parent.Location.Include(sym.Location) {
+					if !utils.Contains(c.spec.ProtectedSymbolKinds(), sym.Kind) {
+						isNested = true
+						break
+					}
+				} else if parent.Location.Range.End.Less(sym.Location.Range.Start) {
+					// This parent can no longer contain any future symbols (since we're sorted by start)
+					// But we don't necessarily need to remove it from the slice here for correctness.
+				}
+			}
+
+			if isNested {
+				delete(c.syms, sym.Location)
+			} else {
+				activeParents = append(activeParents, sym)
+			}
+		}
+	}
+}
+
 func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol, refName string, visited map[*DocumentSymbol]*uniast.Identity) (id *uniast.Identity, e error) {
 	defer func() {
 		if e != nil && e != ErrStdSymbol && e != ErrExternalSymbol {
@@ -207,29 +302,18 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		return
 	}
 
-	// Java IPC mode: external/JDK/third-party symbols are exported as one-layer stub identities,
-	// and MUST NOT create module/package entries in repo.
+	//// Java IPC mode: external/JDK/third-party symbols
+	//// For external symbols, we set the module and continue with normal export flow
 	isJavaIPC := c.Language == uniast.Java && c.javaIPC != nil
+
 	if isJavaIPC && !c.internal(symbol.Location) {
-		name := symbol.Name
-		if name == "" {
-			if refName == "" {
-				e = fmt.Errorf("both symbol %v name and refname is empty", symbol)
-				return
-			}
-			name = refName
-		}
-		m := "@external"
+		// Determine module name based on URI path
 		fp := symbol.Location.URI.File()
 		if strings.Contains(fp, "abcoder-jdk") {
-			m = "@jdk"
-		} else if strings.Contains(fp, "abcoder-third") {
-			m = "@third"
+			mod = "jdk"
+		} else if strings.Contains(fp, "abcoder-unknown") {
+			mod = "unknown"
 		}
-		tmp := uniast.NewIdentity(m, "external", name)
-		id = &tmp
-		visited[symbol] = id
-		return id, nil
 	}
 	if !c.NeedStdSymbol && mod == "" {
 		e = ErrStdSymbol
@@ -290,12 +374,8 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	}
 
 	// map receiver to methods
-	receivers := make(map[*DocumentSymbol][]*DocumentSymbol, len(c.funcs)/4)
-	for method, rec := range c.funcs {
-		if method.Kind == SKMethod && rec.Method != nil && rec.Method.Receiver.Symbol != nil {
-			receivers[rec.Method.Receiver.Symbol] = append(receivers[rec.Method.Receiver.Symbol], method)
-		}
-	}
+	// Using pre-computed receivers map from c.receivers
+	receivers := c.receivers
 
 	switch k := symbol.Kind; k {
 	// Function
@@ -441,6 +521,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			TypeKind: mapKind(k),
 			Exported: public,
 		}
+		// collect deps
 		// collect deps
 		if deps := c.deps[symbol]; deps != nil {
 			for _, dep := range deps {

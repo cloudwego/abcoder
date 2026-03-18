@@ -75,7 +75,7 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		return nil, err
 	}
 
-	var client = &lsp.LSPClient{ClientOptions: lsp.ClientOptions{Language: args.Language}, LspOptions: args.LspOptions}
+	var client = &lsp.LSPClient{ClientOptions: lsp.ClientOptions{Language: args.Language, Verbose: args.Verbose}, LspOptions: args.LspOptions}
 	if lspPath != "" {
 		// Initialize the LSP client
 		log.Info("start initialize LSP server %s...\n", lspPath)

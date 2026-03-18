@@ -92,8 +92,24 @@ func (c *JavaSpec) PathToMod(path string) *javaparser.ModuleInfo {
 
 func (c *JavaSpec) NameSpace(path string, file *uniast.File) (string, string, error) {
 	if !strings.HasPrefix(path, c.repo) {
-		// External library
-		return "external", "external", nil
+		// External library: determine module based on path prefix
+		var modName string
+		switch {
+		case strings.Contains(path, "abcoder-jdk"):
+			modName = "jdk"
+		case strings.Contains(path, "abcoder-unknown"):
+			modName = "unknown"
+		default:
+			modName = "external"
+		}
+		pkgPath := "external"
+		if file != nil && file.Package != "" {
+			pkgPath = string(file.Package)
+		}
+		if file != nil && file.Path != "" {
+			modName = string(file.Path)
+		}
+		return modName, pkgPath, nil
 	}
 
 	modName := ""

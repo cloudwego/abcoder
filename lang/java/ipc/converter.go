@@ -58,17 +58,6 @@ func NewConverter(repoPath string, moduleName string) *Converter {
 	return c
 }
 
-// ConvertResponses 将 Java Parser 的流式响应列表转换为 UniAST Repository。
-func ConvertResponses(repoPath string, moduleName string, responses []*pb.AnalyzeResponse) (*uniast.Repository, error) {
-	conv := NewConverter(repoPath, moduleName)
-	for _, resp := range responses {
-		if err := conv.ProcessResponse(resp); err != nil {
-			return conv.Repository(), err
-		}
-	}
-	return conv.Repository(), nil
-}
-
 // Repository returns the converted UniAST repository
 func (c *Converter) Repository() *uniast.Repository {
 	return c.repo
@@ -125,42 +114,47 @@ func (c *Converter) processClassInfo(info *pb.ClassInfo) error {
 	if err != nil {
 		return err
 	}
-	for _, dep := range info.Dependencies {
-		if dep.SourceType == pb.SourceType_SOURCE_TYPE_JDK && dep.ClassName != "" {
-			if _, ok := c.JdkClassCache[dep.ClassName]; !ok {
-				depPoint := &pb.ClassInfo{
-					ClassName: dep.ClassName,
-					Source: &pb.SourceInfo{
-						Type: pb.SourceType_SOURCE_TYPE_JDK,
-					},
+	return nil
+}
+
+func (c *Converter) ProcessClassDepInfo() error {
+	for _, info := range c.LocalClassCache {
+		for _, dep := range info.Dependencies {
+			if dep.SourceType == pb.SourceType_SOURCE_TYPE_JDK && dep.ClassName != "" {
+				if _, ok := c.JdkClassCache[dep.ClassName]; !ok {
+					depPoint := &pb.ClassInfo{
+						ClassName: dep.ClassName,
+						Source: &pb.SourceInfo{
+							Type: pb.SourceType_SOURCE_TYPE_JDK,
+						},
+					}
+					putCache(depPoint, c)
 				}
-				putCache(depPoint, c)
 			}
-		}
-		if dep.SourceType == pb.SourceType_SOURCE_TYPE_UNKNOWN && dep.ClassName != "" {
-			if _, ok := c.UnknowClassCache[dep.ClassName]; !ok {
-				depPoint := &pb.ClassInfo{
-					ClassName: dep.ClassName,
-					Source: &pb.SourceInfo{
-						Type: pb.SourceType_SOURCE_TYPE_UNKNOWN,
-					},
+			if dep.SourceType == pb.SourceType_SOURCE_TYPE_UNKNOWN && dep.ClassName != "" {
+				if _, ok := c.UnknowClassCache[dep.ClassName]; !ok {
+					depPoint := &pb.ClassInfo{
+						ClassName: dep.ClassName,
+						Source: &pb.SourceInfo{
+							Type: pb.SourceType_SOURCE_TYPE_UNKNOWN,
+						},
+					}
+					putCache(depPoint, c)
 				}
-				putCache(depPoint, c)
 			}
-		}
-		if (dep.SourceType == pb.SourceType_SOURCE_TYPE_MAVEN || dep.SourceType == pb.SourceType_SOURCE_TYPE_EXTERNAL_JAR) && dep.ClassName != "" {
-			if _, ok := c.ThirdPartClassCache[dep.ClassName]; !ok {
-				depPoint := &pb.ClassInfo{
-					ClassName: dep.ClassName,
-					Source: &pb.SourceInfo{
-						Type: pb.SourceType_SOURCE_TYPE_MAVEN,
-					},
+			if (dep.SourceType == pb.SourceType_SOURCE_TYPE_MAVEN || dep.SourceType == pb.SourceType_SOURCE_TYPE_EXTERNAL_JAR) && dep.ClassName != "" {
+				if _, ok := c.ThirdPartClassCache[dep.ClassName]; !ok {
+					depPoint := &pb.ClassInfo{
+						ClassName: dep.ClassName,
+						Source: &pb.SourceInfo{
+							Type: pb.SourceType_SOURCE_TYPE_MAVEN,
+						},
+					}
+					putCache(depPoint, c)
 				}
-				putCache(depPoint, c)
 			}
 		}
 	}
-
 	return nil
 }
 

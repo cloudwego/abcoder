@@ -111,7 +111,7 @@ func (s *JavaParserServer) Start(ctx context.Context, repoPath string, analyzerC
 		return nil, fmt.Errorf("failed to create socket listener: %w", err)
 	}
 
-	// Step 2: Start Java subprocess
+	//Step 2: Start Java subprocess
 	if err := s.startJavaProcess(ctx); err != nil {
 		s.cleanup()
 		return nil, fmt.Errorf("failed to start Java process: %w", err)
