@@ -242,7 +242,7 @@ func (rwc rwc) Close() error {
 func startLSPSever(path string, opts ClientOptions) (io.ReadWriteCloser, error) {
 
 	var cmd *exec.Cmd
-	if uniast.Java == opts.Language || uniast.Cpp == opts.Language {
+	if uniast.Java == opts.Language {
 		parts := strings.Fields(path)
 		cmd = exec.Command(parts[0], parts[1:]...)
 	} else {

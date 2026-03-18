@@ -27,7 +27,6 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 
-	"github.com/cloudwego/abcoder/lang/cpp"
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/java"
 	javaipc "github.com/cloudwego/abcoder/lang/java/ipc"
@@ -114,8 +113,6 @@ func switchSpec(l uniast.Language, repo string) LanguageSpec {
 		return python.NewPythonSpec()
 	case uniast.Java:
 		return java.NewJavaSpec(repo)
-	case uniast.Cpp:
-		return cpp.NewCppSpec()
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}
@@ -1701,11 +1698,9 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	// 	return sym, nil
 	// }
 
-	if !(from.Type == "typeParameter" && c.Language == uniast.Cpp) {
-		// 1. already loaded
-		if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
-			return sym, nil
-		}
+	// 1. already loaded
+	if sym := c.findMatchingSymbolIn(loc, slices.Collect(maps.Values(c.syms))); sym != nil {
+		return sym, nil
 	}
 
 	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
@@ -1934,11 +1929,11 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 
 	// function info: type params, inputs, outputs, receiver (if !needImpl)
 	if sym.Kind == SKFunction || sym.Kind == SKMethod {
-		var rd *dependency
+		var rsym *dependency
 		rec, tps, ips, ops := c.spec.FunctionSymbol(*sym)
-		if (!hasImpl || c.Language == uniast.Cpp) && rec >= 0 {
+
+		if !hasImpl && rec >= 0 {
 			rsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[rec], depth)
-			rd = &dependency{sym.Tokens[rec].Location, rsym}
 			if err != nil || rsym == nil {
 				log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
 			}
@@ -1946,18 +1941,6 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 		tsyms, ts := c.getDepsWithLimit(ctx, sym, tps, depth-1)
 		ipsyms, is := c.getDepsWithLimit(ctx, sym, ips, depth-1)
 		opsyms, os := c.getDepsWithLimit(ctx, sym, ops, depth-1)
-
-		// filter tsym is type parameter
-		if c.Language == uniast.Cpp {
-			tsFiltered := make([]dependency, 0, len(ts))
-			for _, d := range ts {
-				if d.Symbol == nil || d.Symbol.Kind == SKTypeParameter {
-					continue
-				}
-				tsFiltered = append(tsFiltered, d)
-			}
-			ts = tsFiltered
-		}
 
 		//get last token of params for get signature
 		lastToken := rec
@@ -1977,28 +1960,18 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 			}
 		}
 
-		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rd, lastToken)
+		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rsym, lastToken)
 	}
 
 	// variable info: type
 	if sym.Kind == SKVariable || sym.Kind == SKConstant {
 		i := c.spec.DeclareTokenOfSymbol(*sym)
-		// in cpp, it should search form behind to front to find the first entity token
 		// find first entity token
-		if c.Language == uniast.Cpp {
-			for i = i - 1; i >= 0; i-- {
-				if c.spec.IsEntityToken(sym.Tokens[i]) {
-					break
-				}
-			}
-		} else {
-			for i = i + 1; i < len(sym.Tokens); i++ {
-				if c.spec.IsEntityToken(sym.Tokens[i]) {
-					break
-				}
+		for i = i + 1; i < len(sym.Tokens); i++ {
+			if c.spec.IsEntityToken(sym.Tokens[i]) {
+				break
 			}
 		}
-
 		if i < 0 || i >= len(sym.Tokens) {
 			log.Error("get type token of variable symbol %s failed\n", sym)
 			return
