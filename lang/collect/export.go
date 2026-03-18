@@ -478,18 +478,21 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					}
 				}
 
-				// cpp get method name without class name
+				// cpp get method name without class name and namespace
 				if c.Language == uniast.Cpp && rid != nil {
-					rec := strings.TrimSpace(rid.Name)
-					if rec != "" {
-						searchStr := rec + "::"
-						if idx := strings.Index(name, searchStr); idx >= 0 {
-							name = name[idx+len(searchStr):]
-						}
+					p := strings.IndexByte(name, '(')
+					head, tail := name, ""
+					if p >= 0 {
+						head, tail = name[:p], name[p:]
 					}
+
+					if idx := strings.LastIndex(head, "::"); idx >= 0 {
+						head = head[idx+2:]
+					}
+					name = head + tail
 				}
 
-				if k == SKFunction {
+				if k == SKFunction || c.Language == uniast.Cpp {
 					// NOTICE: class static method name is: type::method
 					id.Name += "::" + name
 				} else {
@@ -583,7 +586,17 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				// NOTICE: use method name as key here
-				obj.Methods[method.Name] = *mid
+				if c.Language == uniast.Cpp {
+					methodName := c.cppBaseName(method.Name)
+					_, methodExist := obj.Methods[methodName]
+					isHeaderMethod := strings.HasSuffix(method.Location.URI.File(), ".h")
+					if methodExist && isHeaderMethod {
+						continue
+					}
+					obj.Methods[methodName] = *mid
+				} else {
+					obj.Methods[method.Name] = *mid
+				}
 			}
 		}
 		obj.Identity = *id

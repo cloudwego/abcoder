@@ -7,7 +7,7 @@ int main() {
 
     util::Greeter hi("Hello");
     std::cout << hi.greet("Alice") << "\n";
-
+    
     hi.bump();
     hi.bump();
 
