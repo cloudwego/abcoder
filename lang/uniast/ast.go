@@ -95,6 +95,16 @@ type Repository struct {
 	Path        string             // repo absolute path
 	Modules     map[string]*Module // module name => module
 	Graph       NodeGraph          // node id => node
+
+	// [新增] name → files 反向索引
+	// 加速 search_symbol API，无需独立 .idx 文件
+	NameToLocations map[string]NameLocations `json:"NameToLocations,omitempty"`
+}
+
+// NameLocations represents all locations of a symbol name
+// [新增] 用于反向索引 name → files
+type NameLocations struct {
+	Files []string `json:"Files,omitempty"`
 }
 
 func (r Repository) ID() string {
@@ -126,7 +136,14 @@ func NewRepository(name string) Repository {
 type File struct {
 	Path    string
 	Imports []Import `json:",omitempty"`
-	Package PkgPath  `json:",omitempty"`
+
+	// Package 兼容旧字段
+	Package PkgPath `json:",omitempty"`
+
+	// [新增] Identity fields for O(1) lookup
+	// 解析时直接赋值，无需查询
+	ModPath ModPath `json:"ModPath,omitempty"`
+	PkgPath PkgPath `json:"PkgPath,omitempty"`
 }
 
 type Import struct {
@@ -568,6 +585,9 @@ type FileLine struct {
 
 	// NOTICE: start line. line number start from 1
 	Line int
+
+	// [新增] end line number (1-based)
+	EndLine int `json:"EndLine,omitempty"`
 
 	// start offset in file
 	StartOffset int
