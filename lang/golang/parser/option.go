@@ -26,6 +26,7 @@ type Options struct {
 	CollectComment bool
 	NeedTest       bool
 	LoadByPackages bool
+	BuildFlags     []string
 }
 
 // type Option func(options *Options)

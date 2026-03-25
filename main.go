@@ -188,6 +188,7 @@ Language Support:
 	cmd.Flags().BoolVar(&opts.LoadByPackages, "load-by-packages", false, "Load packages one by one instead of all at once (only works for Go, uses more memory).")
 	cmd.Flags().StringSliceVar(&opts.Excludes, "exclude", []string{}, "Files or directories to exclude from parsing (can be specified multiple times).")
 	cmd.Flags().StringVar(&opts.RepoID, "repo-id", "", "Custom identifier for this repository (useful for multi-repo scenarios).")
+	cmd.Flags().StringArrayVar(&opts.BuildFlags, "build-flag", []string{}, "Pass build flags to the Go parser (e.g. -tags=xxx).")
 	cmd.Flags().StringVar(&opts.TSConfig, "tsconfig", "", "Path to tsconfig.json file for TypeScript project configuration.")
 	cmd.Flags().StringSliceVar(&opts.TSSrcDir, "ts-src-dir", []string{}, "Additional TypeScript source directories (can be specified multiple times).")
 

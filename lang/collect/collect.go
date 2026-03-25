@@ -47,6 +47,7 @@ type CollectOption struct {
 	NotNeedTest        bool
 	Excludes           []string
 	LoadByPackages     bool
+	BuildFlags         []string
 }
 
 type Collector struct {
