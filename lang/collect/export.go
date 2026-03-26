@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/cloudwego/abcoder/lang/log"
+	"github.com/cloudwego/abcoder/lang/lsp"
 	. "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
@@ -336,6 +337,21 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		// NOTICE: use refName as id when symbol name is missing
 		name = refName
 	}
+
+	if c.Language == uniast.Cpp {
+		// for function override, use call signature as id
+		if symbol.Kind == SKMethod || symbol.Kind == SKFunction {
+			name = c.extractCppCallSig(symbol)
+		}
+
+		// join name with namespace
+		if ns := c.scopePrefix(symbol); ns != "" {
+			if !strings.HasPrefix(name, ns+"::") {
+				name = ns + "::" + name
+			}
+		}
+	}
+
 	tmp := uniast.NewIdentity(mod, path, name)
 	id = &tmp
 	// Save to visited ONLY WHEN no errors occur
@@ -461,7 +477,22 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 						id.Name = iid.Name + "<" + id.Name + ">"
 					}
 				}
-				if k == SKFunction {
+
+				// cpp get method name without class name and namespace
+				if c.Language == uniast.Cpp && rid != nil {
+					p := strings.IndexByte(name, '(')
+					head, tail := name, ""
+					if p >= 0 {
+						head, tail = name[:p], name[p:]
+					}
+
+					if idx := strings.LastIndex(head, "::"); idx >= 0 {
+						head = head[idx+2:]
+					}
+					name = head + tail
+				}
+
+				if k == SKFunction || c.Language == uniast.Cpp {
 					// NOTICE: class static method name is: type::method
 					id.Name += "::" + name
 				} else {
@@ -555,7 +586,17 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					continue
 				}
 				// NOTICE: use method name as key here
-				obj.Methods[method.Name] = *mid
+				if c.Language == uniast.Cpp {
+					methodName := c.cppBaseName(method.Name)
+					_, methodExist := obj.Methods[methodName]
+					isHeaderMethod := strings.HasSuffix(method.Location.URI.File(), ".h")
+					if methodExist && isHeaderMethod {
+						continue
+					}
+					obj.Methods[methodName] = *mid
+				} else {
+					obj.Methods[method.Name] = *mid
+				}
 			}
 		}
 		obj.Identity = *id
@@ -603,4 +644,131 @@ func mapKind(kind SymbolKind) uniast.TypeKind {
 	default:
 		panic(fmt.Sprintf("unexpected kind %v", kind))
 	}
+}
+
+func (c *Collector) scopePrefix(sym *DocumentSymbol) string {
+	parts := []string{}
+	cur := sym
+	for {
+		p := c.cli.GetParent(cur)
+		if p == nil {
+			break
+		}
+		if p.Kind == lsp.SKNamespace {
+			if p.Name != "" {
+				parts = append([]string{p.Name}, parts...)
+			}
+		}
+		cur = p
+	}
+	return strings.Join(parts, "::") // "a::b"
+}
+
+func (c *Collector) cppBaseName(n string) string {
+	n = strings.TrimSpace(n)
+	if i := strings.LastIndex(n, "::"); i >= 0 {
+		n = n[i+2:]
+	}
+	n = strings.TrimSpace(n)
+	// optional: strip template args on the function name itself: foo<T> -> foo
+	if j := strings.IndexByte(n, '<'); j >= 0 {
+		n = n[:j]
+	}
+	return strings.TrimSpace(n)
+}
+
+// extractCppCallSig returns "sym.Name(params)" where params is extracted from sym.Text.
+func (c *Collector) extractCppCallSig(sym *lsp.DocumentSymbol) (ret string) {
+	name := strings.TrimSpace(sym.Name)
+	if name == "" {
+		return ""
+	}
+	text := sym.Text
+	if text == "" {
+		return name + "()"
+	}
+
+	want := c.cppBaseName(name)
+	if want == "" {
+		want = name
+	}
+	fallback := name + "()"
+
+	isIdent := func(b byte) bool {
+		return (b >= 'a' && b <= 'z') ||
+			(b >= 'A' && b <= 'Z') ||
+			(b >= '0' && b <= '9') ||
+			b == '_'
+	}
+	isWholeIdentAt := func(s string, pos int, w string) bool {
+		if pos < 0 || pos+len(w) > len(s) || s[pos:pos+len(w)] != w {
+			return false
+		}
+		if pos > 0 && isIdent(s[pos-1]) {
+			return false
+		}
+		if pos+len(w) < len(s) && isIdent(s[pos+len(w)]) {
+			return false
+		}
+		return true
+	}
+	findMatchingParenIn := func(s string, openIdx int, end int) int {
+		if openIdx < 0 || openIdx >= len(s) || s[openIdx] != '(' {
+			return -1
+		}
+		if end > len(s) {
+			end = len(s)
+		}
+		depth := 0
+		for i := openIdx; i < end; i++ {
+			switch s[i] {
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					return i
+				}
+			}
+		}
+		return -1
+	}
+
+	headerEnd := len(text)
+	if i := strings.IndexByte(text, '{'); i >= 0 && i < headerEnd {
+		headerEnd = i
+	}
+	if i := strings.IndexByte(text, ';'); i >= 0 && i < headerEnd {
+		headerEnd = i
+	}
+	header := text[:headerEnd]
+
+	namePos := -1
+	for i := 0; i+len(want) <= len(header); i++ {
+		if isWholeIdentAt(header, i, want) {
+			namePos = i
+			break
+		}
+	}
+	if namePos < 0 {
+		return fallback
+	}
+
+	openIdx := -1
+	for i := namePos + len(want); i < len(header); i++ {
+		if header[i] == '(' {
+			openIdx = i
+			break
+		}
+	}
+	if openIdx < 0 {
+		return fallback
+	}
+
+	closeIdx := findMatchingParenIn(header, openIdx, len(header))
+	if closeIdx < 0 {
+		return fallback
+	}
+
+	return name + header[openIdx:closeIdx+1]
 }

@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     env:
-      LANGS: "go rust python typescript"
+      LANGS: "go rust python typescript cxx cpp"
       # ignore package version for Go e.g. 'a.b/c@506fb8ece467f3a71c29322169bef9b0bc92d554'
       DIFFJSON_IGNORE: >
         ['id']
@@ -63,6 +63,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Setup clangd-18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clangd-18
 
       - name: Compile both binaries
         run: |

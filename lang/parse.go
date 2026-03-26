@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/collect"
+	"github.com/cloudwego/abcoder/lang/cpp"
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/golang/parser"
 	"github.com/cloudwego/abcoder/lang/java/pb"
@@ -87,11 +88,12 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 			Verbose:               args.Verbose,
 			InitializationOptions: args.LspOptions,
 		})
-		client.LspOptions = args.LspOptions
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)
 			return nil, err
 		}
+		client.LspOptions = args.LspOptions
+
 		log.Info("end initialize LSP server")
 	}
 
@@ -127,6 +129,8 @@ func checkRepoPath(repoPath string, language uniast.Language) (openfile string, 
 		openfile, wait = rust.CheckRepo(repoPath)
 	case uniast.Cxx:
 		openfile, wait = cxx.CheckRepo(repoPath)
+	case uniast.Cpp:
+		openfile, wait = cpp.CheckRepo(repoPath)
 	case uniast.Python:
 		openfile, wait = python.CheckRepo(repoPath)
 	case uniast.Java:
@@ -150,6 +154,8 @@ func checkLSP(language uniast.Language, lspPath string, args ParseOptions) (l un
 		switch language {
 		case uniast.Rust:
 			l, s = rust.GetDefaultLSP()
+		case uniast.Cpp:
+			l, s = cpp.GetDefaultLSP()
 		case uniast.Cxx:
 			l, s = cxx.GetDefaultLSP()
 		case uniast.Python:
