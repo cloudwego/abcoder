@@ -182,10 +182,11 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	}
 
 	cfg := &packages.Config{
-		Mode: baseOpts,
-		Fset: fset,
-		Dir:  dir,
-		Env:  append(os.Environ(), "GOSUMDB=off"),
+		Mode:       baseOpts,
+		Fset:       fset,
+		Dir:        dir,
+		Env:        append(os.Environ(), "GOSUMDB=off"),
+		BuildFlags: p.opts.BuildFlags,
 	}
 
 	if p.opts.NeedTest {

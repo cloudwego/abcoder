@@ -214,6 +214,7 @@ func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOpti
 		goopts.LoadByPackages = true
 	}
 	goopts.Excludes = opts.Excludes
+	goopts.BuildFlags = opts.BuildFlags
 	p := parser.NewParser(repoPath, repoPath, goopts)
 	repo, err := p.ParseRepo()
 	if err != nil {
