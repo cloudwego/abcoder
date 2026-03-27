@@ -1,0 +1,40 @@
+# Pyright 内部生成文件 & 缓存
+packages/python-parser/dist/
+packages/python-parser/typeshed-fallback/
+typeshed-fallback/
+dist/
+*.pyi
+
+# 通用 Python 缓存
+__pycache__/
+*.py[cod]
+
+# TypeScript 编译输出
+*.js
+*.js.map
+*.d.ts
+*.tsbuildinfo
+
+# 构建输出目录
+dist/
+out/
+build/
+
+# 内部生成的声明与映射
+packages/**/*.js
+packages/**/*.js.map
+packages/**/*.d.ts
+
+# 日志、IDE、缓存
+node_modules/
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+*.md
+.spec/
+.repotalk/
+.claude/
+.abcoder/
+.mcp.json

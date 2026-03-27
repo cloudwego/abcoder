@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mock-python"
+version = "0.1.0"
+description = "Mock Python Project"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pkg_a", "src/pkg_b", "src"]
+
+[tool.hatch.structure]
+root = "src"
