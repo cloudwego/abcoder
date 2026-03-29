@@ -171,13 +171,14 @@ func NewURI(file string) DocumentURI {
 }
 
 type TextDocumentItem struct {
-	URI         DocumentURI               `json:"uri"`
-	LanguageID  string                    `json:"languageId"`
-	Version     int                       `json:"version"`
-	Text        string                    `json:"text"`
-	LineCounts  []int                     `json:"-"`
-	Symbols     map[Range]*DocumentSymbol `json:"-"`
-	Definitions map[Position][]Location   `json:"-"`
+	URI            DocumentURI               `json:"uri"`
+	LanguageID     string                    `json:"languageId"`
+	Version        int                       `json:"version"`
+	Text           string                    `json:"text"`
+	LineCounts     []int                     `json:"-"`
+	Symbols        map[Range]*DocumentSymbol `json:"-"`
+	Definitions    map[Position][]Location   `json:"-"`
+	SemanticTokens *SemanticTokens           `json:"-"`
 }
 
 type DocumentSymbol struct {
