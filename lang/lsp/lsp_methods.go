@@ -156,22 +156,27 @@ func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, 
 	return resp, nil
 }
 
-// Some language servers do not provide semanticTokens/range.
-// In that case, we fall back to semanticTokens/full and then filter the tokens manually.
 func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens) error {
-	if cli.hasSemanticTokensRange {
-		if err := cli.Call(ctx, "textDocument/semanticTokens/range", req, resp); err != nil {
-			return err
-		}
-		return nil
-	}
-	// fall back to semanticTokens/full
-	req1 := SemanticTokensFullParams{
-		TextDocument: req.TextDocument,
-	}
-	if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
+	f, err := cli.DidOpen(ctx, DocumentURI(req.TextDocument.URI))
+	if err != nil {
 		return err
 	}
+
+	if f.SemanticTokens == nil {
+		req1 := SemanticTokensFullParams{
+			TextDocument: req.TextDocument,
+		}
+		var fullResp SemanticTokens
+		if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, &fullResp); err != nil {
+			return err
+		}
+		f.SemanticTokens = &fullResp
+	}
+
+	resp.ResultID = f.SemanticTokens.ResultID
+	resp.Data = make([]uint32, len(f.SemanticTokens.Data))
+	copy(resp.Data, f.SemanticTokens.Data)
+
 	filterSemanticTokensInRange(resp, req.Range)
 	return nil
 }
