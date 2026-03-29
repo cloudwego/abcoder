@@ -28,7 +28,7 @@ func CountFiles(dir string, subfix string, skipdir string) (int, int) {
 	skipdir, _ = filepath.Abs(filepath.Join(dir, skipdir))
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if strings.HasPrefix(path, skipdir) {
-			return nil
+			return filepath.SkipDir
 		}
 		if !info.IsDir() && filepath.Ext(path) == subfix {
 			count++
