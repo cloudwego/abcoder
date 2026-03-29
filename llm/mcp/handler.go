@@ -59,10 +59,12 @@ func getASTTools(opts tool.ASTReadToolsOptions) []Tool {
 	ast := tool.NewASTReadTools(opts)
 	return []Tool{
 		NewTool(tool.ToolListRepos, tool.DescListRepos, tool.SchemaListRepos, ast.ListRepos),
-		NewTool(tool.ToolGetRepoStructure, tool.DescGetRepoStructure, tool.SchemaGetRepoStructure, ast.GetRepoStructure),
-		NewTool(tool.ToolGetPackageStructure, tool.DescGetPackageStructure, tool.SchemaGetPackageStructure, ast.GetPackageStructure),
+		// NewTool(tool.ToolGetRepoStructure, tool.DescGetRepoStructure, tool.SchemaGetRepoStructure, ast.GetRepoStructure),
+		// NewTool(tool.ToolGetPackageStructure, tool.DescGetPackageStructure, tool.SchemaGetPackageStructure, ast.GetPackageStructure),
+		NewTool(tool.ToolTreeRepo, tool.DescTreeRepo, tool.SchemaTreeRepo, ast.TreeRepo),
 		NewTool(tool.ToolGetFileStructure, tool.DescGetFileStructure, tool.SchemaGetFileStructure, ast.GetFileStructure),
-		NewTool(tool.ToolGetASTNode, tool.DescGetASTNode, tool.SchemaGetASTNode, ast.GetASTNode),
+		// NewTool(tool.ToolGetASTNode, tool.DescGetASTNode, tool.SchemaGetASTNode, ast.GetASTNode),
+		NewTool(tool.ToolGetFileSymbol, tool.DescGetFileSymbol, tool.SchemaGetFileSymbol, ast.GetFileSymbol),
 	}
 }
 

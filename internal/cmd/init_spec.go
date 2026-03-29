@@ -81,10 +81,10 @@ func RunInitSpec(targetDir string) error {
 	}
 
 	claudeConfigPath := filepath.Join(homeDir, ".claude.json")
-	if err := configureMCPServers(claudeConfigPath, astsDir); err != nil {
-		return fmt.Errorf("failed to configure MCP servers: %w", err)
-	}
-	log.Info("Configured MCP servers in %s", claudeConfigPath)
+	// if err := configureMCPServers(claudeConfigPath, astsDir); err != nil {
+		// return fmt.Errorf("failed to configure MCP servers: %w", err)
+	// }
+	// log.Info("Configured MCP servers in %s", claudeConfigPath)
 
 	// 4. Print success message
 	printSuccessMessage(targetDirAbs, claudeConfigPath, astsDir)
