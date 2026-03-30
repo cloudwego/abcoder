@@ -29,7 +29,7 @@ func InstallLanguageServer() (string, error) {
 }
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
-	return uniast.Cpp, "clangd-18 --background-index=false -j=2 --clang-tidy=false"
+	return uniast.Cpp, "clangd-18 --background-index=false -j=32 --clang-tidy=false"
 }
 
 func CheckRepo(repo string) (string, time.Duration) {
