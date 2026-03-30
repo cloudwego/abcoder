@@ -23,10 +23,13 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
+	"golang.org/x/sync/errgroup"
 	sitter "github.com/smacker/go-tree-sitter"
 
+	"github.com/cloudwego/abcoder/lang/cpp"
 	"github.com/cloudwego/abcoder/lang/cxx"
 	"github.com/cloudwego/abcoder/lang/java"
 	javaipc "github.com/cloudwego/abcoder/lang/java/ipc"
@@ -125,6 +128,8 @@ func switchSpec(l uniast.Language, repo string) LanguageSpec {
 		return python.NewPythonSpec()
 	case uniast.Java:
 		return java.NewJavaSpec(repo)
+	case uniast.Cpp:
+		return cpp.NewCppSpec()
 	default:
 		panic(fmt.Sprintf("unsupported language %s", l))
 	}
@@ -184,6 +189,8 @@ func (c *Collector) Collect(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+	} else if c.Language == uniast.Cpp {
+		root_syms = c.ScannerFileForConCurrentCPPScan(ctx)
 	} else {
 		root_syms = c.ScannerFile(ctx)
 	}
@@ -1125,6 +1132,129 @@ func (c *Collector) ScannerFile(ctx context.Context) []*DocumentSymbol {
 	return root_syms
 }
 
+func (c *Collector) ScannerFileForConCurrentCPPScan(ctx context.Context) []*DocumentSymbol {
+	c.configureLSP(ctx)
+	excludes := make([]string, len(c.Excludes))
+	for i, e := range c.Excludes {
+		if !filepath.IsAbs(e) {
+			excludes[i] = filepath.Join(c.repo, e)
+		} else {
+			excludes[i] = e
+		}
+	}
+
+	var paths []string
+	scanner := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		for _, e := range excludes {
+			if strings.HasPrefix(path, e) {
+				return nil
+			}
+		}
+
+		if c.spec.ShouldSkip(path) {
+			return nil
+		}
+
+		paths = append(paths, path)
+		return nil
+	}
+
+	if err := filepath.Walk(c.repo, scanner); err != nil {
+		log.Error("scan files failed: %v", err)
+	}
+
+	// pre-open all files sequentially to avoid concurrent map writes in cli.files
+	for _, path := range paths {
+		_, err := c.cli.DidOpen(ctx, NewURI(path))
+		if err != nil {
+			log.Error("open file failed: %v", err)
+		}
+	}
+
+	var root_syms []*DocumentSymbol
+	var mu sync.Mutex
+
+	var eg errgroup.Group
+	// Limit concurrency to not overwhelm the LSP server
+	eg.SetLimit(32)
+
+	for _, path := range paths {
+		path := path // capture loop variable
+		eg.Go(func() error {
+			mu.Lock()
+			file := c.files[path]
+			if file == nil {
+				rel, err := filepath.Rel(c.repo, path)
+				if err == nil {
+					file = uniast.NewFile(rel)
+					c.files[path] = file
+				}
+			}
+			mu.Unlock()
+
+			if file == nil {
+				return nil
+			}
+
+			// 解析use语句
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			uses, err := c.spec.FileImports(content)
+			if err != nil {
+				log.Error("parse file %s use statements failed: %v", path, err)
+			} else {
+				mu.Lock()
+				file.Imports = uses
+				mu.Unlock()
+			}
+
+			// collect symbols
+			uri := NewURI(path)
+			symbols, err := c.cli.DocumentSymbols(ctx, uri)
+			if err != nil {
+				return nil
+			}
+
+			var local_syms []*DocumentSymbol
+			for _, sym := range symbols {
+				// collect content
+				symContent, err := c.cli.Locate(sym.Location)
+				if err != nil {
+					continue
+				}
+				// collect tokens
+				tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+				if err != nil {
+					continue
+				}
+				sym.Text = symContent
+				sym.Tokens = tokens
+				local_syms = append(local_syms, sym)
+			}
+
+			mu.Lock()
+			for _, sym := range local_syms {
+				c.addSymbol(sym.Location, sym)
+				root_syms = append(root_syms, sym)
+			}
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	_ = eg.Wait()
+	return root_syms
+}
+
 func (c *Collector) ScannerByTreeSitter(ctx context.Context) ([]*DocumentSymbol, error) {
 	var modulePaths []string
 	// Java uses parsing pom method to obtain hierarchical relationships
@@ -1837,11 +1967,13 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	// 	return sym, nil
 	// }
 
-	// 1. already loaded
-	// Optimization: only search in symbols of the same file
-	if fileSyms, ok := c.symsByFile[loc.URI]; ok {
-		if sym := c.findMatchingSymbolIn(loc, fileSyms); sym != nil {
-			return sym, nil
+	if !(from.Type == "typeParameter" && c.Language == uniast.Cpp) {
+		// 1. already loaded
+		// Optimization: only search in symbols of the same file
+		if fileSyms, ok := c.symsByFile[loc.URI]; ok {
+			if sym := c.findMatchingSymbolIn(loc, fileSyms); sym != nil {
+				return sym, nil
+			}
 		}
 	}
 
@@ -2071,11 +2203,11 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 
 	// function info: type params, inputs, outputs, receiver (if !needImpl)
 	if sym.Kind == SKFunction || sym.Kind == SKMethod {
-		var rsym *dependency
+		var rd *dependency
 		rec, tps, ips, ops := c.spec.FunctionSymbol(*sym)
-
-		if !hasImpl && rec >= 0 {
+		if (!hasImpl || c.Language == uniast.Cpp) && rec >= 0 {
 			rsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[rec], depth)
+			rd = &dependency{sym.Tokens[rec].Location, rsym}
 			if err != nil || rsym == nil {
 				log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
 			}
@@ -2083,6 +2215,18 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 		tsyms, ts := c.getDepsWithLimit(ctx, sym, tps, depth-1)
 		ipsyms, is := c.getDepsWithLimit(ctx, sym, ips, depth-1)
 		opsyms, os := c.getDepsWithLimit(ctx, sym, ops, depth-1)
+
+		// filter tsym is type parameter
+		if c.Language == uniast.Cpp {
+			tsFiltered := make([]dependency, 0, len(ts))
+			for _, d := range ts {
+				if d.Symbol == nil || d.Symbol.Kind == SKTypeParameter {
+					continue
+				}
+				tsFiltered = append(tsFiltered, d)
+			}
+			ts = tsFiltered
+		}
 
 		//get last token of params for get signature
 		lastToken := rec
@@ -2102,18 +2246,28 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 			}
 		}
 
-		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rsym, lastToken)
+		c.updateFunctionInfo(sym, tsyms, ipsyms, opsyms, ts, is, os, rd, lastToken)
 	}
 
 	// variable info: type
 	if sym.Kind == SKVariable || sym.Kind == SKConstant {
 		i := c.spec.DeclareTokenOfSymbol(*sym)
+		// in cpp, it should search form behind to front to find the first entity token
 		// find first entity token
-		for i = i + 1; i < len(sym.Tokens); i++ {
-			if c.spec.IsEntityToken(sym.Tokens[i]) {
-				break
+		if c.Language == uniast.Cpp {
+			for i = i - 1; i >= 0; i-- {
+				if c.spec.IsEntityToken(sym.Tokens[i]) {
+					break
+				}
+			}
+		} else {
+			for i = i + 1; i < len(sym.Tokens); i++ {
+				if c.spec.IsEntityToken(sym.Tokens[i]) {
+					break
+				}
 			}
 		}
+
 		if i < 0 || i >= len(sym.Tokens) {
 			log.Error("get type token of variable symbol %s failed\n", sym)
 			return
