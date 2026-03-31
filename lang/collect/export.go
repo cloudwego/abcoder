@@ -464,6 +464,19 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 					// Name: rid.Name,
 				}
 				obj.IsMethod = true
+
+				if c.Language == uniast.Cpp {
+					id.ModPath = rid.ModPath
+					id.PkgPath = rid.PkgPath
+					if repo.Modules[id.ModPath] == nil {
+						repo.Modules[id.ModPath] = newModule(id.ModPath, "", c.Language)
+					}
+					if repo.Modules[id.ModPath].Packages[id.PkgPath] == nil {
+						repo.Modules[id.ModPath].Packages[id.PkgPath] = uniast.NewPackage(id.PkgPath)
+					}
+					pkg = repo.Modules[id.ModPath].Packages[id.PkgPath]
+				}
+
 				id.Name = rid.Name
 				// NOTICE: check if the method is a trait method
 				// if true, type = trait<receiver>
