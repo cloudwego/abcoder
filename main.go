@@ -186,6 +186,7 @@ Language Support:
 	cmd.Flags().BoolVar(&opts.NoNeedComment, "no-need-comment", false, "Skip parsing code comments (only works for Go).")
 	cmd.Flags().BoolVar(&opts.NotNeedTest, "no-need-test", false, "Skip test files during parsing (only works for Go).")
 	cmd.Flags().BoolVar(&opts.LoadByPackages, "load-by-packages", false, "Load packages one by one instead of all at once (only works for Go, uses more memory).")
+	cmd.Flags().BoolVar(&opts.DisableBuildGraph, "disable-build-graph", false, "Disable the step of building the dependency graph among AST nodes.")
 	cmd.Flags().StringSliceVar(&opts.Excludes, "exclude", []string{}, "Files or directories to exclude from parsing (can be specified multiple times).")
 	cmd.Flags().StringVar(&opts.RepoID, "repo-id", "", "Custom identifier for this repository (useful for multi-repo scenarios).")
 	cmd.Flags().StringArrayVar(&opts.BuildFlags, "build-flag", []string{}, "Pass build flags to the Go parser (e.g. -tags=xxx).")
