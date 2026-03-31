@@ -50,6 +50,8 @@ type ParseOptions struct {
 
 	LspOptions map[string]string
 
+	DisableBuildGraph bool
+
 	// TS options
 	// tsconfig string
 	TSParseOptions
@@ -100,6 +102,13 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		log.Error("Failed to collect symbols: %v\n", err)
 		return nil, err
 	}
+
+	if !args.DisableBuildGraph {
+		if err := repo.BuildGraph(); err != nil {
+			return nil, err
+		}
+	}
+
 	log.Info("all symbols collected, start writing to stdout...\n")
 
 	if args.RepoID != "" {
@@ -193,9 +202,6 @@ func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opt
 		}
 	}
 
-	if err := repo.BuildGraph(); err != nil {
-		return nil, err
-	}
 	return repo, nil
 }
 
