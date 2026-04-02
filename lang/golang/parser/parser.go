@@ -527,7 +527,7 @@ func (p *GoParser) searchName(name string) (ids []Identity, err error) {
 		if err != nil {
 			return err
 		}
-		tids, e := p.searchOnFile(file, fset, fcontent, m.Name, pkg, impts, name)
+		tids, e := p.searchOnFile(file, fset, fcontent, m.Name, pkg, impts, name, "")
 		if e != nil {
 			err = e
 			return nil
@@ -553,7 +553,13 @@ func (p *GoParser) exportFileLine(fset *token.FileSet, decl ast.Node) (ret FileL
 	return
 }
 
-func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []byte, mod string, pkg string, impt *importInfo, name string) (ids []Identity, err error) {
+func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []byte, mod string, pkg string, impt *importInfo, name string, pkgDir string) (ids []Identity, err error) {
+	isExternal := pkgDir != ""
+	homeDir := p.homePageDir
+	if isExternal {
+		homeDir = pkgDir
+	}
+
 	for _, decl := range file.Decls {
 		// println(string(GetRawContent(fset, fcontent, decl)))
 		switch decl := decl.(type) {
@@ -562,7 +568,7 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 			var receiver *Receiver
 			if decl.Recv != nil && strings.Contains(name, ".") {
 				var m = map[string]Identity{}
-				tname, isPointer := p.mockTypes(decl.Recv.List[0].Type, m, fcontent, fset, getRelativeOrBasePath(p.homePageDir, fset, decl.Pos()), mod, pkg, impt)
+				tname, isPointer := p.mockTypes(decl.Recv.List[0].Type, m, fcontent, fset, getRelativeOrBasePath(homeDir, fset, decl.Pos()), mod, pkg, impt)
 				if tname == "" {
 					fmt.Fprintf(os.Stderr, "Error: cannot get type from receiver %v", decl.Recv.List[0].Type)
 					continue
@@ -584,7 +590,12 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 				ids = append(ids, newIdentity(mod, pkg, name))
 				fn := p.newFunc(mod, pkg, name)
 				fn.Content = string(GetRawContent(fset, fcontent, decl, p.opts.CollectComment))
-				fn.FileLine = p.exportFileLine(fset, decl)
+				if isExternal {
+					fn.FileLine.File = fset.Position(decl.Pos()).Filename
+				} else {
+					fn.FileLine.File = getRelativeOrBasePath(homeDir, fset, decl.Pos())
+				}
+				fn.FileLine.Line = fset.Position(decl.Pos()).Line
 				fn.IsMethod = decl.Recv != nil
 				fn.Receiver = receiver
 				// if decl.Type.Params != nil {
@@ -612,7 +623,12 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 					if spec.Name.Name == name {
 						st = p.newType(mod, pkg, spec.Name.Name)
 						st.Content = string(GetRawContent(fset, fcontent, spec, p.opts.CollectComment))
-						st.FileLine = p.exportFileLine(fset, spec)
+						if isExternal {
+							st.FileLine.File = fset.Position(spec.Pos()).Filename
+						} else {
+							st.FileLine.File = getRelativeOrBasePath(homeDir, fset, spec.Pos())
+						}
+						st.FileLine.Line = fset.Position(spec.Pos()).Line
 						st.TypeKind = getTypeKind(spec.Type)
 						ids = append(ids, newIdentity(mod, pkg, name))
 					}
@@ -628,7 +644,12 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 								ids = append(ids, newIdentity(mod, pkg, name))
 								fn := p.newFunc(mod, pkg, name)
 								fn.Content = string(GetRawContent(fset, fcontent, m, p.opts.CollectComment))
-								fn.FileLine = p.exportFileLine(fset, m)
+								if isExternal {
+									fn.FileLine.File = fset.Position(m.Pos()).Filename
+								} else {
+									fn.FileLine.File = getRelativeOrBasePath(homeDir, fset, m.Pos())
+								}
+								fn.FileLine.Line = fset.Position(m.Pos()).Line
 								fn.IsMethod = true
 								fn.IsInterfaceMethod = true
 								fn.Receiver = &Receiver{
@@ -659,7 +680,12 @@ func (p *GoParser) searchOnFile(file *ast.File, fset *token.FileSet, fcontent []
 							ids = append(ids, newIdentity(mod, pkg, name))
 							v := p.newVar(mod, pkg, name, decl.Tok == token.CONST)
 							v.Content = string(GetRawContent(fset, fcontent, spec, p.opts.CollectComment))
-							v.FileLine = p.exportFileLine(fset, spec)
+							if isExternal {
+								v.FileLine.File = fset.Position(spec.Pos()).Filename
+							} else {
+								v.FileLine.File = getRelativeOrBasePath(homeDir, fset, spec.Pos())
+							}
+							v.FileLine.Line = fset.Position(spec.Pos()).Line
 							if spec.Type != nil {
 								var m = map[string]Identity{}
 								// NOTICE: collect all types

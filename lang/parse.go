@@ -200,7 +200,8 @@ func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opt
 }
 
 func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOption) (*uniast.Repository, error) {
-	goopts := parser.Options{}
+	// Use default options (ReferCodeDepth: 1 by default)
+	goopts := parser.DefaultOptions()
 	if opts.LoadExternalSymbol {
 		goopts.ReferCodeDepth = 1
 	}
