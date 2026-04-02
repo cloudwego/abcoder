@@ -1,0 +1,17 @@
+{
+    "name": "python-parser",
+    "version": "1.0.0",
+    "private": true,
+    "workspaces": ["packages/*"],
+    "description": "Python repository parser using pyright-internal",
+    "bin": {
+        "python-parser": "packages/pyright-internal/out/src/pythonParser/index.js"
+    },
+    "scripts": {
+        "build": "npm run build -w packages/pyright-internal",
+        "clean": "npm run clean -w packages/pyright-internal"
+    },
+    "devDependencies": {
+        "lerna": "^8.2.4"
+    }
+}

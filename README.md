@@ -118,6 +118,45 @@ Start coding(sub-agent) ─────────→ Execute Implementation
 
 > Watch the demo video [here](https://github.com/cloudwego/abcoder/pull/141)
 
+## Use ABCoder as a Skill
+
+The **Skill** interface provides native Claude Code integration without MCP protocol overhead. It uses Claude Code's built-in skill system for a more streamlined workflow.
+
+### Setup
+
+The Skill is automatically configured when you run `abcoder init-spec`. The skill definitions are located in `internal/cmd/assets/.claude/skills/`.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_repos` | List all available repositories |
+| `tree_repo` | Get repository file structure |
+| `get_file_structure` | Get all symbols in a file |
+| `get_file_symbol` | Get symbol details with dependencies and references |
+| `search_symbol` | Search symbols by name pattern |
+
+### Usage Example
+
+```bash
+# List all repositories
+abcoder cli list_repos
+
+# Get repository file tree
+abcoder cli tree_repo 'repo_name'
+
+# Get file structure
+abcoder cli get_file_structure 'repo_name' 'path/to/file.go'
+
+# Get symbol details
+abcoder cli get_file_symbol 'repo_name' 'path/to/file.go' 'SymbolName'
+
+# Search symbols
+abcoder cli search_symbol 'repo_name' 'Pattern*'
+```
+
+For Claude Code integration, the skill tools are invoked directly via slash commands like `/abcoder:schedule`.
+
 ## Use ABCoder as a MCP server
 
 1. Install ABCoder:
@@ -177,6 +216,44 @@ Start coding(sub-agent) ─────────→ Execute Implementation
     
 - Try to use [the recommended prompt](llm/prompt/analyzer.md) and combine planning/memory tools like [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) in your AI agent.
 
+### Skill vs MCP
+
+ABCoder provides two integration methods with Claude Code:
+
+| Feature | MCP (mcp__abcoder) | Skill (skill__abcoder) |
+|---------|-------------------|----------------------|
+| **Invocation** | `mcp__abcoder__tool_name` | `skill__abcoder__tool_name` |
+| **Definition** | MCP protocol | .claude/skills/ |
+| **Use Case** | General AI agents | Claude Code workflow |
+| **Auto Detection** | - | Auto-detect `current_repo` from cwd |
+| **Memory Efficient** | - | Sonic lazy-load, on-demand parsing |
+| **Pipeline Support** | - | `rg` filter, `jq` extract |
+| **Symbol Search** | - | Regex pattern support |
+| **Example** | `mcp__abcoder__get_file_symbol` | `skill__abcoder__get_file_symbol` |
+
+The **Skill** interface is the recommended approach for Claude Code users, providing a more streamlined workflow:
+
+- **Auto-detect current repo**: `list_repos` automatically detects repos that match current working directory
+- **Memory efficient**: Uses Sonic for lazy JSON parsing, only loads needed data
+- **Pipeline friendly**: Output can be piped to `rg` for filtering or `jq` for extraction
+- **Regex search**: `search_symbol` supports regex patterns to precisely locate symbols
+
+**Pipeline Examples:**
+```bash
+# Filter current repo(s) only
+abcoder cli list_repos | jq '.current_repo'
+
+# Search with regex
+abcoder cli search_symbol myrepo "^Get.*User$"
+
+# Filter related file
+abcoder cli tree_repo myrepo | rg 'related-file'
+
+# Filter dependencies only
+abcoder cli get_file_symbol myrepo src/main.go MyFunc | jq '.node.dependencies'
+```
+
+For detailed usage, see [Skill Definitions](internal/cmd/assets/.claude/skills/).
 
 ## Use ABCoder as an Agent (WIP)
 
