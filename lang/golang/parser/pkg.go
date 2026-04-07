@@ -208,6 +208,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 			return fmt.Errorf("load path '%s' with CGO failed: %v", dir, err)
 		}
 	} else {
+		cfg.Env = append(cfg.Env, "CGO_ENABLED=0")
 		pkgs, err = packages.Load(cfg, pkgPath)
 		if err != nil {
 			return fmt.Errorf("load path '%s' failed: %v", dir, err)
