@@ -852,6 +852,12 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			}
 			if n := m.GetName(); n != "" {
 				methodSymByKey[methodKey(fqcn, n)] = msym
+				shortName := strings.TrimSpace(n)
+				parts := strings.Split(shortName, " ")
+				shortName = parts[len(parts)-1]
+				if shortName != "" && shortName != n {
+					methodSymByKey[methodKey(fqcn, shortName)] = msym
+				}
 			}
 
 			// Fill functionInfo
