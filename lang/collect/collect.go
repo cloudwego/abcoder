@@ -26,8 +26,8 @@ import (
 	"sync"
 	"unicode"
 
-	"golang.org/x/sync/errgroup"
 	sitter "github.com/smacker/go-tree-sitter"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/cloudwego/abcoder/lang/cpp"
 	"github.com/cloudwego/abcoder/lang/cxx"
@@ -819,7 +819,13 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			}
 		}
 
-		// 4) Methods (and method calls)
+		// 4) Methods (Pass 1: Definitions)
+		type methodAndSym struct {
+			m    *javapb.MethodDetail
+			msym *DocumentSymbol
+		}
+		var methodSyms []methodAndSym
+
 		for _, m := range ci.Methods {
 			if m == nil {
 				continue
@@ -852,6 +858,12 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			}
 			if n := m.GetName(); n != "" {
 				methodSymByKey[methodKey(fqcn, n)] = msym
+				shortName := strings.TrimSpace(n)
+				parts := strings.Split(shortName, " ")
+				shortName = parts[len(parts)-1]
+				if shortName != "" && shortName != n {
+					methodSymByKey[methodKey(fqcn, shortName)] = msym
+				}
 			}
 
 			// Fill functionInfo
@@ -900,12 +912,23 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				}
 			}
 			c.funcs[msym] = finfo
+			methodSyms = append(methodSyms, methodAndSym{m: m, msym: msym})
+		}
 
-			// Method calls
+		// 5) Process method calls (Pass 2)
+		for _, pair := range methodSyms {
+			m := pair.m
+			msym := pair.msym
+
 			for _, call := range m.MethodCalls {
-				if call == nil || call.CalleeClass == "" {
+				if call == nil {
 					continue
 				}
+
+				if call.CalleeClass == "" {
+					continue
+				}
+
 				calleeInfo := resolveClass(call.CalleeClass)
 				if calleeInfo == nil {
 					// drop if callee class can't be resolved
@@ -924,6 +947,16 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				if call.CalleeMethod != "" {
 					if s, ok := methodSymByKey[methodKey(call.CalleeClass, call.CalleeMethod)]; ok {
 						calleeMethodSym = s
+					} else {
+						shortName := call.CalleeMethod
+						if idx := strings.IndexByte(shortName, '('); idx >= 0 {
+							shortName = shortName[:idx]
+						}
+						parts := strings.Split(shortName, " ")
+						shortName = parts[len(parts)-1]
+						if s, ok := methodSymByKey[methodKey(call.CalleeClass, shortName)]; ok {
+							calleeMethodSym = s
+						}
 					}
 				}
 				if calleeMethodSym == nil {
@@ -931,15 +964,11 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 					// IMPORTANT: do NOT put it into c.syms to avoid clobbering class symbols.
 					stubLoc := Location{URI: calleeClassSym.Location.URI, Range: Range{Start: calleeClassSym.Location.Range.Start, End: calleeClassSym.Location.Range.Start}}
 					calleeMethodSym = &DocumentSymbol{
-						Name:     call.CalleeMethod,
+						Name:     calleeClassSym.Name + "." + call.CalleeMethod,
 						Kind:     SKMethod,
 						Text:     "",
 						Location: stubLoc,
 						Role:     DEFINITION,
-					}
-
-					if _, ok := localByName[call.CalleeClass]; !ok {
-						calleeMethodSym.Name = call.CalleeClass + "." + call.CalleeMethod
 					}
 				}
 

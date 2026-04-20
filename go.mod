@@ -23,6 +23,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/vifraa/gopom v1.0.0
 	golang.org/x/mod v0.24.0
+	golang.org/x/sync v0.13.0
 	golang.org/x/tools v0.32.0
 )
 
@@ -91,7 +92,6 @@ require (
 	golang.org/x/arch v0.14.0 // indirect
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
