@@ -29,6 +29,13 @@ type Options struct {
 	BuildFlags     []string
 }
 
+// DefaultOptions returns default parsing options
+func DefaultOptions() Options {
+	return Options{
+		ReferCodeDepth: 1, // Enable external dependency parsing by default
+	}
+}
+
 // type Option func(options *Options)
 
 // func WithReferCodeDepth(depth int) Option {

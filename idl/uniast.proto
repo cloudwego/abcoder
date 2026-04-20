@@ -1,0 +1,270 @@
+// uniast.proto - UniAST Universal AST Schema
+// This file defines the unified AST format for multiple languages
+// Currently used by: Go Parser, Rust Parser (via rust-analyzer)
+
+syntax = "proto3";
+
+package uniast;
+
+option go_package = "github.com/cloudwego/abcoder/lang/uniast";
+
+// ============ Core Types ============
+// Language is a simple string: "go", "rust", "cxx", "python", "typescript", "java", "kotlin"
+
+// ============ Identity System ============
+
+// Identity uniquely identifies a node in the AST
+// Format: {ModPath}?{PkgPath}#{Name}
+// Example: "github.com/user/repo?path/to/pkg#FunctionName"
+message Identity {
+  string mod_path = 1;  // module id, unique within a repo
+  string pkg_path = 2;  // path id, unique within a module
+  string name = 3;      // symbol id, unique within a package
+}
+
+// FileLine represents a filename and line number
+message FileLine {
+  string file = 1;      // file path relative to repo root
+  int32 line = 2;       // start line number (1-based)
+  int32 end_line = 5;   // end line number (1-based) [新增]
+  int32 start_offset = 3; // start byte offset in file
+  int32 end_offset = 4;   // end byte offset in file
+}
+
+// ============ Relation System ============
+
+// RelationKind represents the type of relationship between nodes
+// Using string for JSON compatibility: "Dependency", "Implement", "Inherit", "Group"
+message RelationKind {
+  string value = 1;
+}
+
+// Relation represents a relationship between two nodes
+message Relation {
+  string kind = 1;              // kind of relation as string: "Dependency", "Implement", "Inherit", "Group"
+  // Flat identity fields (for JSON compatibility with Go implementation)
+  // NOTE: Use uppercase first char so serde(camelCase) produces PascalCase
+  string ModPath = 6;
+  string PkgPath = 7;
+  string Name = 8;
+  int32 line = 3;               // start line-offset relative to current node's codes
+  string desc = 4;              // information about this relation
+  string codes = 5;             // related codes representing this relation
+}
+
+// ============ Repository ============
+
+// Repository represents a parsed codebase
+message Repository {
+  string id = 1;           // repository name
+  string ast_version = 2;   // uniast version
+  string tool_version = 3;  // abcoder version
+  string path = 4;          // repo absolute path
+  RepoVersion repo_version = 5;  // repository version info
+  map<string, Module> modules = 6;  // module name => module
+  map<string, Node> graph = 7;  // node id => node
+
+  // [新增] name → files 反向索引
+  // 加速 search_symbol API，无需独立 .idx 文件
+  // 从 File.function_names/type_names/var_names 推导，不冗余
+  map<string, NameLocations> name_to_locations = 8;
+}
+
+// NameLocations represents all locations of a symbol name
+// [新增] 用于反向索引 name → files
+message NameLocations {
+  repeated string files = 1;  // 包含该 name 的文件列表（去重）
+}
+
+// Repository version info
+// NOTE: Proto3 JSON conversion uses camelCase by default
+// So commit_hash -> CommitHash, parse_time -> ParseTime
+message RepoVersion {
+  string commit_hash = 1;  // Git commit hash (JSON: CommitHash)
+  string parse_time = 2;  // Parse timestamp RFC3339 (JSON: ParseTime)
+}
+
+// ============ Module ============
+
+// Module represents a single module/package (e.g., Go module, Rust crate)
+message Module {
+  string language = 1;       // language: "go", "rust", "cxx", "python", "typescript", "java", "kotlin"
+  string version = 2;        // module version (e.g., "1.0.0")
+  string name = 3;          // module name
+  string dir = 4;          // relative path to repo root
+  map<string, Package> packages = 5;  // package import path => package
+  map<string, string> dependencies = 6;  // module name => module_path@version
+  map<string, File> files = 7;           // relative path => file info
+  repeated string load_errors = 8;        // loading errors
+  string compress_data = 9;              // module compress info
+}
+
+// Node represents a symbol node in the graph
+// NOTE: For JSON compatibility with Go implementation, use flat format:
+//   - mod_path, pkg_path, name (扁平 Identity)
+//   - type (string: "FUNC", "TYPE", "VAR")
+//   - dependencies, references, implements, inherits, groups (relations)
+message Node {
+  // Flat identity fields (matching Go's embedded Identity)
+  string mod_path = 1;
+  string pkg_path = 2;
+  string name = 3;
+
+  // Node type as string: "FUNC", "TYPE", "VAR"
+  string type = 4;
+
+  // Unified relation fields
+  repeated Relation dependencies = 10;
+  repeated Relation references = 11;
+  repeated Relation implements = 12;
+  repeated Relation inherits = 13;
+  repeated Relation groups = 14;
+
+}
+
+// ============ Package ============
+
+message Package {
+  bool is_main = 1;
+  bool is_test = 2;
+  string pkg_path = 3;  // package import path
+  map<string, Function> functions = 4;  // function name => function
+  map<string, Type> types = 5;          // type name => type
+  map<string, Var> vars = 6;            // var name => var
+  string compress_data = 7;              // package compress info
+}
+
+// ============ File ============
+
+// File represents a source file
+// Lightweight index: only stores names, full data in Package/Graph
+message File {
+  string path = 1;           // relative path to repo root
+  repeated Import imports = 2;  // import statements
+
+  // Identity fields (matching Module/Package hierarchy)
+  string mod_path = 3;       // module path
+  string pkg_path = 4;       // package path
+
+  // Lightweight symbol name index (reference only, full data in Package)
+  // [新增] Accelerates get_file_structure API
+  repeated string function_names = 5;
+  repeated string type_names = 6;
+  repeated string var_names = 7;
+}
+
+// Import represents an import/use statement
+message Import {
+  string alias = 1;   // optional alias
+  string path = 2;    // raw import path
+}
+
+// ============ Function ============
+
+// Function represents a function or method
+// NOTE: Using flat fields for JSON compatibility with Go implementation
+message Function {
+  bool exported = 1;           // if the function is exported
+  bool is_method = 2;          // if it's a method (has receiver)
+  bool is_interface_method = 3; // if it's an interface method stub
+
+  // Flat identity fields (matching Go's embedded Identity)
+  string mod_path = 4;
+  string pkg_path = 5;
+  string name = 6;
+
+  // Flat FileLine fields
+  string file = 7;
+  int32 line = 8;
+
+  string content = 9;           // full function source code
+  string signature = 10;        // function signature
+
+  Receiver receiver = 11;        // method receiver (if is_method)
+  repeated Relation params = 12;   // function parameters
+  repeated Relation results = 13; // function return values
+}
+
+// Receiver represents a method receiver
+message Receiver {
+  bool is_pointer = 1;
+  Identity type = 2;  // receiver type identity
+}
+
+// ============ Type ============
+
+// Type represents a struct, enum, trait, or interface
+message Type {
+  bool exported = 1;         // if the type is exported
+  TypeKind type_kind = 2;    // struct, interface, enum, typedef
+  Identity identity = 3;      // unique identity
+  FileLine file_line = 4;    // location in source
+  string content = 5;        // type declaration source
+
+  // For struct: field types
+  repeated Relation sub_struct = 6;      // field types
+  repeated Relation inline_struct = 7;   // inherited/anonymous fields
+
+  // Methods defined on this type
+  map<string, Identity> methods = 8;
+
+  // Legacy: use implements relation instead
+  // repeated Identity implements = 9;
+
+  // LLM compress result
+  string compress_data = 10;
+}
+
+// TypeKind represents the kind of type
+enum TypeKind {
+  STRUCT = 0;
+  INTERFACE = 1;
+  TYPEDEF = 2;
+  ENUM = 3;
+}
+
+// ============ Variable ============
+
+// Var represents a variable or constant
+message Var {
+  bool exported = 1;        // if the variable is exported
+  bool is_const = 2;         // if it's a constant
+  bool is_pointer = 3;       // if the type is a pointer
+  Identity identity = 4;     // unique identity
+  FileLine file_line = 5;    // location in source
+  Identity type = 6;         // type of the variable
+  string content = 7;        // variable declaration source
+
+  // Legacy: use relations instead
+  // repeated Dependency dependencies = 8;
+
+  // For enum variants or grouped constants
+  repeated Identity groups = 9;
+
+  // LLM compress result
+  string compress_data = 10;
+}
+
+// ============ Rust-Specific Extensions ============
+
+// Rust only: Trait represents a Rust trait
+message Trait {
+  Type base = 1;  // embed Type
+  repeated Identity super_traits = 2;  // supertraits
+  map<string, Identity> associated_items = 3;  // associated items
+}
+
+// Rust only: Impl represents an impl block
+message Impl {
+  bool is_trait_impl = 1;       // if it's a trait impl
+  Identity trait = 2;            // trait being implemented (if any)
+  Identity self_type = 3;        // self type
+  repeated Identity items = 4;   // items in the impl block
+}
+
+// Rust only: Macro represents a macro definition
+message Macro {
+  Identity identity = 1;
+  FileLine file_line = 2;
+  string body = 3;  // macro body
+}

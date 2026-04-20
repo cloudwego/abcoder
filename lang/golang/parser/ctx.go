@@ -106,7 +106,7 @@ func (p *GoParser) referCodes(ctx *fileContext, id *Identity, depth int) (err er
 			continue
 		}
 		// println("search file", fpath)
-		_, e = p.searchOnFile(file, pkg.Fset, bs, id.ModPath, pkg.ID, impts, id.Name)
+		_, e = p.searchOnFile(file, pkg.Fset, bs, id.ModPath, pkg.ID, impts, id.Name, pkg.Dir)
 		if e != nil {
 			err = e
 			continue

@@ -1,0 +1,52 @@
+// get_file_structure IDL
+
+syntax = "proto3";
+
+package abcoder;
+
+// Request
+message GetFileStructReq {
+    string repo_name = 1;  // the name of the repository (output of list_repos tool)
+    string file_path = 2; // relative file path (output of get_repo_structure tool, e.g., 'src/main.go')
+}
+
+// Response
+message GetFileStructResp {
+    FileStruct file_struct = 1;
+    string error = 2; // optional
+}
+
+message FileStruct {
+    string file_path = 1;            // the path of the file
+    string mod_path = 2;             // optional, the module path
+    string pkg_path = 3;             // optional, the package path
+    repeated Import imports = 4;     // optional, the imports of the file
+    repeated NodeStruct nodes = 5;    // optional, the node structs of the file
+}
+
+message Import {
+    string path = 1;     // import path
+    string alias = 2;    // optional, import alias
+}
+
+message NodeStruct {
+    string mod_path = 1;      // optional, the module path
+    string pkg_path = 2;      // optional, the package path
+    string name = 3;          // the name of the node
+    string type = 4;          // optional, the type of the node
+    string signature = 5;     // optional, the func signature of the node (omitted when nodes > 500)
+    string file = 6;          // optional, the file path of the node
+    int32 line = 7;           // optional, the line of the node
+    string codes = 8;         // optional, the codes of the node
+    repeated NodeID dependencies = 9;  // optional, the dependencies of the node
+    repeated NodeID references = 10;  // optional, the references of the node
+    repeated NodeID implements = 11;  // optional, the implements of the node
+    repeated NodeID groups = 12;     // optional, the groups of the node
+    repeated NodeID inherits = 13;    // optional, the inherits of the node
+}
+
+message NodeID {
+    string mod_path = 1; // module path of the node (from get_repo_structure)
+    string pkg_path = 2; // package path of the node (from get_repo_structure)
+    string name = 3;     // name of the node (from get_package_structure or get_file_structure)
+}
