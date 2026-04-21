@@ -82,13 +82,14 @@ jobs:
         run: |
           # HACK: auto installation uses the published version, not our local version
           (cd ./main_repo/ts-parser && npm install && npm run build && npm install -g .)
-          OUTDIR=out_old ABCEXE=./abcoder_old ./main_repo/script/run_testdata.sh first
+          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh first
           # avoid wasting time install a new jdtls
           echo "JDTLS_ROOT_PATH=$(realpath ./main_repo/lang/java/lsp/jdtls/jdt-language-server-*)" >> $GITHUB_ENV
 
       - name: Run OLD abcoder
         run:
-          OUTDIR=out_old ABCEXE=./abcoder_old ./main_repo/script/run_testdata.sh all
+          # we run the old abcoder on the new data to compare the outputs
+          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
 
       - name: Reset dependencies
         run: |

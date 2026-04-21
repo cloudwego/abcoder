@@ -61,3 +61,11 @@ const G1 = 1
 type Integer int
 
 var V1 = Integer(1)
+
+func (a *MyStruct) Return0() *MyStruct {
+	return a
+}
+
+func (a *MyStruct) Return4() string {
+	return a.Return0().DFunction()
+}
