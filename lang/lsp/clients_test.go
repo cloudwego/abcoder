@@ -63,7 +63,9 @@ func TestGolangLSP(t *testing.T) {
 
 	uri := NewURI(goTestCase + "/pkg/entity/entity.go")
 	// documentSymbol
-	expectedSymNames := `(MyStruct).String
+	expectedSymNames := `(*MyStruct).Return0
+(*MyStruct).Return4
+(MyStruct).String
 (MyStructC).String
 (MyStructD).DFunction
 (MyStructD).String

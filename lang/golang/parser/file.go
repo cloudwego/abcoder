@@ -354,21 +354,6 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 	} else if sel, ok := expr.X.(*ast.SelectorExpr); ok {
 		// recurse call
 		cont = p.parseSelector(ctx, sel, infos)
-	} else {
-		// try to get type info of field first
-		if ti := ctx.GetTypeInfo(expr); ti.Ty != nil {
-			if _, ok := ti.Ty.(*types.Signature); ok {
-				// collect method call
-				// method call
-				rev := ctx.GetTypeInfo(expr.X)
-				if !rev.IsStdOrBuiltin {
-					id := NewIdentity(rev.Id.ModPath, rev.Id.PkgPath, rev.Id.Name+"."+expr.Sel.Name)
-					dep := NewDependency(id, ctx.FileLine(expr.Sel))
-					infos.methodCalls = InsertDependency(infos.methodCalls, dep)
-				}
-			}
-		}
-		return true
 	}
 
 	// method calls
@@ -400,7 +385,9 @@ func (p *GoParser) parseSelector(ctx *fileContext, expr *ast.SelectorExpr, infos
 			}
 			infos.methodCalls = InsertDependency(infos.methodCalls, dep)
 		}
-		return false
+
+		// 此处应该是 true，用于处理 chained method call，让 visit 可以继续处理
+		return true
 	}
 
 	return cont
