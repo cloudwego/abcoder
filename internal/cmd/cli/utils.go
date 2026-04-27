@@ -117,8 +117,21 @@ func pathMatchesCwd(astsDir, filename, cwd string) bool {
 	if err != nil {
 		return false
 	}
-	// 前缀匹配：cwd 以 path 开头
 	return strings.HasPrefix(cwd, path)
+}
+
+func findRepoFileByCwd(astsDir, cwd string) string {
+	files, _ := filepath.Glob(filepath.Join(astsDir, "*.json"))
+	for _, f := range files {
+		base := filepath.Base(f)
+		if strings.HasSuffix(base, "_repo_index.json") || strings.HasSuffix(base, ".repo_index.json") {
+			continue
+		}
+		if pathMatchesCwd(astsDir, base, cwd) {
+			return f
+		}
+	}
+	return ""
 }
 
 // loadRepoFileData 读取整个 repo JSON 文件，返回 raw data 供后续 sonic.Get 按需读取
