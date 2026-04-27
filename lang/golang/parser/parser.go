@@ -212,16 +212,9 @@ func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs
 	cmd.Env = append(os.Environ(), "GONOSUMDB=*", "GOTOOLCHAIN=local")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to execute 'go mod tidy', err: %v, output: %s, remove go.sum file reexecute\n", err, string(output))
-		os.Remove(filepath.Join(dir, "go.sum"))
-		cmd = exec.Command("go", "mod", "tidy", "-e")
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GOSUMDB=off", "GOTOOLCHAIN=local")
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			return nil, cgoPkgs, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
-		}
+		return nil, cgoPkgs, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
 	}
+
 	if hasNoDeps(filepath.Join(dir, "go.mod")) {
 		return map[string]string{}, cgoPkgs, nil
 	}
