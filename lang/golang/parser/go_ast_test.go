@@ -308,7 +308,10 @@ func TestCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser("a.b/c", "../../../testdata", Options{})
+			p, err := newGoParser("a.b/c", "../../../testdata", Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if tt.refered != nil {
 				p.opts.ReferCodeDepth = 1
 			}

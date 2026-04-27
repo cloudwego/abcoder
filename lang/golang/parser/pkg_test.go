@@ -53,10 +53,13 @@ func Test_goParser_ParseRepo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to clone repo %s", err)
 			}
-			p := newGoParser(tt.fields.modName, repoDir, Options{
+			p, err := newGoParser(tt.fields.modName, repoDir, Options{
 				ReferCodeDepth: 1,
 				NeedTest:       true,
 			})
+			if err != nil {
+				t.Fatalf("failed to init parser %s", err)
+			}
 			r, err := p.ParseRepo()
 			if err != nil {
 				t.Fatalf("failed to parse repo %s", err)
@@ -97,8 +100,11 @@ func Test_goParser_ParseDirs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newGoParser(tt.args.modName, tt.args.homePageDir, tt.args.opts)
-			_, err := p.ParseRepo()
+			p, err := newGoParser(tt.args.modName, tt.args.homePageDir, tt.args.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = p.ParseRepo()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("goParser.ParseDirs() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -173,7 +179,10 @@ func Test_goParser_ParseNode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(tt.fields.modName, tt.fields.homePageDir, Options{})
+			p, err := NewParser(tt.fields.modName, tt.fields.homePageDir, Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
 			got, err := p.ParseNode(tt.args.pkgPath, tt.args.name)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("goParser.ParseNode() error = %v, wantErr %v", err, tt.wantErr)

@@ -216,7 +216,10 @@ func callGoParser(ctx context.Context, repoPath string, opts collect.CollectOpti
 	}
 	goopts.Excludes = opts.Excludes
 	goopts.BuildFlags = opts.BuildFlags
-	p := parser.NewParser(repoPath, repoPath, goopts)
+	p, err := parser.NewParser(repoPath, repoPath, goopts)
+	if err != nil {
+		return nil, err
+	}
 	repo, err := p.ParseRepo()
 	if err != nil {
 		return nil, err

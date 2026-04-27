@@ -65,15 +65,15 @@ func newModuleInfo(name string, dir string, path string) moduleInfo {
 	}
 }
 
-func NewParser(name string, homePageDir string, o Options) *GoParser {
+func NewParser(name string, homePageDir string, o Options) (*GoParser, error) {
 	return newGoParser(name, homePageDir, o)
 }
 
 // newGoParser
-func newGoParser(name string, homePageDir string, opts Options) *GoParser {
+func newGoParser(name string, homePageDir string, opts Options) (*GoParser, error) {
 	abs, err := filepath.Abs(homePageDir)
 	if err != nil {
-		panic(fmt.Sprintf("cannot get absolute path form homePageDir:%v", err))
+		return nil, fmt.Errorf("cannot get absolute path form homePageDir: %w", err)
 	}
 
 	p := &GoParser{
@@ -90,11 +90,11 @@ func newGoParser(name string, homePageDir string, opts Options) *GoParser {
 	}
 
 	if err := p.collectGoMods(p.homePageDir); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	p.opts = opts
-	return p
+	return p, nil
 }
 
 func (p *GoParser) collectGoMods(startDir string) error {
@@ -209,7 +209,7 @@ func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs
 
 	cmd := exec.Command("go", "mod", "tidy", "-e")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GONOSUMDB=*", "GOTOOLCHAIN=local")
+	cmd.Env = append(os.Environ(), "GONOSUMDB=*", "GOTOOLCHAIN=auto")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, cgoPkgs, fmt.Errorf("failed to execute 'go mod tidy', err: %v, output: %s", err, string(output))
@@ -297,7 +297,7 @@ func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 	// run go mod tidy before parse
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=auto")
 	buf := bytes.NewBuffer(nil)
 	cmd.Stderr = buf
 	cmd.Stdout = buf
