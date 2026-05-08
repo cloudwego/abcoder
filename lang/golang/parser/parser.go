@@ -148,7 +148,7 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 
-		deps, cgoPkgs, err = getDeps(filepath.Dir(path), p.workDirs)
+		deps, cgoPkgs, err = getDeps(filepath.Dir(path), p.homePageDir, p.workDirs)
 		if err != nil {
 			return err
 		}
@@ -192,7 +192,7 @@ type dep struct {
 	CgoFiles []string `json:"CgoFiles"`
 }
 
-func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs map[string]bool, err error) {
+func getDeps(dir string, homePageDir string, workDirs map[string]bool) (a map[string]string, cgoPkgs map[string]bool, err error) {
 	cgoPkgs = make(map[string]bool)
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -268,9 +268,20 @@ func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs
 			if strings.HasPrefix(module.Replace.Path, "./") ||
 				strings.HasPrefix(module.Replace.Path, "../") ||
 				strings.HasPrefix(module.Replace.Path, "/") {
-				// local replace
-				deps[module.Path] = module.Path
+				// local replace: only treat as a parseable module when the
+				// target lives inside the repo root. Out-of-repo replace
+				// targets cannot be walked by collectGoMods, so skip them
+				// here to avoid downstream nil-module lookups.
+				replaceAbs := module.Replace.Path
+				if !filepath.IsAbs(replaceAbs) {
+					replaceAbs = filepath.Join(dir, replaceAbs)
+				}
+				replaceAbs = filepath.Clean(replaceAbs)
 
+				rel, relErr := filepath.Rel(homePageDir, replaceAbs)
+				if relErr == nil && !strings.HasPrefix(rel, "..") {
+					deps[module.Path] = module.Path
+				}
 			} else {
 				deps[module.Path] = module.Replace.Path + "@" + module.Replace.Version
 			}
@@ -294,10 +305,12 @@ func getDeps(dir string, workDirs map[string]bool) (a map[string]string, cgoPkgs
 // ParseRepo parse the entiry repo from homePageDir recursively until end
 func (p *GoParser) ParseRepo() (Repository, error) {
 	for _, lib := range p.modules {
-		if strings.Contains(lib.path, "@") {
+		mod := p.repo.Modules[lib.name]
+		if mod == nil {
+			// Not a module of this repo (external dep, or out-of-repo
+			// local replace target). Skip parsing.
 			continue
 		}
-		mod := p.repo.Modules[lib.name]
 		if err := p.ParseModule(mod, filepath.Join(p.homePageDir, mod.Dir)); err != nil {
 			return p.getRepo(), err
 		}
