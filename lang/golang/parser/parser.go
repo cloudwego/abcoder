@@ -305,10 +305,13 @@ func getDeps(dir string, homePageDir string, workDirs map[string]bool) (a map[st
 // ParseRepo parse the entiry repo from homePageDir recursively until end
 func (p *GoParser) ParseRepo() (Repository, error) {
 	for _, lib := range p.modules {
+		if strings.Contains(lib.path, "@") {
+			continue
+		}
 		mod := p.repo.Modules[lib.name]
 		if mod == nil {
-			// Not a module of this repo (external dep, or out-of-repo
-			// local replace target). Skip parsing.
+			// Out-of-repo local replace target — collectGoMods didn't
+			// register it; skip to avoid nil deref.
 			continue
 		}
 		if err := p.ParseModule(mod, filepath.Join(p.homePageDir, mod.Dir)); err != nil {
