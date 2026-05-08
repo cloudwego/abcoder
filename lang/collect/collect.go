@@ -2530,7 +2530,13 @@ func buildJavaMethodID(m *javapb.MethodDetail) string {
 	if m == nil {
 		return ""
 	}
-	name := m.GetName()
+	name := strings.TrimSpace(m.GetName())
+	// GetName() may still contain modifiers + return type when the JAR's
+	// Descriptor uses the long form (e.g. "abstract void foo"). Take the last
+	// token after any space.
+	if sp := strings.LastIndexByte(name, ' '); sp >= 0 {
+		name = name[sp+1:]
+	}
 	if name == "" {
 		return ""
 	}
@@ -2547,6 +2553,9 @@ func buildJavaMethodID(m *javapb.MethodDetail) string {
 			continue
 		}
 		types = append(types, t)
+	}
+	if len(types) == 0 {
+		return name
 	}
 	return name + "(" + strings.Join(types, ",") + ")"
 }
