@@ -432,7 +432,7 @@ Represents a dependency relationship, containing the dependent node Id, dependen
 - Extra: Additional information for storing language-specific details or extra metadata
 
 
-    - IsInvoked: For function/method dependencies, whether it is invoked or just referenced (not executed).
+    - IsInvoked: For function/method dependencies, or for GlobalVars dependencies whose target is a func-typed global variable, whether it is invoked or just referenced (not executed). For example, given `var Foo = func() {...}`, if another function body contains `Foo()`, the corresponding dependency in that function's `GlobalVars` is marked `IsInvoked: true`; a plain reference such as `_ = Foo` is not marked.
 
 
 ##### Type

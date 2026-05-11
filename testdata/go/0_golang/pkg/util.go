@@ -125,6 +125,13 @@ func Case_Func_Global() {
 	_ = entity.V1
 }
 
+// Case_Invoke_GlobalFuncVar directly invokes a global var that holds a func value.
+// Used to verify that the GlobalVars dependency for Var6 is marked IsInvoked=true,
+// while a pure reference (e.g. in Case_Func_Global) is not.
+func Case_Invoke_GlobalFuncVar() {
+	Var6()
+}
+
 // Type is Result type
 type Type int
 
