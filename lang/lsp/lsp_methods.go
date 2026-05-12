@@ -310,9 +310,18 @@ func (cli *LSPClient) Locate(id Location) (string, error) {
 	}
 
 	text := f.Text
-	// get block text of range
+	// LSP servers (e.g. jedi/parso on partially-supported syntax) occasionally return
+	// malformed ranges where Start > End or the offsets fall outside the document.
+	// Return an error rather than panicking.
+	if id.Range.Start.Line < 0 || id.Range.End.Line < 0 ||
+		id.Range.Start.Line >= len(f.LineCounts) || id.Range.End.Line >= len(f.LineCounts) {
+		return "", fmt.Errorf("locate: line out of range %v in %s", id.Range, id.URI)
+	}
 	start := f.LineCounts[id.Range.Start.Line] + id.Range.Start.Character
 	end := f.LineCounts[id.Range.End.Line] + id.Range.End.Character
+	if start < 0 || end < 0 || start > end || end > len(text) {
+		return "", fmt.Errorf("locate: invalid range [%d:%d] (text len %d) in %s", start, end, len(text), id.URI)
+	}
 	return text[start:end], nil
 }
 
