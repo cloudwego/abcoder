@@ -114,6 +114,50 @@ func Test_goParser_ParseDirs(t *testing.T) {
 	}
 }
 
+func Test_goParser_GlobalFuncVar_IsInvoked(t *testing.T) {
+	p := newGoParser("a.b/c", testutils.FirstTest("go"), Options{LoadByPackages: true})
+	pkgPath := "a.b/c/pkg"
+	if err := p.parsePackage(pkgPath); err != nil {
+		t.Fatalf("parsePackage failed: %v", err)
+	}
+	var6 := NewIdentity("a.b/c", pkgPath, "Var6")
+
+	// Case_Invoke_GlobalFuncVar() directly calls Var6() -> IsInvoked must be true.
+	invokeFn := p.repo.GetFunction(NewIdentity("a.b/c", pkgPath, "Case_Invoke_GlobalFuncVar"))
+	if invokeFn == nil {
+		t.Fatalf("function Case_Invoke_GlobalFuncVar not found")
+	}
+	dep := findDep(invokeFn.GlobalVars, var6)
+	if dep == nil {
+		t.Fatalf("Var6 not found in GlobalVars of Case_Invoke_GlobalFuncVar")
+	}
+	if v, _ := dep.GetExtra(ExtraKey_IsInvoked).(bool); !v {
+		t.Fatalf("expected Var6 to be marked IsInvoked=true in Case_Invoke_GlobalFuncVar, got Extra=%+v", dep.Extra)
+	}
+
+	// Case_Func_Global() only references Var6 (no call) -> IsInvoked must be unset.
+	refFn := p.repo.GetFunction(NewIdentity("a.b/c", pkgPath, "Case_Func_Global"))
+	if refFn == nil {
+		t.Fatalf("function Case_Func_Global not found")
+	}
+	dep = findDep(refFn.GlobalVars, var6)
+	if dep == nil {
+		t.Fatalf("Var6 not found in GlobalVars of Case_Func_Global")
+	}
+	if v, _ := dep.GetExtra(ExtraKey_IsInvoked).(bool); v {
+		t.Fatalf("expected Var6 to NOT be marked IsInvoked in Case_Func_Global")
+	}
+}
+
+func findDep(deps []Dependency, id Identity) *Dependency {
+	for i := range deps {
+		if deps[i].Identity == id {
+			return &deps[i]
+		}
+	}
+	return nil
+}
+
 func TestGoAst(t *testing.T) {
 	src := `
 package parse

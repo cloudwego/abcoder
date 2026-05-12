@@ -584,6 +584,11 @@ set_func:
 				f.MethodCalls[i].SetExtra(ExtraKey_IsInvoked, true)
 			}
 		}
+		for i, dep := range f.GlobalVars {
+			if collects.directCalls[dep.FileLine] {
+				f.GlobalVars[i].SetExtra(ExtraKey_IsInvoked, true)
+			}
+		}
 	}
 	if len(collects.anonymousFunctions) > 0 {
 		f.SetExtra(ExtraKey_AnonymousFunctions, collects.anonymousFunctions)
