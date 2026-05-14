@@ -15,6 +15,7 @@
 package uniast
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -256,6 +257,31 @@ func (r *Repository) BuildGraph() error {
 				}
 			}
 		}
+	}
+
+	// Canonicalize relation slice order. AddRelation is fed from map
+	// iterations, so insertion order varies between runs.
+	sortRelations := func(rs []Relation) {
+		if len(rs) < 2 {
+			return
+		}
+		sort.Slice(rs, func(i, j int) bool {
+			a, b := rs[i].Identity.Full(), rs[j].Identity.Full()
+			if a != b {
+				return a < b
+			}
+			if rs[i].Line != rs[j].Line {
+				return rs[i].Line < rs[j].Line
+			}
+			return rs[i].Kind < rs[j].Kind
+		})
+	}
+	for _, node := range r.Graph {
+		sortRelations(node.Dependencies)
+		sortRelations(node.References)
+		sortRelations(node.Implements)
+		sortRelations(node.Inherits)
+		sortRelations(node.Groups)
 	}
 	return nil
 }

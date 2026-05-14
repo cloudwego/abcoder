@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     #if: "!contains(github.event.pull_request.title, '[NO-REGRESSION-TEST]')"
     env:
-      LANGS: "go rust python typescript cxx cpp"
+      LANGS: "go rust python typescript cxx cpp java"
       # ignore package version for Go e.g. 'a.b/c@506fb8ece467f3a71c29322169bef9b0bc92d554'
       DIFFJSON_IGNORE: >
         ['id']
@@ -82,14 +82,16 @@ jobs:
         run: |
           # HACK: auto installation uses the published version, not our local version
           (cd ./main_repo/ts-parser && npm install && npm run build && npm install -g .)
-          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh first
+          JAVA_PARSER_JAR_PATH=$(realpath ./main_repo/lang/java/ipc/abcoder-java-analyzer-1.0-SNAPSHOT.jar) \
+            OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh first
           # avoid wasting time install a new jdtls
           echo "JDTLS_ROOT_PATH=$(realpath ./main_repo/lang/java/lsp/jdtls/jdt-language-server-*)" >> $GITHUB_ENV
 
       - name: Run OLD abcoder
-        run:
+        run: |
           # we run the old abcoder on the new data to compare the outputs
-          OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
+          JAVA_PARSER_JAR_PATH=$(realpath ./main_repo/lang/java/ipc/abcoder-java-analyzer-1.0-SNAPSHOT.jar) \
+            OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
 
       - name: Reset dependencies
         run: |
@@ -98,11 +100,13 @@ jobs:
       - name: Install dependencies for new
         run: |
           (cd ./pr_repo/ts-parser && npm install && npm run build && npm install -g .)
-          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
+          JAVA_PARSER_JAR_PATH=$(realpath ./pr_repo/lang/java/ipc/abcoder-java-analyzer-1.0-SNAPSHOT.jar) \
+            OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
 
       - name: Run NEW abcoder
-        run:
-          OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
+        run: |
+          JAVA_PARSER_JAR_PATH=$(realpath ./pr_repo/lang/java/ipc/abcoder-java-analyzer-1.0-SNAPSHOT.jar) \
+            OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
 
       - name: Upload output directories
         uses: actions/upload-artifact@v4
