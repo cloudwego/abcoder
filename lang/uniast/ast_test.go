@@ -43,6 +43,36 @@ func TestRepository_BuildGraph(t *testing.T) {
 	}
 }
 
+// TestRepository_BuildGraph_Deterministic ensures BuildGraph yields a byte-stable
+// JSON repeatedly. Relation slices (References, Dependencies, etc.) are filled
+// via map iteration, so without an explicit canonical sort each run produced a
+// different order and downstream diffs lit up spurious changes.
+func TestRepository_BuildGraph_Deterministic(t *testing.T) {
+	astFile := testutils.GetTestAstFile("localsession")
+
+	var prev []byte
+	for i := 0; i < 5; i++ {
+		r, err := LoadRepo(astFile)
+		if err != nil {
+			t.Fatalf("iter %d: load repo: %v", i, err)
+		}
+		if err := r.BuildGraph(); err != nil {
+			t.Fatalf("iter %d: build graph: %v", i, err)
+		}
+		js, err := json.Marshal(r)
+		if err != nil {
+			t.Fatalf("iter %d: marshal: %v", i, err)
+		}
+		if i == 0 {
+			prev = js
+			continue
+		}
+		if string(prev) != string(js) {
+			t.Fatalf("iter %d: BuildGraph output is not byte-stable across runs (len %d vs %d)", i, len(prev), len(js))
+		}
+	}
+}
+
 func BenchmarkRepository_BuildGraph(b *testing.B) {
 	astFile := testutils.GetTestAstFile("large_ast")
 	r, err := LoadRepo(astFile)

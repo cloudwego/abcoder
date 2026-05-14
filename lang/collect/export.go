@@ -354,6 +354,27 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 
 	tmp := uniast.NewIdentity(mod, path, name)
 	id = &tmp
+
+	// Eagerly prefix Identity.Name for methods so a cyclic visit
+	// (receiver Type -> receivers map -> back to this method via the
+	// visited cache) reads the final name, not the bare one. Without
+	// this, Type.Methods[k] = *mid value-copies a partially-built id
+	// non-deterministically. Cpp finalizes name in the SKMethod branch
+	// because it needs extractCppCallSig + namespace munging.
+	if c.Language != uniast.Cpp && (symbol.Kind == SKMethod || symbol.Kind == SKFunction) {
+		if mi := c.funcs[symbol].Method; mi != nil && mi.Receiver.Symbol != nil {
+			recvName := mi.Receiver.Symbol.Name
+			if mi.Interface != nil && mi.Interface.Symbol != nil {
+				recvName = mi.Interface.Symbol.Name + "<" + recvName + ">"
+			}
+			sep := "."
+			if symbol.Kind == SKFunction {
+				sep = "::"
+			}
+			id.Name = recvName + sep + name
+		}
+	}
+
 	// Save to visited ONLY WHEN no errors occur
 	visited[symbol] = id
 
