@@ -67,6 +67,11 @@ type Collector struct {
 	// 	symbol => [deps]
 	deps map[*DocumentSymbol][]dependency
 
+	// type symbol => list of interfaces it implements.
+	// Populated alongside c.deps but kept separately so Export can emit
+	// Type.Implements distinct from the generic SubStruct dependency list.
+	implementsRel map[*DocumentSymbol][]dependency
+
 	// variable (or const) => type
 	vars map[*DocumentSymbol]dependency
 
@@ -99,6 +104,19 @@ type Collector struct {
 // When enabled, Java Collect will not rely on LSP (no Definition/SemanticTokens).
 func (c *Collector) UseJavaIPC(conv *javaipc.Converter) {
 	c.javaIPC = conv
+}
+
+// addImplementsRel records that `from` implements `iface`. Idempotent on (from, iface).
+func (c *Collector) addImplementsRel(from *DocumentSymbol, iface *DocumentSymbol, tokenLoc Location) {
+	if from == nil || iface == nil {
+		return
+	}
+	for _, existing := range c.implementsRel[from] {
+		if existing.Symbol == iface {
+			return
+		}
+	}
+	c.implementsRel[from] = append(c.implementsRel[from], dependency{Location: tokenLoc, Symbol: iface})
 }
 
 type methodInfo struct {
@@ -143,6 +161,7 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 		syms:             map[Location]*DocumentSymbol{},
 		funcs:            map[*DocumentSymbol]functionInfo{},
 		deps:             map[*DocumentSymbol][]dependency{},
+		implementsRel:    map[*DocumentSymbol][]dependency{},
 		vars:             map[*DocumentSymbol]dependency{},
 		files:            map[string]*uniast.File{},
 		fileContentCache: make(map[string]string),
@@ -760,6 +779,7 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 				}
 				tokLoc := locFromPos(fileAbs, impl.StartLine, impl.StartColumn, impl.EndLine, impl.EndColumn)
 				addDep(classSym, depSym, tokLoc)
+				c.addImplementsRel(classSym, depSym, tokLoc)
 			}
 		} else {
 			for _, impl := range ci.ImplementsTypes {
@@ -777,6 +797,7 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 					depSym.Kind = SKInterface
 				}
 				addDep(classSym, depSym, classSym.Location)
+				c.addImplementsRel(classSym, depSym, classSym.Location)
 			}
 		}
 
@@ -1587,6 +1608,7 @@ func (c *Collector) walk(node *sitter.Node, uri DocumentURI, content []byte, fil
 					impl.Kind = SKInterface
 					impl.Role = REFERENCE
 					c.addReferenceDeps(sym, impl)
+					c.addImplementsRel(sym, impl, impl.Location)
 				}
 			}
 		}
