@@ -830,10 +830,7 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 			if m == nil {
 				continue
 			}
-			name := m.Descriptor
-			if name == "" {
-				name = m.GetName()
-			}
+			name := buildJavaMethodID(m)
 			if name == "" {
 				continue
 			}
@@ -2522,6 +2519,45 @@ func (c *Collector) extractRootIdentifier(node *sitter.Node, content []byte) str
 	}
 
 	return ""
+}
+
+// buildJavaMethodID generates the simplified NodeID.Name for a Java method:
+//   methodName(ParamRawType1,ParamRawType2,...)
+// Strips access modifiers, static/final/etc., annotations, return type, throws,
+// and parameter names. Prefers ParameterDetail.TypeRawText (preserves generics
+// and array notation as written) and falls back to TypeFqcn.
+func buildJavaMethodID(m *javapb.MethodDetail) string {
+	if m == nil {
+		return ""
+	}
+	name := strings.TrimSpace(m.GetName())
+	// GetName() may still contain modifiers + return type when the JAR's
+	// Descriptor uses the long form (e.g. "abstract void foo"). Take the last
+	// token after any space.
+	if sp := strings.LastIndexByte(name, ' '); sp >= 0 {
+		name = name[sp+1:]
+	}
+	if name == "" {
+		return ""
+	}
+	types := make([]string, 0, len(m.Parameters))
+	for _, p := range m.Parameters {
+		if p == nil {
+			continue
+		}
+		t := p.TypeRawText
+		if t == "" {
+			t = p.TypeFqcn
+		}
+		if t == "" {
+			continue
+		}
+		types = append(types, t)
+	}
+	if len(types) == 0 {
+		return name
+	}
+	return name + "(" + strings.Join(types, ",") + ")"
 }
 
 // parseMethodSignature 从方法节点解析签名，保留方法名和参数类型
