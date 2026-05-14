@@ -573,10 +573,29 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			TypeKind: mapKind(k),
 			Exported: public,
 		}
-		// collect deps
+		// Implements relationship is preserved as a first-class field rather
+		// than blended into the generic SubStruct dependency list.
+		implSyms := map[*DocumentSymbol]bool{}
+		if rels := c.implementsRel[symbol]; rels != nil {
+			for _, rel := range rels {
+				tok := ""
+				if c.cli != nil {
+					tok, _ = c.cli.Locate(rel.Location)
+				}
+				iid, err := c.exportSymbol(repo, rel.Symbol, tok, visited)
+				if err != nil {
+					continue
+				}
+				obj.Implements = append(obj.Implements, *iid)
+				implSyms[rel.Symbol] = true
+			}
+		}
 		// collect deps
 		if deps := c.deps[symbol]; deps != nil {
 			for _, dep := range deps {
+				if implSyms[dep.Symbol] {
+					continue
+				}
 				tok := ""
 				if c.cli != nil {
 					tok, _ = c.cli.Locate(dep.Location)
