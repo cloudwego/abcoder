@@ -245,7 +245,7 @@ func (s *JavaParserServer) sendAnalyzeRequest(repoPath string, config *pb.Analyz
 	}
 
 	writer := NewProtocolWriter(s.conn)
-	writer.SetDebug(true) // Enable debug logging for sent messages
+	writer.SetDebug(s.config.Debug)
 	if err := writer.WriteRequest(request); err != nil {
 		return fmt.Errorf("failed to write analyze request: %w", err)
 	}
@@ -261,7 +261,7 @@ func (s *JavaParserServer) readResponses(ctx context.Context, responseChan chan<
 	defer s.cleanup()
 
 	reader := NewProtocolReader(s.conn)
-	reader.SetDebug(true) // Enable debug logging for received messages
+	reader.SetDebug(s.config.Debug)
 
 	for {
 		select {

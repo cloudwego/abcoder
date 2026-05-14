@@ -23,6 +23,7 @@ import (
 	"io"
 	"log"
 
+	"github.com/bytedance/sonic"
 	"github.com/cloudwego/abcoder/lang/java/pb"
 )
 
@@ -133,7 +134,7 @@ func (pr *ProtocolReader) ReadMessage() (*pb.Message, error) {
 		Payload   json.RawMessage `json:"payload,omitempty"`
 	}
 	var raw rawMessage
-	if err := json.Unmarshal(pr.buf, &raw); err != nil {
+	if err := sonic.Unmarshal(pr.buf, &raw); err != nil {
 		if pr.debug {
 			log.Printf("[Protocol] <<< Failed to unmarshal: %v", err)
 		}
@@ -156,7 +157,7 @@ func (pr *ProtocolReader) ReadMessage() (*pb.Message, error) {
 			Payload     json.RawMessage `json:"payload"`
 		}
 		var arRaw rawAnalyzeResponse
-		if err := json.Unmarshal(raw.Payload, &arRaw); err != nil {
+		if err := sonic.Unmarshal(raw.Payload, &arRaw); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal analyze_response payload: %w", err)
 		}
 
@@ -183,7 +184,7 @@ func (pr *ProtocolReader) ReadMessage() (*pb.Message, error) {
 		if rm, ok := payload.(json.RawMessage); ok {
 			ar.Payload = rm
 		} else {
-			if err := json.Unmarshal(arRaw.Payload, payload); err != nil {
+			if err := sonic.Unmarshal(arRaw.Payload, payload); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal analyze_response inner payload (%s): %w", arRaw.PayloadType, err)
 			}
 			ar.Payload = payload
@@ -192,21 +193,21 @@ func (pr *ProtocolReader) ReadMessage() (*pb.Message, error) {
 
 	case pb.TYPE_ANALYZE_REQUEST:
 		var req pb.AnalyzeRequest
-		if err := json.Unmarshal(raw.Payload, &req); err != nil {
+		if err := sonic.Unmarshal(raw.Payload, &req); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal analyze_request payload: %w", err)
 		}
 		msg.Payload = &req
 
 	case pb.TYPE_STOP_REQUEST:
 		var stop pb.StopRequest
-		if err := json.Unmarshal(raw.Payload, &stop); err != nil {
+		if err := sonic.Unmarshal(raw.Payload, &stop); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal stop_request payload: %w", err)
 		}
 		msg.Payload = &stop
 
 	case pb.TYPE_HEARTBEAT:
 		var hb pb.Heartbeat
-		if err := json.Unmarshal(raw.Payload, &hb); err != nil {
+		if err := sonic.Unmarshal(raw.Payload, &hb); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal heartbeat payload: %w", err)
 		}
 		msg.Payload = &hb
@@ -247,7 +248,7 @@ func (pw *ProtocolWriter) SetDebug(enabled bool) {
 
 // WriteMessage writes a length-prefixed JSON Message.
 func (pw *ProtocolWriter) WriteMessage(msg *pb.Message) error {
-	data, err := json.Marshal(msg)
+	data, err := sonic.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON message: %w", err)
 	}
