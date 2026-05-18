@@ -417,18 +417,31 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 	switch k := symbol.Kind; k {
 	// Function
 	case SKFunction, SKMethod:
+		info := c.funcs[symbol]
+		// Detect interface-method via LSP parent first (cli.files populated).
+		// Java IPC mode does not populate cli.files, so fall back to the
+		// receiver symbol kind recorded by the scanner.
+		isInterfaceMethod := false
 		if c.cli != nil {
 			if p := c.cli.GetParent(symbol); p != nil && p.Kind == SKInterface {
-				// NOTICE: no need collect interface method
-				break
+				isInterfaceMethod = true
 			}
 		}
-		obj := &uniast.Function{
-			FileLine: fileLine,
-			Content:  content,
-			Exported: public,
+		if isInterfaceMethod {
+			// NOTICE: no need collect interface method for non-Java langs.
+			// Java still collects it but flags IsInterfaceMethod.
+			break
 		}
-		info := c.funcs[symbol]
+		if info.Method != nil && info.Method.Receiver.Symbol != nil &&
+			info.Method.Receiver.Symbol.Kind == SKInterface {
+			isInterfaceMethod = true
+		}
+		obj := &uniast.Function{
+			FileLine:          fileLine,
+			Content:           content,
+			Exported:          public,
+			IsInterfaceMethod: isInterfaceMethod,
+		}
 		obj.Signature = info.Signature
 		// NOTICE: type parames collect into types
 		if info.TypeParams != nil {
