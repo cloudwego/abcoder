@@ -195,6 +195,10 @@ func collectSymbol(ctx context.Context, cli *lsp.LSPClient, repoPath string, opt
 	} else {
 		collector := collect.NewCollector(repoPath, cli)
 		collector.CollectOption = opts
+		// Plumb language-specific options into the spec implementation
+		// after CollectOption is set, so options like --sysroot reach the
+		// CppSpec NameSpace logic.
+		collector.ApplyCollectOptionToSpec()
 		log.Info("start collecting symbols...\n")
 		err = collector.Collect(ctx)
 		if err != nil {

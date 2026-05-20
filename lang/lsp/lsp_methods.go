@@ -20,6 +20,8 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
+	"sync"
 
 	"github.com/cloudwego/abcoder/lang/utils"
 	lsp "github.com/sourcegraph/go-lsp"
@@ -39,28 +41,65 @@ type DidOpenTextDocumentParams struct {
 }
 
 func (cli *LSPClient) DidOpen(ctx context.Context, file DocumentURI) (*TextDocumentItem, error) {
-	if f, ok := cli.files[file]; ok {
+	cli.filesMu.RLock()
+	f, ok := cli.files[file]
+	cli.filesMu.RUnlock()
+	if ok {
+		// An entry exists locally — but ensureLocalFile() may have created
+		// it without notifying clangd. Send didOpen now if needed, so the
+		// server's side gets the file content and subsequent AST queries
+		// don't fail with "trying to get AST for non-added document".
+		f.Mu.Lock()
+		if f.ServerOpened {
+			f.Mu.Unlock()
+			return f, nil
+		}
+		f.ServerOpened = true
+		params := DidOpenTextDocumentParams{TextDocument: *f}
+		f.Mu.Unlock()
+		if err := cli.Notify(ctx, "textDocument/didOpen", params); err != nil {
+			// roll back so a later DidOpen can retry
+			f.Mu.Lock()
+			f.ServerOpened = false
+			f.Mu.Unlock()
+			return nil, err
+		}
 		return f, nil
 	}
 	text, err := os.ReadFile(file.File())
 	if err != nil {
 		return nil, err
 	}
-	f := &TextDocumentItem{
-		URI:        DocumentURI(file),
-		LanguageID: cli.Language.String(),
-		Version:    1,
-		Text:       string(text),
-		LineCounts: utils.CountLines(string(text)),
+	nf := &TextDocumentItem{
+		URI:          DocumentURI(file),
+		LanguageID:   cli.Language.String(),
+		Version:      1,
+		Text:         string(text),
+		LineCounts:   utils.CountLines(string(text)),
+		Mu:           &sync.Mutex{},
+		ServerOpened: true, // we're about to send didOpen below
 	}
-	cli.files[file] = f
+	cli.filesMu.Lock()
+	if _, ok := cli.files[file]; ok {
+		// lost the race; reuse the existing entry (recurse so it notifies
+		// the server if the winner created a local-only stub).
+		cli.filesMu.Unlock()
+		return cli.DidOpen(ctx, file)
+	}
+	cli.files[file] = nf
+	cli.filesMu.Unlock()
 	req := DidOpenTextDocumentParams{
-		TextDocument: *f,
+		TextDocument: *nf,
 	}
 	if err := cli.Notify(ctx, "textDocument/didOpen", req); err != nil {
+		// roll back: server doesn't know about the file, future callers
+		// must re-attempt the notification.
+		nf.Mu.Lock()
+		nf.ServerOpened = false
+		nf.Mu.Unlock()
 		return nil, err
 	}
-	return f, nil
+	return nf, nil
 }
 
 func flattenDocumentSymbols(symbols []*DocumentSymbol, uri DocumentURI) []*DocumentSymbol {
@@ -75,21 +114,26 @@ func flattenDocumentSymbols(symbols []*DocumentSymbol, uri DocumentURI) []*Docum
 		} else {
 			location = sym.Location
 		}
+		// Preserve SelectionRange — it points at the symbol's NAME token
+		// (vs Range which spans the whole body). Some downstream paths
+		// (e.g. typeHierarchy/prepareTypeHierarchy) need a position on
+		// the identifier specifically.
 		flatSymbol := DocumentSymbol{
 			// copy
-			Name:     sym.Name,
-			Kind:     sym.Kind,
-			Tags:     sym.Tags,
-			Text:     sym.Text,
-			Tokens:   sym.Tokens,
-			Node:     sym.Node,
-			Children: sym.Children,
+			Name:           sym.Name,
+			Detail:         sym.Detail,
+			Kind:           sym.Kind,
+			Tags:           sym.Tags,
+			Text:           sym.Text,
+			Tokens:         sym.Tokens,
+			Node:           sym.Node,
+			Children:       sym.Children,
+			SelectionRange: sym.SelectionRange,
 			// new
 			Location: location,
 			// empty
-			Role:           0,
-			Range:          nil,
-			SelectionRange: nil,
+			Role:  0,
+			Range: nil,
 		}
 		result = append(result, &flatSymbol)
 
@@ -107,27 +151,54 @@ func (cli *LSPClient) DocumentSymbols(ctx context.Context, file DocumentURI) (ma
 	if err != nil {
 		return nil, err
 	}
+	f.Mu.Lock()
 	if f.Symbols != nil {
-		return f.Symbols, nil
+		syms := f.Symbols
+		f.Mu.Unlock()
+		return syms, nil
 	}
-	uri := lsp.DocumentURI(file)
-	req := lsp.DocumentSymbolParams{
-		TextDocument: lsp.TextDocumentIdentifier{
-			URI: uri,
-		},
-	}
-	var resp []*DocumentSymbol
-	if err := cli.Call(ctx, "textDocument/documentSymbol", req, &resp); err != nil {
+	f.Mu.Unlock()
+
+	// Deduplicate concurrent requests for the same URI. Without this, 32
+	// workers all hitting a freshly-encountered external header would each
+	// fire their own documentSymbol RPC; clangd serializes per-document
+	// parses so they'd queue up anyway.
+	v, err, _ := cli.docSymFlight.Do(string(file), func() (interface{}, error) {
+		// Re-check after acquiring the flight: another flight just finished.
+		f.Mu.Lock()
+		if f.Symbols != nil {
+			cached := f.Symbols
+			f.Mu.Unlock()
+			return cached, nil
+		}
+		f.Mu.Unlock()
+
+		uri := lsp.DocumentURI(file)
+		req := lsp.DocumentSymbolParams{
+			TextDocument: lsp.TextDocumentIdentifier{URI: uri},
+		}
+		var resp []*DocumentSymbol
+		if err := cli.Call(ctx, "textDocument/documentSymbol", req, &resp); err != nil {
+			return nil, err
+		}
+		respFlatten := flattenDocumentSymbols(resp, file)
+		built := make(map[Range]*DocumentSymbol, len(respFlatten))
+		for i := range respFlatten {
+			s := respFlatten[i]
+			built[s.Location.Range] = s
+		}
+		f.Mu.Lock()
+		if f.Symbols == nil {
+			f.Symbols = built
+		}
+		out := f.Symbols
+		f.Mu.Unlock()
+		return out, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	respFlatten := flattenDocumentSymbols(resp, file)
-	// cache symbols
-	f.Symbols = make(map[Range]*DocumentSymbol, len(respFlatten))
-	for i := range respFlatten {
-		s := respFlatten[i]
-		f.Symbols[s.Location.Range] = s
-	}
-	return f.Symbols, nil
+	return v.(map[Range]*DocumentSymbol), nil
 }
 
 func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, error) {
@@ -157,25 +228,47 @@ func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, 
 }
 
 func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens) error {
-	f, err := cli.DidOpen(ctx, DocumentURI(req.TextDocument.URI))
+	uri := DocumentURI(req.TextDocument.URI)
+	f, err := cli.DidOpen(ctx, uri)
 	if err != nil {
 		return err
 	}
 
-	if f.SemanticTokens == nil {
-		req1 := SemanticTokensFullParams{
-			TextDocument: req.TextDocument,
-		}
-		var fullResp SemanticTokens
-		if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, &fullResp); err != nil {
+	f.Mu.Lock()
+	have := f.SemanticTokens
+	f.Mu.Unlock()
+	if have == nil {
+		v, err, _ := cli.semTokFlight.Do(string(uri), func() (interface{}, error) {
+			f.Mu.Lock()
+			if f.SemanticTokens != nil {
+				cached := f.SemanticTokens
+				f.Mu.Unlock()
+				return cached, nil
+			}
+			f.Mu.Unlock()
+
+			req1 := SemanticTokensFullParams{TextDocument: req.TextDocument}
+			var fullResp SemanticTokens
+			if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, &fullResp); err != nil {
+				return nil, err
+			}
+			f.Mu.Lock()
+			if f.SemanticTokens == nil {
+				f.SemanticTokens = &fullResp
+			}
+			out := f.SemanticTokens
+			f.Mu.Unlock()
+			return out, nil
+		})
+		if err != nil {
 			return err
 		}
-		f.SemanticTokens = &fullResp
+		have = v.(*SemanticTokens)
 	}
 
-	resp.ResultID = f.SemanticTokens.ResultID
-	resp.Data = make([]uint32, len(f.SemanticTokens.Data))
-	copy(resp.Data, f.SemanticTokens.Data)
+	resp.ResultID = have.ResultID
+	resp.Data = make([]uint32, len(have.Data))
+	copy(resp.Data, have.Data)
 
 	filterSemanticTokensInRange(resp, req.Range)
 	return nil
@@ -219,8 +312,18 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 		return nil, err
 	}
 	sym := syms[id.Range]
-	if sym != nil && sym.Tokens != nil {
-		return sym.Tokens, nil
+	f := cli.lookupFile(id.URI)
+	if sym != nil {
+		if f != nil {
+			f.Mu.Lock()
+			toks := sym.Tokens
+			f.Mu.Unlock()
+			if toks != nil {
+				return toks, nil
+			}
+		} else if sym.Tokens != nil {
+			return sym.Tokens, nil
+		}
 	}
 
 	uri := lsp.DocumentURI(id.URI)
@@ -238,9 +341,26 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 
 	toks := cli.getAllTokens(resp, id.URI)
 	if sym != nil {
-		sym.Tokens = toks
+		if f != nil {
+			f.Mu.Lock()
+			if sym.Tokens == nil {
+				sym.Tokens = toks
+			}
+			toks = sym.Tokens
+			f.Mu.Unlock()
+		} else {
+			sym.Tokens = toks
+		}
 	}
 	return toks, nil
+}
+
+// lookupFile returns the cached TextDocumentItem if open, otherwise nil.
+func (cli *LSPClient) lookupFile(uri DocumentURI) *TextDocumentItem {
+	cli.filesMu.RLock()
+	f := cli.files[uri]
+	cli.filesMu.RUnlock()
+	return f
 }
 
 func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Position) ([]Location, error) {
@@ -249,30 +369,50 @@ func (cli *LSPClient) Definition(ctx context.Context, uri DocumentURI, pos Posit
 	if err != nil {
 		return nil, err
 	}
+	f.Mu.Lock()
 	if f.Definitions != nil {
 		if locations, ok := f.Definitions[pos]; ok {
+			f.Mu.Unlock()
 			return locations, nil
 		}
 	}
+	f.Mu.Unlock()
 
-	// call
-	req := lsp.TextDocumentPositionParams{
-		TextDocument: lsp.TextDocumentIdentifier{
-			URI: lsp.DocumentURI(uri),
-		},
-		Position: lsp.Position(pos),
-	}
-	var resp []Location
-	if err := cli.Call(ctx, "textDocument/definition", req, &resp); err != nil {
+	key := string(uri) + ":" + strconv.Itoa(pos.Line) + ":" + strconv.Itoa(pos.Character)
+	v, err, _ := cli.definitionFlight.Do(key, func() (interface{}, error) {
+		f.Mu.Lock()
+		if f.Definitions != nil {
+			if locations, ok := f.Definitions[pos]; ok {
+				f.Mu.Unlock()
+				return locations, nil
+			}
+		}
+		f.Mu.Unlock()
+
+		req := lsp.TextDocumentPositionParams{
+			TextDocument: lsp.TextDocumentIdentifier{URI: lsp.DocumentURI(uri)},
+			Position:     lsp.Position(pos),
+		}
+		var resp []Location
+		if err := cli.Call(ctx, "textDocument/definition", req, &resp); err != nil {
+			return nil, err
+		}
+		f.Mu.Lock()
+		if f.Definitions == nil {
+			f.Definitions = make(map[Position][]Location)
+		}
+		if existing, ok := f.Definitions[pos]; ok {
+			resp = existing
+		} else {
+			f.Definitions[pos] = resp
+		}
+		f.Mu.Unlock()
+		return resp, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	// cache definitions
-	if f.Definitions == nil {
-		f.Definitions = make(map[Position][]Location)
-	}
-	f.Definitions[pos] = resp
-	return resp, nil
+	return v.([]Location), nil
 }
 
 func (cli *LSPClient) TypeDefinition(ctx context.Context, uri DocumentURI, pos Position) ([]Location, error) {
@@ -289,26 +429,46 @@ func (cli *LSPClient) TypeDefinition(ctx context.Context, uri DocumentURI, pos P
 	return resp, nil
 }
 
+// ensureLocalFile returns the cached TextDocumentItem for uri, reading and
+// caching the file if necessary. Unlike DidOpen it does NOT send a didOpen
+// notification — use this for read-only helpers (Locate, Line, ...) that
+// just need the file body. The stub it creates has ServerOpened=false so
+// that the next DidOpen() will still notify the LSP server. Safe for
+// concurrent use.
+func (cli *LSPClient) ensureLocalFile(uri DocumentURI) (*TextDocumentItem, error) {
+	if f := cli.lookupFile(uri); f != nil {
+		return f, nil
+	}
+	fd, err := os.ReadFile(uri.File())
+	if err != nil {
+		return nil, err
+	}
+	text := string(fd)
+	nf := &TextDocumentItem{
+		URI:          DocumentURI(uri),
+		LanguageID:   cli.Language.String(),
+		Version:      1,
+		Text:         text,
+		LineCounts:   utils.CountLines(text),
+		Mu:           &sync.Mutex{},
+		ServerOpened: false, // local-only stub; DidOpen() will notify if asked
+	}
+	cli.filesMu.Lock()
+	if existing, ok := cli.files[uri]; ok {
+		cli.filesMu.Unlock()
+		return existing, nil
+	}
+	cli.files[uri] = nf
+	cli.filesMu.Unlock()
+	return nf, nil
+}
+
 // read file and get the text of block of range
 func (cli *LSPClient) Locate(id Location) (string, error) {
-	f, ok := cli.files[id.URI]
-	if !ok {
-		// open file os
-		fd, err := os.ReadFile(id.URI.File())
-		if err != nil {
-			return "", err
-		}
-		text := string(fd)
-		f = &TextDocumentItem{
-			URI:        DocumentURI(id.URI),
-			LanguageID: cli.Language.String(),
-			Version:    1,
-			Text:       text,
-			LineCounts: utils.CountLines(text),
-		}
-		cli.files[id.URI] = f
+	f, err := cli.ensureLocalFile(id.URI)
+	if err != nil {
+		return "", err
 	}
-
 	text := f.Text
 	// get block text of range
 	start := f.LineCounts[id.Range.Start.Line] + id.Range.Start.Character
@@ -318,22 +478,9 @@ func (cli *LSPClient) Locate(id Location) (string, error) {
 
 // get line text of pos
 func (cli *LSPClient) Line(uri DocumentURI, pos int) string {
-	f, ok := cli.files[uri]
-	if !ok {
-		// open file os
-		fd, err := os.ReadFile(uri.File())
-		if err != nil {
-			return ""
-		}
-		text := string(fd)
-		f = &TextDocumentItem{
-			URI:        DocumentURI(uri),
-			LanguageID: cli.Language.String(),
-			Version:    1,
-			Text:       text,
-			LineCounts: utils.CountLines(text),
-		}
-		cli.files[uri] = f
+	f, err := cli.ensureLocalFile(uri)
+	if err != nil {
+		return ""
 	}
 	if pos < 0 || pos >= len(f.LineCounts) {
 		return ""
@@ -347,35 +494,24 @@ func (cli *LSPClient) Line(uri DocumentURI, pos int) string {
 }
 
 func (cli *LSPClient) LineCounts(uri DocumentURI) []int {
-	f, ok := cli.files[uri]
-	if !ok {
-		// open file os
-		fd, err := os.ReadFile(uri.File())
-		if err != nil {
-			return nil
-		}
-		text := string(fd)
-		f = &TextDocumentItem{
-			URI:        DocumentURI(uri),
-			LanguageID: cli.Language.String(),
-			Version:    1,
-			Text:       text,
-			LineCounts: utils.CountLines(text),
-		}
-		cli.files[uri] = f
+	f, err := cli.ensureLocalFile(uri)
+	if err != nil {
+		return nil
 	}
 	return f.LineCounts
 }
 
 func (cli *LSPClient) GetFile(uri DocumentURI) *TextDocumentItem {
-	return cli.files[uri]
+	return cli.lookupFile(uri)
 }
 
 func (cli *LSPClient) GetParent(sym *DocumentSymbol) (ret *DocumentSymbol) {
 	if sym == nil {
 		return nil
 	}
-	if f, ok := cli.files[sym.Location.URI]; ok {
+	if f := cli.lookupFile(sym.Location.URI); f != nil {
+		f.Mu.Lock()
+		defer f.Mu.Unlock()
 		for _, s := range f.Symbols {
 			if s != sym && s.Location.Range.Include(sym.Location.Range) {
 				if ret == nil || ret.Location.Range.Include(s.Location.Range) {

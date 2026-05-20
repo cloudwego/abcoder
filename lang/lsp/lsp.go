@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 
@@ -167,6 +168,14 @@ func NewURI(file string) DocumentURI {
 	if !filepath.IsAbs(file) {
 		file, _ = filepath.Abs(file)
 	}
+	// Canonicalise via realpath so symlinks don't produce two URIs for the
+	// same physical file. clangd resolves symlinks internally and returns
+	// realpath-based URIs in its responses; if we registered the file
+	// under the symlinked path, the response URI wouldn't match our
+	// `cli.files` key (and breaks every downstream Location comparison).
+	if real, err := filepath.EvalSymlinks(file); err == nil && real != "" {
+		file = real
+	}
 	return DocumentURI("file://" + file)
 }
 
@@ -179,10 +188,27 @@ type TextDocumentItem struct {
 	Symbols        map[Range]*DocumentSymbol `json:"-"`
 	Definitions    map[Position][]Location   `json:"-"`
 	SemanticTokens *SemanticTokens           `json:"-"`
+	// Mu protects Symbols, Definitions, SemanticTokens, ServerOpened from
+	// concurrent access. Pointer so that copying TextDocumentItem (e.g.
+	// when building didOpen params) doesn't copy the lock. RPC calls are
+	// issued without holding this lock; only cache check / write are
+	// guarded.
+	Mu *sync.Mutex `json:"-"`
+	// ServerOpened tracks whether we've actually sent textDocument/didOpen
+	// for this file to the LSP server. Read helpers like ensureLocalFile
+	// populate the local cache without notifying the server; DidOpen must
+	// still send the notification on first transition to true so clangd
+	// can answer subsequent AST queries (e.g. documentSymbol/definition).
+	ServerOpened bool `json:"-"`
 }
 
 type DocumentSymbol struct {
-	Name     string            `json:"name"`
+	Name string `json:"name"`
+	// Detail is the optional "more detail for this symbol" string from
+	// the LSP spec — clangd populates it with the function signature
+	// (e.g. "void(int x)") for SKMethod/SKFunction kinds, which lets us
+	// skip our own text-level signature extraction in extractCppCallSig.
+	Detail   string            `json:"detail,omitempty"`
 	Kind     SymbolKind        `json:"kind"`
 	Tags     []json.RawMessage `json:"tags"`
 	Children []*DocumentSymbol `json:"children"`

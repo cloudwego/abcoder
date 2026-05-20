@@ -23,21 +23,36 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	lsp "github.com/sourcegraph/go-lsp"
 	"github.com/sourcegraph/jsonrpc2"
+	"golang.org/x/sync/singleflight"
 )
 
 type LSPClient struct {
 	*jsonrpc2.Conn
 	*lspHandler
-	tokenTypes             []string
-	tokenModifiers         []string
-	files                  map[DocumentURI]*TextDocumentItem
-	provider               LanguageServiceProvider
+	tokenTypes     []string
+	tokenModifiers []string
+	files          map[DocumentURI]*TextDocumentItem
+	// filesMu guards files. Lock briefly when checking/inserting an entry;
+	// the per-file Mu inside TextDocumentItem guards per-document caches.
+	filesMu  sync.RWMutex
+	provider LanguageServiceProvider
+
+	// In-flight request dedup. When N workers simultaneously ask for
+	// DocumentSymbols / SemanticTokens / Definition of the same key, only
+	// one RPC is sent; the rest wait on the first one's result. After the
+	// result lands it goes into the per-file cache so future calls are
+	// instant.
+	docSymFlight    singleflight.Group // key: URI
+	semTokFlight    singleflight.Group // key: URI (full-doc semantic tokens)
+	definitionFlight singleflight.Group // key: URI + ":" + line + ":" + col
+
 	ClientOptions
 	LspOptions map[string]string
 }
