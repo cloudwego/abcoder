@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible
+	github.com/avast/retry-go/v4 v4.7.0
 	github.com/bytedance/sonic v1.14.1
 	github.com/cloudwego/eino v0.3.52
 	github.com/cloudwego/eino-ext/components/model/ark v0.1.16
@@ -20,7 +21,7 @@ require (
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/spf13/cobra v1.8.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/vifraa/gopom v1.0.0
 	golang.org/x/mod v0.24.0
 	golang.org/x/sync v0.13.0

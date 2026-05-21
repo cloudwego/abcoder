@@ -102,107 +102,23 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	}
 }
 
-// cppFnHasBody returns true when `content` represents a function
-// DEFINITION (with body) rather than a DECLARATION. A naive
-// strings.Contains(content, "{") check misclassifies header declarations
-// whose parameter list contains `{`-bearing constructs — for example a
-// default argument with a lambda or a braced-init:
-//
-//	void f(std::function<void()> cb = []{});
-//	void g(std::vector<int> v = {1, 2, 3});
-//
-// In both cases the `{` lives INSIDE the parameter list (paren depth > 0).
-// A true function body is the `{` that appears AFTER the parameter list's
-// closing `)` (paren depth back to 0). We walk the text skipping strings,
-// chars, and comments, track paren depth, and only count `{` once the
-// parameter list has closed.
-func cppFnHasBody(content string) bool {
-	parenDepth := 0
-	sawParamClose := false
-	const (
-		stNormal = iota
-		stLineComment
-		stBlockComment
-		stString
-		stChar
-	)
-	st := stNormal
-	for i := 0; i < len(content); i++ {
-		c := content[i]
-		switch st {
-		case stLineComment:
-			if c == '\n' {
-				st = stNormal
-			}
-			continue
-		case stBlockComment:
-			if c == '*' && i+1 < len(content) && content[i+1] == '/' {
-				i++
-				st = stNormal
-			}
-			continue
-		case stString:
-			if c == '\\' && i+1 < len(content) {
-				i++
-				continue
-			}
-			if c == '"' {
-				st = stNormal
-			}
-			continue
-		case stChar:
-			if c == '\\' && i+1 < len(content) {
-				i++
-				continue
-			}
-			if c == '\'' {
-				st = stNormal
-			}
-			continue
-		}
-		// stNormal
-		if c == '/' && i+1 < len(content) {
-			if content[i+1] == '/' {
-				st = stLineComment
-				i++
-				continue
-			}
-			if content[i+1] == '*' {
-				st = stBlockComment
-				i++
-				continue
-			}
-		}
-		switch c {
-		case '"':
-			st = stString
-		case '\'':
-			st = stChar
-		case '(':
-			parenDepth++
-		case ')':
-			if parenDepth > 0 {
-				parenDepth--
-			}
-			if parenDepth == 0 {
-				sawParamClose = true
-			}
-		case '{':
-			if sawParamClose && parenDepth == 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // dedupCppFunction handles header-decl-vs-cpp-def collapsing for a single
 // emitted Function. Returns true when the caller should drop `obj` (the
 // existing entry already won, possibly with body fields copied over from
 // `obj`). Returns false when `obj` should be written into pkg.Functions
 // as the canonical version.
-func (c *Collector) dedupCppFunction(repo *uniast.Repository, name, mod, path, content string, obj *uniast.Function) bool {
-	hasBody := cppFnHasBody(content)
+func (c *Collector) dedupCppFunction(repo *uniast.Repository, symbol *DocumentSymbol, name, mod, path, content string, obj *uniast.Function) bool {
+	// Decide hasBody from clangd's AST (presence of CompoundStmt under a
+	// FunctionDecl). When the server doesn't support textDocument/ast we
+	// can't safely distinguish definition from declaration; default to
+	// `false` (treat as declaration) so the .cpp body still wins via the
+	// "no prev body" branch when a .cpp emit follows the .h decl.
+	hasBody := false
+	if c.exportCtx != nil {
+		if v, ok := c.cppASTHasBody(c.exportCtx, symbol); ok {
+			hasBody = v
+		}
+	}
 	isHeader := isCppHeaderPkg(path)
 	cur := cppFnLoc{mod: mod, pkg: path, hasBody: hasBody, isHeader: isHeader}
 	prev, hasPrev := c.cppFnEmitted[name]
@@ -290,6 +206,11 @@ func (c *Collector) ExportLocalFunction() map[Location]*DocumentSymbol {
 }
 
 func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
+	// Stash ctx so recursive exportSymbol-and-friends can issue LSP
+	// requests (e.g. textDocument/ast for cpp kind classification)
+	// without threading a new parameter through every helper.
+	c.exportCtx = ctx
+	defer func() { c.exportCtx = nil }()
 	// recursively read all go files in repo
 	repo := uniast.NewRepository(c.repo)
 	modules, err := c.spec.WorkSpace(c.repo)
@@ -516,27 +437,30 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		return
 	}
 
-	// `using Y = X;` redirects to the real target; the alias itself is never
-	// emitted. Unresolved aliases (e.g. `using A = double`) are dropped below.
-	if len(c.aliasRedirect) > 0 {
-		seen := map[*DocumentSymbol]bool{symbol: true}
-		cur := symbol
-		for {
-			nxt, ok := c.aliasRedirect[cur]
-			if !ok || nxt == nil || seen[nxt] {
-				break
+	if c.Language == uniast.Cpp && c.exportCtx != nil {
+		// AST-only classification — no text fallback. clangd uses short
+		// kind names (strips the `Decl` suffix):
+		//   `TypeAlias` / `TypeAliasTemplate` -> alias of a type; drop
+		//     the symbol, references resolve to the target.
+		//   `UsingDirective` (`using namespace foo;`) -> NOT an alias.
+		//   `Using` / `UsingShadow` / `UsingPack` -> name-import; only
+		//     drop when importing a TYPE (so phantom Class nodes like
+		//     `using common::Provider;` get redirected to the real
+		//     type). LSP Kind says: SKClass/SKStruct/SKEnum/SKInterface
+		//     /SKTypeParameter are types.
+		isAlias := false
+		if kind, ok := c.cppASTKind(c.exportCtx, symbol); ok {
+			switch kind {
+			case ASTKindTypeAlias, ASTKindTypeAliasTemplate:
+				isAlias = true
+			case ASTKindUsing, ASTKindUsingShadow, ASTKindUsingPack:
+				switch symbol.Kind {
+				case SKClass, SKStruct, SKEnum, SKInterface, SKTypeParameter:
+					isAlias = true
+				}
 			}
-			seen[nxt] = true
-			cur = nxt
 		}
-		if cur != symbol {
-			return c.exportSymbol(repo, cur, refName, visited)
-		}
-	}
-	if c.Language == uniast.Cpp {
-		if us, ok := c.spec.(interface {
-			IsUsingAlias(sym DocumentSymbol) bool
-		}); ok && us.IsUsingAlias(*symbol) {
+		if isAlias {
 			e = ErrExternalSymbol
 			return
 		}
@@ -881,7 +805,7 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		// look like it has a body even when the original was a decl.
 		dropForDup := false
 		if c.Language == uniast.Cpp && (k == SKMethod || k == SKFunction) {
-			dropForDup = c.dedupCppFunction(repo, id.Name, mod, path, content, obj)
+			dropForDup = c.dedupCppFunction(repo, symbol, id.Name, mod, path, content, obj)
 		}
 		if !dropForDup {
 			pkg.Functions[id.Name] = obj
@@ -904,11 +828,17 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		}
 		tkind := mapKind(k)
 		// C++ typedefs are reported by clangd with SymbolKind Class/Struct,
-		// but they're aliases. Tag them as Typedef so downstream consumers
-		// can distinguish from real types. `using Y = X;` is handled
-		// upstream (alias redirect) and never reaches here.
-		if c.Language == uniast.Cpp && strings.HasPrefix(strings.TrimSpace(content), "typedef ") {
-			tkind = uniast.TypeKindTypedef
+		// but they're aliases. Tag them as Typedef when clang AST says so.
+		// No text-prefix fallback — when ast is unavailable we just leave
+		// it as struct/class.
+		// clangd's textDocument/ast returns short kind names (no "Decl"
+		// suffix): `Typedef` for `typedef X Y;` and `TypeAlias` for
+		// `using Y = X;`.
+		if c.Language == uniast.Cpp && c.exportCtx != nil {
+			if kind, ok := c.cppASTKind(c.exportCtx, symbol); ok &&
+				(kind == ASTKindTypedef || kind == ASTKindTypeAlias) {
+				tkind = uniast.TypeKindTypedef
+			}
 		}
 		obj := &uniast.Type{
 			FileLine: fileLine,
@@ -942,34 +872,6 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 				obj.Implements = append(obj.Implements, *iid)
 				implSyms[rel.Symbol] = true
-			}
-		}
-		// C++: bases that clangd couldn't resolve (typical for external
-		// template bases like `SimpleProvider<...>`) get recorded by
-		// collect as plain names. Synthesise a light Identity per name.
-		if c.Language == uniast.Cpp {
-			seen := map[string]bool{}
-			for _, base := range obj.Implements {
-				seen[base.Name] = true
-			}
-			for _, baseName := range c.cppUnresolvedBases[symbol] {
-				// Skip if a real (or already-light) edge to this name exists.
-				dup := false
-				for k := range seen {
-					if k == baseName || strings.HasSuffix(k, "::"+baseName) {
-						dup = true
-						break
-					}
-				}
-				if dup {
-					continue
-				}
-				obj.Implements = append(obj.Implements, uniast.Identity{
-					ModPath: "external",
-					PkgPath: "external",
-					Name:    baseName,
-				})
-				seen[baseName] = true
 			}
 		}
 		// collect deps

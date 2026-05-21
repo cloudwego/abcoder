@@ -104,16 +104,27 @@ type Collector struct {
 	// definition under the header pkg.
 	cppFnEmitted map[string]cppFnLoc
 
-	// cppUnresolvedBases: type symbol -> base names that clangd couldn't
-	// resolve (typically external/unloaded templated bases). Export wraps
-	// them as light Identities under module=external so the Implements
-	// edge survives even without a definition.
-	cppUnresolvedBases map[*DocumentSymbol][]string
-
 	// cppExtDepsQueue queues external method/function syms for a final
 	// deps pass after Collect — running inline would recurse through
 	// more loads.
 	cppExtDepsQueue []*DocumentSymbol
+
+	// cppFileASTCache caches the WHOLE-FILE clang AST per URI. We issue
+	// one `textDocument/ast` request per file (covering the entire
+	// translation-unit range) and reuse the cached tree for every
+	// symbol lookup in that file — turning N_syms RPCs into N_files.
+	// A nil entry means the request failed for this file; callers must
+	// treat it as "AST unavailable".
+	cppFileASTCache map[DocumentURI]*ASTNode
+	// cppASTUnsupported is set once when the server has signalled it
+	// doesn't implement textDocument/ast (jsonrpc2 -32601). After this
+	// we stop issuing AST requests entirely.
+	cppASTUnsupported bool
+	// exportCtx is the context.Context belonging to the current Export()
+	// invocation. Set at the top of Export and cleared at return; gives
+	// exportSymbol-and-friends access to ctx without rippling a new
+	// parameter through every recursive helper.
+	exportCtx context.Context
 
 	// 	symbol => [deps]
 	deps map[*DocumentSymbol][]dependency
@@ -134,13 +145,6 @@ type Collector struct {
 
 	// receivers cache: receiver symbol => list of method symbols
 	receivers map[*DocumentSymbol][]*DocumentSymbol
-
-	// aliasRedirect: typedef/using alias symbol -> the underlying type's
-	// symbol. Used at export time to substitute references to the alias
-	// with the real type's Identity, and to suppress emission of the alias
-	// itself as a standalone Type entry. C++ only for now. Guarded by c.mu
-	// like the rest of the collector state.
-	aliasRedirect map[*DocumentSymbol]*DocumentSymbol
 
 	// file content cache to reduce IO in Export
 	fileContentCache map[string]string
@@ -170,26 +174,6 @@ func (c *Collector) UseJavaIPC(conv *javaipc.Converter) {
 }
 
 
-// resolveAlias walks c.aliasRedirect (cyclic-safe) to find the real symbol
-// behind a `using Y = X;` / `using NS::Name;` declaration. Returns the
-// input unchanged when no redirect applies.
-func (c *Collector) resolveAlias(sym *DocumentSymbol) *DocumentSymbol {
-	if sym == nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	visited := map[*DocumentSymbol]bool{sym: true}
-	for {
-		target, ok := c.aliasRedirect[sym]
-		if !ok || target == nil || visited[target] {
-			return sym
-		}
-		visited[target] = true
-		sym = target
-	}
-}
-
 // addImplementsRel records that `from` implements `iface`. Idempotent on (from, iface).
 func (c *Collector) addImplementsRel(from *DocumentSymbol, iface *DocumentSymbol, tokenLoc Location) {
 	if from == nil || iface == nil {
@@ -203,6 +187,129 @@ func (c *Collector) addImplementsRel(from *DocumentSymbol, iface *DocumentSymbol
 		}
 	}
 	c.implementsRel[from] = append(c.implementsRel[from], dependency{Location: tokenLoc, Symbol: iface})
+}
+
+// cppASTForSymbol returns the smallest AST declaration node whose range
+// contains the symbol's range, by walking the cached whole-file AST.
+// Per-symbol classification costs N_files RPCs instead of N_syms RPCs.
+// Returns nil when AST is unavailable; callers must default sensibly —
+// there is no text fallback.
+func (c *Collector) cppASTForSymbol(ctx context.Context, sym *DocumentSymbol) *ASTNode {
+	if c.cli == nil || sym == nil || c.cppASTUnsupported {
+		return nil
+	}
+	root := c.cppFileAST(ctx, sym.Location.URI)
+	if root == nil {
+		return nil
+	}
+	target := sym.Location.Range
+	var best *ASTNode
+	var walk func(n *ASTNode)
+	walk = func(n *ASTNode) {
+		if n == nil {
+			return
+		}
+		if n.Role == ASTRoleDeclaration && n.Range.Include(target) {
+			if best == nil || best.Range.Include(n.Range) {
+				best = n
+			}
+		}
+		for _, ch := range n.Children {
+			walk(ch)
+		}
+	}
+	walk(root)
+	if best != nil {
+		return best
+	}
+	// No declaration node matched the symbol's range — return nil rather
+	// than falling back to the TranslationUnit root, which would let
+	// downstream callers (e.g. cppASTHasBody) confuse "no symbol here"
+	// with "found some unrelated node".
+	return nil
+}
+
+// cppFileAST returns the cached AST root for uri, fetching once on
+// first access.
+func (c *Collector) cppFileAST(ctx context.Context, uri DocumentURI) *ASTNode {
+	c.mu.Lock()
+	if cached, ok := c.cppFileASTCache[uri]; ok {
+		c.mu.Unlock()
+		return cached
+	}
+	c.mu.Unlock()
+	// clangd's textDocument/ast requires the document be in its session
+	// (responds with -32602 "trying to get AST for non-added document"
+	// otherwise). DidOpen is idempotent on the client side.
+	_, _ = c.cli.DidOpen(ctx, uri)
+	// Whole-file range. clangd rejects line numbers past the file end
+	// with "Line value is out of range". LineCounts gives the starting
+	// byte-offset of each line; valid line indices are 0..len-1.
+	// End.Character must cover the last line's actual content so that
+	// files without a trailing newline don't drop their last line from
+	// the requested range.
+	lineCount := len(c.cli.LineCounts(uri))
+	if lineCount <= 0 {
+		return nil // file not loaded
+	}
+	lastLine := lineCount - 1
+	lastLineText := c.cli.Line(uri, lastLine)
+	lastLineLen := len(lastLineText)
+	if lastLineLen > 0 && lastLineText[lastLineLen-1] == '\n' {
+		lastLineLen--
+	}
+	if lastLineLen > 0 && lastLineText[lastLineLen-1] == '\r' {
+		lastLineLen--
+	}
+	fullRange := Range{
+		Start: Position{Line: 0, Character: 0},
+		End:   Position{Line: lastLine, Character: lastLineLen},
+	}
+	// LSPClient.Call already retries transient failures (-32602
+	// "trying to get AST for non-added document" etc.) up to 3
+	// attempts. By the time we see an error here it's terminal for
+	// this file — cache nil so subsequent symbol lookups skip the
+	// extension. MethodNotFound additionally trips the global
+	// cppASTUnsupported flag.
+	node, err := c.cli.AST(ctx, uri, fullRange)
+	if err != nil {
+		if IsJSONRPCMethodNotFound(err) {
+			c.mu.Lock()
+			c.cppASTUnsupported = true
+			c.mu.Unlock()
+		}
+		c.mu.Lock()
+		c.cppFileASTCache[uri] = nil
+		c.mu.Unlock()
+		return nil
+	}
+	c.mu.Lock()
+	c.cppFileASTCache[uri] = node
+	c.mu.Unlock()
+	return node
+}
+
+// cppASTHasBody reports whether `sym` is a definition (Compound child
+// present in its AST node). `ok` is false when AST data isn't available
+// for this symbol; callers must default — there is no text fallback.
+func (c *Collector) cppASTHasBody(ctx context.Context, sym *DocumentSymbol) (hasBody, ok bool) {
+	node := c.cppASTForSymbol(ctx, sym)
+	if node == nil {
+		return false, false
+	}
+	return node.HasFunctionBody(), true
+}
+
+// cppASTKind returns the clang AST kind ("Typedef", "TypeAlias",
+// "Using", "Function", "CXXRecord", ...) of the deepest declaration
+// node containing the symbol's range. clangd uses short names — no
+// "Decl" suffix. Returns "" + ok=false when AST data isn't available.
+func (c *Collector) cppASTKind(ctx context.Context, sym *DocumentSymbol) (kind string, ok bool) {
+	node := c.cppASTForSymbol(ctx, sym)
+	if node == nil {
+		return "", false
+	}
+	return node.Kind, true
 }
 
 // collectCppBasesViaTypeHierarchy uses LSP typeHierarchy to resolve the
@@ -304,13 +411,12 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 		funcs:            map[*DocumentSymbol]functionInfo{},
 		deps:             map[*DocumentSymbol][]dependency{},
 		implementsRel:    map[*DocumentSymbol][]dependency{},
-		cppFnEmitted:       map[string]cppFnLoc{},
-		cppUnresolvedBases: map[*DocumentSymbol][]string{},
+		cppFnEmitted:     map[string]cppFnLoc{},
+		cppFileASTCache:  map[DocumentURI]*ASTNode{},
 		vars:             map[*DocumentSymbol]dependency{},
 		files:            map[string]*uniast.File{},
 		fileContentCache: make(map[string]string),
 		symsByFile:       make(map[DocumentURI][]*DocumentSymbol),
-		aliasRedirect:    map[*DocumentSymbol]*DocumentSymbol{},
 	}
 	// if cli.Language == uniast.Rust {
 	// 	ret.modPatcher = &rust.RustModulePatcher{Root: repo}
@@ -2515,97 +2621,13 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 	if impl == "" || len(impl) < len(sym.Name) {
 		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
-	// C++ multi-inheritance: pick up additional base classes beyond the
-	// single `inter` slot exposed by ImplSymbol. For each base class token,
-	// resolve it and record an implements-rel so the Type's Implements
-	// field is populated.
+	// C++ multi-inheritance: pick up additional base classes via
+	// typeHierarchy. clangd doesn't return supertypes for dependent
+	// template bases (`class Foo : public Tmpl<X,Y>`), so those edges
+	// will simply be absent — accepting that trade-off keeps the parser
+	// purely LSP-based with no text fallback.
 	if c.Language == uniast.Cpp {
-		// Primary path: typeHierarchy. clangd knows the real C++ AST so
-		// it returns properly resolved supertypes (including across
-		// using-declarations and aliases) without us having to text-parse
-		// the base clause. Falls back to BaseClassRefs below when
-		// typeHierarchy returns nothing — typical for bases clangd can't
-		// resolve (external templates) where we need the raw text name
-		// for unresolved-Implements recording.
-		thyResolved := c.collectCppBasesViaTypeHierarchy(ctx, sym)
-		// Fallback / supplemental: source-text base extraction.
-		// BaseClassRefs always returns one entry per base specifier, so
-		// we can issue a Definition query at the recovered file position
-		// for anything typeHierarchy missed (or use it to record
-		// unresolved bases).
-		if mi, ok := c.spec.(interface {
-			BaseClassRefs(sym DocumentSymbol) []cpp.BaseClassRef
-		}); ok && !thyResolved {
-			for _, ref := range mi.BaseClassRefs(*sym) {
-				fakeTok := Token{
-					Location: ref.Loc,
-					Type:     "class",
-					Text:     ref.Name,
-				}
-				baseSym, err := c.getSymbolByTokenWithLimit(ctx, fakeTok, depth)
-				// `using NS::Name;` declarations are reported by clangd as
-				// a Class sym whose Range covers only the `Name` token —
-				// not a real class definition. Detect that narrow range
-				// and follow one more Definition hop to reach the real
-				// target (avoiding NodeIDs like `Cur::Provider::Provider`).
-				for hops := 0; baseSym != nil && hops < 4; hops++ {
-					r := baseSym.Location.Range
-					if r.End.Line != r.Start.Line {
-						break // multi-line: real definition
-					}
-					if int(r.End.Character)-int(r.Start.Character) > len(baseSym.Name)+2 {
-						break // wide enough to be a real def, not just a name
-					}
-					defs, derr := c.cli.Definition(ctx, baseSym.Location.URI, baseSym.Location.Range.Start)
-					if derr != nil || len(defs) == 0 {
-						break
-					}
-					if defs[0] == baseSym.Location {
-						break
-					}
-					next, nerr := c.getSymbolByLocation(ctx, defs[0], depth, fakeTok)
-					if nerr != nil || next == nil || next == baseSym {
-						break
-					}
-					baseSym = next
-				}
-				// When the fake-token location can't be resolved by clangd
-				// (typical for unresolved external template bases), the
-				// Definition query either fails or falls back to the
-				// enclosing symbol (the class itself). Detect "resolved
-				// to self" by Location containment, NOT by short-name
-				// equality — short names can legitimately collide across
-				// namespaces (e.g. `app::Provider : public common::Provider`).
-				selfResolved := baseSym == sym ||
-					(baseSym != nil && baseSym.Location.URI == sym.Location.URI &&
-						sym.Location.Include(baseSym.Location))
-				if err != nil || baseSym == nil || selfResolved {
-					c.mu.Lock()
-					c.cppUnresolvedBases[sym] = append(c.cppUnresolvedBases[sym], ref.Name)
-					c.mu.Unlock()
-					continue
-				}
-				// Follow `using NS::Name;` / `using Y = X;` aliases so the
-				// recorded base points at the real type, not at the alias
-				// symbol (which would yield NodeIDs like `Cur::Provider::Provider`).
-				baseSym = c.resolveAlias(baseSym)
-				c.addImplementsRel(sym, baseSym, ref.Loc)
-			}
-		} else if mi, ok := c.spec.(interface {
-			BaseClassTokens(sym DocumentSymbol) []int
-		}); ok {
-			for _, idx := range mi.BaseClassTokens(*sym) {
-				if idx < 0 || idx >= len(sym.Tokens) {
-					continue
-				}
-				baseTok := sym.Tokens[idx]
-				baseSym, err := c.getSymbolByTokenWithLimit(ctx, baseTok, depth)
-				if err != nil || baseSym == nil {
-					continue
-				}
-				c.addImplementsRel(sym, baseSym, baseTok.Location)
-			}
-		}
+		c.collectCppBasesViaTypeHierarchy(ctx, sym)
 	}
 
 	// search all methods — snapshot c.syms first so we hold mu only briefly,
@@ -2637,25 +2659,6 @@ func (c *Collector) needProcessExternal(sym *DocumentSymbol) bool {
 }
 
 func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, depth int) {
-	// C++ `using Y = X;` / `using NS::Name;` aliases: resolve target once
-	// and stash a redirect so subsequent dep lookups / Export resolve
-	// through to the real type.
-	if c.Language == uniast.Cpp {
-		if ai, ok := c.spec.(interface {
-			AliasTargetTokenIndex(sym DocumentSymbol) int
-		}); ok {
-			idx := ai.AliasTargetTokenIndex(*sym)
-			if idx >= 0 && idx < len(sym.Tokens) {
-				target, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[idx], depth)
-				if err == nil && target != nil && target != sym {
-					c.mu.Lock()
-					c.aliasRedirect[sym] = target
-					c.mu.Unlock()
-				}
-			}
-		}
-	}
-
 	// method info: receiver, implementee
 	hasImpl := c.spec.HasImplSymbol()
 	if hasImpl {

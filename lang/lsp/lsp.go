@@ -270,6 +270,68 @@ type SymbolInformation struct {
 	ContainerName string     `json:"containerName,omitempty"`
 }
 
+// ASTNode mirrors clangd's `textDocument/ast` response shape. It's NOT
+// part of the LSP standard — clangd-only — and we use it to skip text
+// heuristics for function body / typedef / using-declaration kind
+// detection. Other LSPs returning "method not found" is normal and
+// callers must fall back to text inspection.
+//
+// Reference: https://clangd.llvm.org/extensions#ast
+//
+// clangd uses short kind names (no "Decl" suffix). The constants below
+// cover every kind the C++ collector keys off — keep them in sync with
+// clangd's `clang::Decl::Kind` short-name table when extending.
+const (
+	ASTRoleDeclaration = "declaration"
+
+	ASTKindCompound          = "Compound" // CompoundStmt — a function body
+	ASTKindTypedef           = "Typedef"
+	ASTKindTypeAlias         = "TypeAlias"
+	ASTKindTypeAliasTemplate = "TypeAliasTemplate"
+	ASTKindUsing             = "Using"
+	ASTKindUsingShadow       = "UsingShadow"
+	ASTKindUsingPack         = "UsingPack"
+)
+
+// AstHasFunctionBody reports whether `n` is a function declaration node
+// with a function body (a Compound child). Lambdas in default arguments
+// and other nested local constructs sit DEEPER than direct children, so
+// a single-level scan rules them out — the classic
+// `void f(std::function<void()> cb = []{});` declaration must NOT be
+// classified as having a body.
+func (n *ASTNode) HasFunctionBody() bool {
+	if n == nil {
+		return false
+	}
+	for _, ch := range n.Children {
+		if ch != nil && ch.Kind == ASTKindCompound {
+			return true
+		}
+	}
+	return false
+}
+
+type ASTNode struct {
+	// Role is a coarse category ("declaration", "statement", "expression",
+	// "specifier", "type", "templateArgument"). Not load-bearing for our
+	// use — we key off Kind.
+	Role string `json:"role"`
+	// Kind is the clang AST node class. Examples we care about:
+	//   FunctionDecl / CXXMethodDecl / CXXConstructorDecl / CXXDestructorDecl
+	//   TypedefDecl / TypeAliasDecl / TypeAliasTemplateDecl
+	//   UsingDecl / UsingDirectiveDecl / UsingShadowDecl / UsingPackDecl
+	//   CompoundStmt  (presence in children = function has body)
+	Kind string `json:"kind"`
+	// Detail is the clang-pretty-printed name/type of this node.
+	Detail string `json:"detail,omitempty"`
+	// Arcana is the raw clang "ast-dump" line for this node.
+	Arcana string `json:"arcana,omitempty"`
+	// Range covers the entire node.
+	Range Range `json:"range,omitempty"`
+	// Children are nested AST nodes.
+	Children []*ASTNode `json:"children,omitempty"`
+}
+
 // TypeHierarchyItem represents a node in the type hierarchy tree.
 //
 // @since 3.17.0
@@ -380,4 +442,22 @@ func (cli *LSPClient) TypeHierarchySubtypes(ctx context.Context, item TypeHierar
 	}
 	// Default implementation (or return an error if not supported)
 	return nil, fmt.Errorf("TypeHierarchySubtypes not supported for this language")
+}
+
+// AST issues clangd's `textDocument/ast` request directly. The endpoint
+// is a clangd extension (not standard LSP); other LSPs return
+// MethodNotFound and the caller must fall back to text heuristics.
+func (cli *LSPClient) AST(ctx context.Context, uri DocumentURI, rng Range) (*ASTNode, error) {
+	params := struct {
+		TextDocument TextDocumentIdentifier `json:"textDocument"`
+		Range        Range                  `json:"range"`
+	}{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        rng,
+	}
+	var result *ASTNode
+	if err := cli.Call(ctx, "textDocument/ast", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

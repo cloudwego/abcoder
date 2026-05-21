@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	retry "github.com/avast/retry-go/v4"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	lsp "github.com/sourcegraph/go-lsp"
@@ -99,17 +101,64 @@ func (c *LSPClient) Close() error {
 	return c.Conn.Close()
 }
 
-// Extra wrapper around json rpc to
-// 1. implement a transparent, generic cache
-func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}, opts ...jsonrpc2.CallOption) error {
+// Extra wrapper around jsonrpc2 that retries transient RPC failures.
+// clangd (and other LSPs) occasionally reject otherwise-valid requests
+// with -32602 "Invalid params" / "trying to get AST for non-added
+// document" while a file is still being ready'd, or recover after a
+// brief pause. We retry up to 3 attempts with a fixed 50ms gap and skip
+// retry for terminal errors: MethodNotFound (-32601, server doesn't
+// implement the endpoint) and context cancellation (caller bailed).
+func (cli *LSPClient) Call(ctx context.Context, method string, params, result any, opts ...jsonrpc2.CallOption) error {
 	var raw json.RawMessage
-	if err := cli.Conn.Call(ctx, method, params, &raw); err != nil {
+	err := cli.Conn.Call(ctx, method, params, &raw)
+	if err != nil && shouldRetryRPC(err) {
+		raw = nil
+		err = retry.Do(
+			func() error {
+				raw = nil
+				return cli.Conn.Call(ctx, method, params, &raw)
+			},
+			retry.Context(ctx),
+			retry.Attempts(2), // initial call already happened; 2 more = 3 total
+			retry.Delay(50*time.Millisecond),
+			retry.DelayType(retry.FixedDelay),
+			retry.LastErrorOnly(true),
+			retry.RetryIf(shouldRetryRPC),
+		)
+	}
+	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(raw, result); err != nil {
-		return err
+	return json.Unmarshal(raw, result)
+}
+
+// shouldRetryRPC reports whether err is worth retrying. Terminal cases:
+// MethodNotFound (server doesn't implement) and ctx cancel/deadline.
+func shouldRetryRPC(err error) bool {
+	if err == nil {
+		return false
 	}
-	return nil
+	if IsJSONRPCMethodNotFound(err) {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	return true
+}
+
+// IsJSONRPCMethodNotFound reports whether err is a jsonrpc2 -32601
+// (server doesn't implement the method) — a terminal classification
+// signalling no point in retrying.
+func IsJSONRPCMethodNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var jrpcErr *jsonrpc2.Error
+	if errors.As(err, &jrpcErr) {
+		return jrpcErr.Code == -32601
+	}
+	return false
 }
 
 type initializeParams struct {
