@@ -251,29 +251,31 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		return nil, fmt.Errorf("server did not provide References")
 	}
 
-	// SemanticTokensLegend
-	semanticTokensProvider, ok := vs["semanticTokensProvider"].(map[string]interface{})
-	if !ok || semanticTokensProvider == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider")
-	}
-	legend, ok := semanticTokensProvider["legend"].(map[string]interface{})
-	if !ok || legend == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend")
-	}
-	tokenTypes, ok := legend["tokenTypes"].([]interface{})
-	if !ok || tokenTypes == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend.tokenTypes")
-	}
-	tokenModifiers, ok := legend["tokenModifiers"].([]interface{})
-	if !ok || tokenModifiers == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend.tokenModifiers")
-	}
-	// store to global
-	for _, t := range tokenTypes {
-		cli.tokenTypes = append(cli.tokenTypes, t.(string))
-	}
-	for _, m := range tokenModifiers {
-		cli.tokenModifiers = append(cli.tokenModifiers, m.(string))
+	// SemanticTokensLegend (optional). Newer LSP servers (e.g. gopls
+	// since the LSP 3.17 client-capability gating became strict) won't
+	// advertise `semanticTokensProvider` unless the client declares
+	// matching capability — and many abcoder language paths (Go uses
+	// the native parser, Java uses tree-sitter) never call
+	// SemanticTokens. Treat absence as "this server doesn't support
+	// semantic tokens"; the LSP call itself will surface a method-not-
+	// found error if anything tries.
+	if semanticTokensProvider, ok := vs["semanticTokensProvider"].(map[string]interface{}); ok && semanticTokensProvider != nil {
+		if legend, ok := semanticTokensProvider["legend"].(map[string]interface{}); ok && legend != nil {
+			if tokenTypes, ok := legend["tokenTypes"].([]interface{}); ok {
+				for _, t := range tokenTypes {
+					if s, ok := t.(string); ok {
+						cli.tokenTypes = append(cli.tokenTypes, s)
+					}
+				}
+			}
+			if tokenModifiers, ok := legend["tokenModifiers"].([]interface{}); ok {
+				for _, m := range tokenModifiers {
+					if s, ok := m.(string); ok {
+						cli.tokenModifiers = append(cli.tokenModifiers, s)
+					}
+				}
+			}
+		}
 	}
 
 	// notify the server that we have initialized
