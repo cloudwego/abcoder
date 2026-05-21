@@ -198,7 +198,11 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		trace = "verbose"
 	}
 
-	// NOTICE: some features need to be enabled explicitly
+	// NOTICE: some features need to be enabled explicitly. Modern
+	// servers (gopls, clangd 18+) suppress `semanticTokensProvider`
+	// from the initialize response unless the client declares
+	// semanticTokens support — so we always advertise it here, even
+	// for languages that don't use the LSP path for tokens.
 	cs := map[string]interface{}{
 		"workspace": map[string]interface{}{
 			"symbol": map[string]interface{}{
@@ -210,6 +214,15 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 				// Java uses tree-sitter instead of hierarchical symbols
 				// Golang stays the same as older versions. ABCoder do not use gopls, so don't play with it.
 				"hierarchicalDocumentSymbolSupport": (language != uniast.Java && language != uniast.Golang),
+			},
+			"semanticTokens": map[string]interface{}{
+				"requests": map[string]interface{}{
+					"range": true,
+					"full":  true,
+				},
+				"tokenTypes":     []string{},
+				"tokenModifiers": []string{},
+				"formats":        []string{"relative"},
 			},
 		},
 	}
