@@ -216,31 +216,13 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 				"hierarchicalDocumentSymbolSupport": (language != uniast.Java && language != uniast.Golang),
 			},
 			"semanticTokens": map[string]interface{}{
-				"dynamicRegistration": true,
 				"requests": map[string]interface{}{
 					"range": true,
-					"full":  map[string]interface{}{"delta": true},
+					"full":  true,
 				},
-				// Empty tokenTypes/tokenModifiers is rejected by some servers
-				// (e.g. recent gopls) — they treat it as "client supports
-				// nothing" and silently omit semanticTokensProvider from the
-				// initialize response. Advertise the standard LSP 3.17 set so
-				// every server we target returns the provider.
-				"tokenTypes": []string{
-					"namespace", "type", "class", "enum", "interface", "struct",
-					"typeParameter", "parameter", "variable", "property",
-					"enumMember", "event", "function", "method", "macro",
-					"keyword", "modifier", "comment", "string", "number",
-					"regexp", "operator", "decorator",
-				},
-				"tokenModifiers": []string{
-					"declaration", "definition", "readonly", "static",
-					"deprecated", "abstract", "async", "modification",
-					"documentation", "defaultLibrary",
-				},
-				"formats":                []string{"relative"},
-				"overlappingTokenSupport": false,
-				"multilineTokenSupport":   false,
+				"tokenTypes":     []string{},
+				"tokenModifiers": []string{},
+				"formats":        []string{"relative"},
 			},
 		},
 	}
