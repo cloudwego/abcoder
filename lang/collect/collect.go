@@ -741,10 +741,14 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		if p == "" {
 			return ""
 		}
-		if filepath.IsAbs(p) {
-			return filepath.Clean(p)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(c.repo, p)
 		}
-		return filepath.Clean(filepath.Join(c.repo, p))
+		// Resolve symlinks so c.files keys match the realpath-shaped
+		// URIs that NewURI produces — otherwise downstream lookups via
+		// `c.files[symbol.Location.URI.File()]` miss and the JavaSpec
+		// NameSpace deref panics.
+		return canonicalizePath(filepath.Clean(p))
 	}
 
 	// Merge caches for lookup
