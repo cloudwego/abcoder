@@ -257,6 +257,7 @@ func GetRawContent(fset *token.FileSet, file []byte, node ast.Node, collectComme
 			funcName = fn.Name.Name
 		}
 		fmt.Fprintf(os.Stderr, "end < begin, file: %s, function: %s, possibly because file compilation failed\n", pos.Filename, funcName)
+		return nil
 	}
 	doc.Write(file[pos.Offset:endPos.Offset])
 	return doc.Bytes()
