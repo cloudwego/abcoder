@@ -42,7 +42,7 @@ jobs:
           components: rust-analyzer
 
       - name: Install gopls
-        run: go install golang.org/x/tools/gopls@latest
+        run: go install golang.org/x/tools/gopls@v0.16.2
 
       - name: Run all tests
         run: go test ./lang/... -skip '${{ env.SKIPPED_TESTS }}'
