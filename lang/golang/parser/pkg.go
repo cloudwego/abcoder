@@ -217,11 +217,18 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s, hasCGO: %v\n", mod.Name, dir, pkgPath, hasCGO)
 
 	for _, pkg := range pkgs {
+		// The package may have been pre-parsed by referCodes for cross-module
+		// references (only Functions populated, no File-level Package/Imports).
+		// We must not skip entirely: otherwise File.Package and File.Imports
+		// remain empty, breaking downstream reachability analysis based on
+		// the package import graph. Instead, still fill File-level metadata
+		// but skip duplicate function body parsing and package-level finalization.
+		alreadyParsed := false
 		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
-			continue
+			alreadyParsed = true
 		}
 		if pp, ok := mod.Packages[pkg.ID]; ok && pp != nil {
-			continue
+			alreadyParsed = true
 		}
 		for idx, file := range pkg.Syntax {
 			var filePath string
@@ -278,9 +285,16 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				f.Package = pkg.ID
 				f.Imports = imports.Origins
 			}
+			// Skip duplicate function body parsing when package was pre-parsed.
+			if alreadyParsed {
+				continue
+			}
 			if err := p.parseFile(ctx, file); err != nil {
 				return err
 			}
+		}
+		if alreadyParsed {
+			continue
 		}
 		if obj := mod.Packages[pkg.ID]; obj != nil {
 			// obj.Dependencies = make([]PkgPath, 0, len(pkg.Imports))
