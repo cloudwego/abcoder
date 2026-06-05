@@ -51,6 +51,37 @@ type CollectOption struct {
 	Excludes           []string
 	LoadByPackages     bool
 	BuildFlags         []string
+	// Sysroots is a list of filesystem prefixes whose contents should be
+	// classified under the `cstdlib` module (typically toolchain sysroots
+	// containing libstdc++/glibc/clang builtins). Currently honoured by the
+	// C++ spec only.
+	Sysroots []string
+}
+
+type cppFnLoc struct {
+	mod      string
+	pkg      string
+	hasBody  bool
+	isHeader bool
+}
+
+// isCppHeaderPkg reports whether a C++ pkg path looks like a header file
+// (`.h`, `.hpp`, `.hh`, `.hxx`). Used to bias the .h-decl-vs-.cpp-def
+// dedup toward keeping the header entry.
+func isCppHeaderPkg(s string) bool {
+	return strings.HasSuffix(s, ".h") ||
+		strings.HasSuffix(s, ".hpp") ||
+		strings.HasSuffix(s, ".hh") ||
+		strings.HasSuffix(s, ".hxx")
+}
+
+// canonicalizePath resolves a path to its realpath form. Returns the
+// input unchanged when EvalSymlinks fails or yields an empty string.
+func canonicalizePath(p string) string {
+	if real, err := filepath.EvalSymlinks(p); err == nil && real != "" {
+		return real
+	}
+	return p
 }
 
 type Collector struct {
@@ -59,10 +90,41 @@ type Collector struct {
 
 	repo string
 
+	// mu guards the collector's maps; never held across LSP RPCs.
+	mu sync.Mutex
+
 	syms map[Location]*DocumentSymbol
 
 	//  symbol => (receiver,impl,func)
 	funcs map[*DocumentSymbol]functionInfo
+
+	// cppFnEmitted records, per emitted Function NodeID, where it landed
+	// and whether the original (pre-ImplHead-wrap) content had a body.
+	// Used by export-time dedup to merge a header decl with the .cpp
+	// definition under the header pkg.
+	cppFnEmitted map[string]cppFnLoc
+
+	// cppExtDepsQueue queues external method/function syms for a final
+	// deps pass after Collect — running inline would recurse through
+	// more loads.
+	cppExtDepsQueue []*DocumentSymbol
+
+	// cppFileASTCache caches the WHOLE-FILE clang AST per URI. We issue
+	// one `textDocument/ast` request per file (covering the entire
+	// translation-unit range) and reuse the cached tree for every
+	// symbol lookup in that file — turning N_syms RPCs into N_files.
+	// A nil entry means the request failed for this file; callers must
+	// treat it as "AST unavailable".
+	cppFileASTCache map[DocumentURI]*ASTNode
+	// cppASTUnsupported is set once when the server has signalled it
+	// doesn't implement textDocument/ast (jsonrpc2 -32601). After this
+	// we stop issuing AST requests entirely.
+	cppASTUnsupported bool
+	// exportCtx is the context.Context belonging to the current Export()
+	// invocation. Set at the top of Export and cleared at return; gives
+	// exportSymbol-and-friends access to ctx without rippling a new
+	// parameter through every recursive helper.
+	exportCtx context.Context
 
 	// 	symbol => [deps]
 	deps map[*DocumentSymbol][]dependency
@@ -100,23 +162,198 @@ type Collector struct {
 	CollectOption
 }
 
+// collectorConcurrency caps the parallelism for processSymbol and the dep
+// collection token loop. 32 matches clangd's default -j=32, letting every
+// worker thread on the server side be saturated by an in-flight RPC.
+const collectorConcurrency = 32
+
 // UseJavaIPC sets the Java IPC converter caches as the source of truth for Java collecting.
 // When enabled, Java Collect will not rely on LSP (no Definition/SemanticTokens).
 func (c *Collector) UseJavaIPC(conv *javaipc.Converter) {
 	c.javaIPC = conv
 }
 
+
 // addImplementsRel records that `from` implements `iface`. Idempotent on (from, iface).
 func (c *Collector) addImplementsRel(from *DocumentSymbol, iface *DocumentSymbol, tokenLoc Location) {
 	if from == nil || iface == nil {
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for _, existing := range c.implementsRel[from] {
 		if existing.Symbol == iface {
 			return
 		}
 	}
 	c.implementsRel[from] = append(c.implementsRel[from], dependency{Location: tokenLoc, Symbol: iface})
+}
+
+// cppASTForSymbol returns the smallest AST declaration node whose range
+// contains the symbol's range, by walking the cached whole-file AST.
+// Per-symbol classification costs N_files RPCs instead of N_syms RPCs.
+// Returns nil when AST is unavailable; callers must default sensibly —
+// there is no text fallback.
+func (c *Collector) cppASTForSymbol(ctx context.Context, sym *DocumentSymbol) *ASTNode {
+	if c.cli == nil || sym == nil || c.cppASTUnsupported {
+		return nil
+	}
+	root := c.cppFileAST(ctx, sym.Location.URI)
+	if root == nil {
+		return nil
+	}
+	target := sym.Location.Range
+	var best *ASTNode
+	var walk func(n *ASTNode)
+	walk = func(n *ASTNode) {
+		if n == nil {
+			return
+		}
+		if n.Role == ASTRoleDeclaration && n.Range.Include(target) {
+			if best == nil || best.Range.Include(n.Range) {
+				best = n
+			}
+		}
+		for _, ch := range n.Children {
+			walk(ch)
+		}
+	}
+	walk(root)
+	if best != nil {
+		return best
+	}
+	// No declaration node matched the symbol's range — return nil rather
+	// than falling back to the TranslationUnit root, which would let
+	// downstream callers (e.g. cppASTHasBody) confuse "no symbol here"
+	// with "found some unrelated node".
+	return nil
+}
+
+// cppFileAST returns the cached AST root for uri, fetching once on
+// first access.
+func (c *Collector) cppFileAST(ctx context.Context, uri DocumentURI) *ASTNode {
+	c.mu.Lock()
+	if cached, ok := c.cppFileASTCache[uri]; ok {
+		c.mu.Unlock()
+		return cached
+	}
+	c.mu.Unlock()
+	// clangd's textDocument/ast requires the document be in its session
+	// (responds with -32602 "trying to get AST for non-added document"
+	// otherwise). DidOpen is idempotent on the client side.
+	_, _ = c.cli.DidOpen(ctx, uri)
+	// Whole-file range. clangd rejects line numbers past the file end
+	// with "Line value is out of range". LineCounts gives the starting
+	// byte-offset of each line; valid line indices are 0..len-1.
+	// End.Character must cover the last line's actual content so that
+	// files without a trailing newline don't drop their last line from
+	// the requested range.
+	lineCount := len(c.cli.LineCounts(uri))
+	if lineCount <= 0 {
+		return nil // file not loaded
+	}
+	lastLine := lineCount - 1
+	lastLineText := c.cli.Line(uri, lastLine)
+	lastLineLen := len(lastLineText)
+	if lastLineLen > 0 && lastLineText[lastLineLen-1] == '\n' {
+		lastLineLen--
+	}
+	if lastLineLen > 0 && lastLineText[lastLineLen-1] == '\r' {
+		lastLineLen--
+	}
+	fullRange := Range{
+		Start: Position{Line: 0, Character: 0},
+		End:   Position{Line: lastLine, Character: lastLineLen},
+	}
+	// LSPClient.Call already retries transient failures (-32602
+	// "trying to get AST for non-added document" etc.) up to 3
+	// attempts. By the time we see an error here it's terminal for
+	// this file — cache nil so subsequent symbol lookups skip the
+	// extension. MethodNotFound additionally trips the global
+	// cppASTUnsupported flag.
+	node, err := c.cli.AST(ctx, uri, fullRange)
+	if err != nil {
+		if IsJSONRPCMethodNotFound(err) {
+			c.mu.Lock()
+			c.cppASTUnsupported = true
+			c.mu.Unlock()
+		}
+		c.mu.Lock()
+		c.cppFileASTCache[uri] = nil
+		c.mu.Unlock()
+		return nil
+	}
+	c.mu.Lock()
+	c.cppFileASTCache[uri] = node
+	c.mu.Unlock()
+	return node
+}
+
+// cppASTHasBody reports whether `sym` is a definition (Compound child
+// present in its AST node). `ok` is false when AST data isn't available
+// for this symbol; callers must default — there is no text fallback.
+func (c *Collector) cppASTHasBody(ctx context.Context, sym *DocumentSymbol) (hasBody, ok bool) {
+	node := c.cppASTForSymbol(ctx, sym)
+	if node == nil {
+		return false, false
+	}
+	return node.HasFunctionBody(), true
+}
+
+// cppASTKind returns the clang AST kind ("Typedef", "TypeAlias",
+// "Using", "Function", "CXXRecord", ...) of the deepest declaration
+// node containing the symbol's range. clangd uses short names — no
+// "Decl" suffix. Returns "" + ok=false when AST data isn't available.
+func (c *Collector) cppASTKind(ctx context.Context, sym *DocumentSymbol) (kind string, ok bool) {
+	node := c.cppASTForSymbol(ctx, sym)
+	if node == nil {
+		return "", false
+	}
+	return node.Kind, true
+}
+
+// collectCppBasesViaTypeHierarchy uses LSP typeHierarchy to resolve the
+// supertypes of a C++ class symbol, recording an implements-rel for each
+// resolved base. Returns true when typeHierarchy returned at least one
+// supertype — the caller can then skip the text-level BaseClassRefs
+// fallback. Returns false on RPC failure / empty results.
+//
+// typeHierarchy is the LSP-blessed way to ask the server "what does this
+// class extend" — clangd has the parsed C++ AST so it knows about
+// using-declarations, type aliases, and namespace-qualified bases
+// without us reparsing the declaration text.
+func (c *Collector) collectCppBasesViaTypeHierarchy(ctx context.Context, sym *DocumentSymbol) bool {
+	if c.cli == nil {
+		return false
+	}
+	// SelectionRange (the name token range) is what clangd expects;
+	// fall back to Location.Range.Start if not populated.
+	pos := sym.Location.Range.Start
+	if sym.SelectionRange != nil {
+		pos = sym.SelectionRange.Start
+	}
+	items, err := c.cli.PrepareTypeHierarchy(ctx, sym.Location.URI, pos)
+	if err != nil || len(items) == 0 {
+		return false
+	}
+	resolvedAny := false
+	for _, item := range items {
+		supers, err := c.cli.TypeHierarchySupertypes(ctx, item)
+		if err != nil {
+			continue
+		}
+		for _, sup := range supers {
+			loc := Location{URI: sup.URI, Range: sup.SelectionRange}
+			fakeTok := Token{Location: loc, Type: "class", Text: sup.Name}
+			baseSym, err := c.getSymbolByLocation(ctx, loc, 0, fakeTok)
+			if err != nil || baseSym == nil || baseSym == sym {
+				continue
+			}
+			c.addImplementsRel(sym, baseSym, loc)
+			resolvedAny = true
+		}
+	}
+	return resolvedAny
 }
 
 type methodInfo struct {
@@ -153,7 +390,19 @@ func switchSpec(l uniast.Language, repo string) LanguageSpec {
 	}
 }
 
+// ApplyCollectOptionToSpec forwards language-specific entries from
+// CollectOption to the underlying LanguageSpec. Currently routes
+// `--sysroot` paths into CppSpec; other languages are no-ops.
+func (c *Collector) ApplyCollectOptionToSpec() {
+	if cs, ok := c.spec.(interface{ SetSysroots([]string) }); ok && len(c.Sysroots) > 0 {
+		cs.SetSysroots(c.Sysroots)
+	}
+}
+
 func NewCollector(repo string, cli *LSPClient) *Collector {
+	// Canonicalise: prefix-based "is this file inside the repo?" checks
+	// must match the realpath form clangd reports in sym.Location.URI.
+	repo = canonicalizePath(repo)
 	ret := &Collector{
 		repo:             repo,
 		cli:              cli,
@@ -162,6 +411,8 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 		funcs:            map[*DocumentSymbol]functionInfo{},
 		deps:             map[*DocumentSymbol][]dependency{},
 		implementsRel:    map[*DocumentSymbol][]dependency{},
+		cppFnEmitted:     map[string]cppFnLoc{},
+		cppFileASTCache:  map[DocumentURI]*ASTNode{},
 		vars:             map[*DocumentSymbol]dependency{},
 		files:            map[string]*uniast.File{},
 		fileContentCache: make(map[string]string),
@@ -221,9 +472,18 @@ func (c *Collector) Collect(ctx context.Context) error {
 		if c.spec.IsEntitySymbol(*sym) {
 			entity_syms = append(entity_syms, sym)
 		}
-		if c.Language != uniast.Java {
-			c.processSymbol(ctx, sym, 1)
+	}
+	if c.Language != uniast.Java {
+		var psg errgroup.Group
+		psg.SetLimit(collectorConcurrency)
+		for _, sym := range root_syms {
+			sym := sym
+			psg.Go(func() error {
+				c.processSymbol(ctx, sym, 1)
+				return nil
+			})
 		}
+		_ = psg.Wait()
 	}
 
 	// collect internal references
@@ -258,87 +518,185 @@ func (c *Collector) Collect(ctx context.Context) error {
 	// 	}
 	// }
 
-	// collect dependencies
+	// collect dependencies — parallel per entity symbol. processSymbol above
+	// already finished, so c.funcs/c.vars are read-only here. Writes to
+	// c.deps and c.syms are routed through c.mu / addSymbol.
+	var deg errgroup.Group
+	deg.SetLimit(collectorConcurrency)
 	for _, sym := range entity_syms {
-	next_token:
+		sym := sym
+		deg.Go(func() error {
+			c.collectDepsForEntity(ctx, sym)
+			return nil
+		})
+	}
+	_ = deg.Wait()
 
-		for i, token := range sym.Tokens {
-			// only entity token need to be collect (std token is only collected when NeedStdSymbol is true)
-			if !c.spec.IsEntityToken(token) {
+	// C++: needProcessExternal is gated on SKObject (clangd never reports
+	// that for C++), so external method/function bodies — including NVI
+	// base `provide()` → `do_provide()` calls — would otherwise have
+	// empty FC/MC edges. Drain the queue here.
+	if c.Language == uniast.Cpp {
+		c.mu.Lock()
+		queue := c.cppExtDepsQueue
+		c.cppExtDepsQueue = nil
+		c.mu.Unlock()
+		// De-dup; an entity may have been queued by multiple call sites.
+		seen := map[*DocumentSymbol]bool{}
+		uniq := queue[:0]
+		for _, sym := range queue {
+			if seen[sym] {
 				continue
 			}
-
-			// skip function's params
-			if sym.Kind == SKFunction || sym.Kind == SKMethod {
-				if finfo, ok := c.funcs[sym]; ok {
-					if finfo.Method != nil {
-						if finfo.Method.Receiver.Location.Include(token.Location) {
-							continue next_token
-						}
-					}
-					if finfo.Inputs != nil {
-						if _, ok := finfo.Inputs[i]; ok {
-							continue next_token
-						}
-					}
-					if finfo.Outputs != nil {
-						if _, ok := finfo.Outputs[i]; ok {
-							continue next_token
-						}
-					}
-					if finfo.TypeParams != nil {
-						if _, ok := finfo.TypeParams[i]; ok {
-							continue next_token
-						}
+			seen[sym] = true
+			uniq = append(uniq, sym)
+		}
+		var eg errgroup.Group
+		eg.SetLimit(collectorConcurrency)
+		for _, sym := range uniq {
+			sym := sym
+			eg.Go(func() error {
+				if len(sym.Tokens) == 0 {
+					tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+					if err == nil {
+						sym.Tokens = tokens
 					}
 				}
-			}
-			// skip variable's type
-			if sym.Kind == SKVariable || sym.Kind == SKConstant {
-				if dep, ok := c.vars[sym]; ok {
-					if dep.Location.Include(token.Location) {
+				c.collectDepsForEntity(ctx, sym)
+				return nil
+			})
+		}
+		_ = eg.Wait()
+	}
+	return nil
+}
+
+// collectDepsForEntity resolves all dep tokens of a single entity symbol and
+// appends them to c.deps[sym]. The caller is responsible for ensuring
+// processSymbol has already run on sym (c.funcs/c.vars populated) and that
+// sym.Location.URI is open in clangd so Definition queries can be answered.
+func (c *Collector) collectDepsForEntity(ctx context.Context, sym *DocumentSymbol) {
+	localDeps := make([]dependency, 0, 8)
+	// Negative cache only: a token (type, text) that already failed to
+	// resolve once is unlikely to resolve on a later occurrence in the
+	// same body, so we skip the redundant Definition() RPC.
+	// We do NOT positive-cache: in C++, three sibling method calls like
+	// `a.process(c)`, `s.process(c)`, `g.process(c)` share token
+	// (type=method, text=process) but resolve to three different
+	// definitions; a positive cache would collapse them onto the first
+	// receiver's method and silently mis-route the call edges.
+	type tokKey struct{ typ, text string }
+	negativeResolved := make(map[tokKey]bool, 16)
+
+	// Snapshot funcs/vars info for this sym once. After processSymbol
+	// has finished, these maps are only written when external recursion
+	// runs in other goroutines, but never for THIS sym key.
+	c.mu.Lock()
+	finfo, hasFn := c.funcs[sym]
+	vardep, hasVar := c.vars[sym]
+	c.mu.Unlock()
+next_token:
+	for i, token := range sym.Tokens {
+		// only entity token need to be collect (std token is only collected when NeedStdSymbol is true)
+		if !c.spec.IsEntityToken(token) {
+			continue
+		}
+
+		// skip function's params
+		if sym.Kind == SKFunction || sym.Kind == SKMethod {
+			if hasFn {
+				if finfo.Method != nil {
+					rl := finfo.Method.Receiver.Location
+					// Receiver.Location can legitimately be either the
+					// qualifier token (for out-of-line methods, narrow)
+					// or the whole class body (fallback for inline-in-
+					// class methods where the language spec couldn't
+					// find a qualifier in the signature). For the latter
+					// the body contains real call tokens, so we must NOT
+					// blanket-skip everything under Include — only the
+					// literal receiver name should be skipped.
+					if rl.Include(sym.Location) {
+						// inline: token text-match check
+						if finfo.Method.Receiver.Symbol != nil &&
+							token.Text == finfo.Method.Receiver.Symbol.Name {
+							continue next_token
+						}
+					} else if rl.Include(token.Location) {
+						// out-of-line: receiver qualifier token range
+						continue next_token
+					}
+				}
+				if finfo.Inputs != nil {
+					if _, ok := finfo.Inputs[i]; ok {
+						continue next_token
+					}
+				}
+				if finfo.Outputs != nil {
+					if _, ok := finfo.Outputs[i]; ok {
+						continue next_token
+					}
+				}
+				if finfo.TypeParams != nil {
+					if _, ok := finfo.TypeParams[i]; ok {
 						continue next_token
 					}
 				}
 			}
-
-			// go to definition
-			dep, err := c.getSymbolByToken(ctx, token)
-			if err != nil || dep == nil {
-				if token.Type == "method_invocation" || token.Type == "static_method_invocation" {
-					// 外部依赖无法从LSP 中查询到定义，先不报错
-					continue
-				}
-				log.Error("dep token %v not found: %v\n", token, err)
-				continue
-			}
-
-			// NOTICE: some internal symbols may not been get by DocumentSymbols, thus we let Unknown symbol pass
-			if dep.Kind == SKUnknown && c.internal(dep.Location) {
-				// try get symbol kind by token
-				sk := c.spec.TokenKind(token)
-				if sk != SKUnknown {
-					dep.Kind = sk
-					dep.Name = token.Text
-				}
-			}
-
-			// remove local symbols
-			if sym.Location.Include(dep.Location) {
-				continue
-			} else {
-				c.addSymbol(dep.Location, dep)
-			}
-
-			c.deps[sym] = append(c.deps[sym], dependency{
-				Location: token.Location,
-				Symbol:   dep,
-			})
-
 		}
-	}
+		// skip variable's type
+		if sym.Kind == SKVariable || sym.Kind == SKConstant {
+			if hasVar {
+				if vardep.Location.Include(token.Location) {
+					continue next_token
+				}
+			}
+		}
 
-	return nil
+		// go to definition — only consult negative cache to avoid retrying
+		// tokens that already failed once. Positive results are NOT cached
+		// because same (type, text) can resolve to different definitions
+		// per occurrence (e.g. different receivers for the same short
+		// method name).
+		key := tokKey{typ: token.Type, text: token.Text}
+		if negativeResolved[key] {
+			continue
+		}
+		dep, err := c.getSymbolByToken(ctx, token)
+		if err != nil || dep == nil {
+			negativeResolved[key] = true
+			if token.Type == "method_invocation" || token.Type == "static_method_invocation" {
+				// 外部依赖无法从LSP 中查询到定义，先不报错
+				continue
+			}
+			log.Error("dep token %v not found: %v\n", token, err)
+			continue
+		}
+		// NOTICE: some internal symbols may not been get by DocumentSymbols, thus we let Unknown symbol pass
+		if dep.Kind == SKUnknown && c.internal(dep.Location) {
+			// try get symbol kind by token
+			sk := c.spec.TokenKind(token)
+			if sk != SKUnknown {
+				dep.Kind = sk
+				dep.Name = token.Text
+			}
+		}
+
+		// remove local symbols
+		if sym.Location.Include(dep.Location) {
+			continue
+		}
+		c.addSymbol(dep.Location, dep)
+
+		localDeps = append(localDeps, dependency{
+			Location: token.Location,
+			Symbol:   dep,
+		})
+	}
+	if len(localDeps) > 0 {
+		c.mu.Lock()
+		c.deps[sym] = append(c.deps[sym], localDeps...)
+		c.mu.Unlock()
+	}
 }
 
 // ScannerByJavaIPC collects Java symbols/deps from IPC Java Parser caches.
@@ -383,10 +741,14 @@ func (c *Collector) ScannerByJavaIPC(ctx context.Context) ([]*DocumentSymbol, er
 		if p == "" {
 			return ""
 		}
-		if filepath.IsAbs(p) {
-			return filepath.Clean(p)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(c.repo, p)
 		}
-		return filepath.Clean(filepath.Join(c.repo, p))
+		// Resolve symlinks so c.files keys match the realpath-shaped
+		// URIs that NewURI produces — otherwise downstream lookups via
+		// `c.files[symbol.Location.URI.File()]` miss and the JavaSpec
+		// NameSpace deref panics.
+		return canonicalizePath(filepath.Clean(p))
 	}
 
 	// Merge caches for lookup
@@ -1940,10 +2302,22 @@ func (c *Collector) internal(loc Location) bool {
 }
 
 func (c *Collector) addSymbol(loc Location, sym *DocumentSymbol) {
+	// Drop C++ cstdlib (sysroot) and build_generated (codegen) symbols
+	// at the storage gate so they never enter c.syms / c.symsByFile and
+	// thus never get iterated by export. Callers receive the *sym they
+	// constructed back and can still build edges by Identity.
+	if c.Language == uniast.Cpp {
+		if mod, _, err := c.spec.NameSpace(loc.URI.File(), nil); err == nil &&
+			(mod == "cstdlib" || mod == "build_generated") {
+			return
+		}
+	}
+	c.mu.Lock()
 	if _, ok := c.syms[loc]; !ok {
 		c.syms[loc] = sym
 		c.symsByFile[loc.URI] = append(c.symsByFile[loc.URI], sym)
 	}
+	c.mu.Unlock()
 }
 
 func (c *Collector) getSymbolByToken(ctx context.Context, tok Token) (*DocumentSymbol, error) {
@@ -2018,14 +2392,36 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 	if !(from.Type == "typeParameter" && c.Language == uniast.Cpp) {
 		// 1. already loaded
 		// Optimization: only search in symbols of the same file
-		if fileSyms, ok := c.symsByFile[loc.URI]; ok {
-			if sym := c.findMatchingSymbolIn(loc, fileSyms); sym != nil {
+		c.mu.Lock()
+		fileSyms, ok := c.symsByFile[loc.URI]
+		// copy the slice header so iteration is safe after unlock
+		var snap []*DocumentSymbol
+		if ok {
+			snap = append(snap, fileSyms...)
+		}
+		c.mu.Unlock()
+		if ok {
+			if sym := c.findMatchingSymbolIn(loc, snap); sym != nil {
 				return sym, nil
 			}
 		}
 	}
 
-	if c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
+	// Short-circuit for C++ sysroot (cstdlib) and build-time generated
+	// (build_generated) files: skip the deep external-load path
+	// (DocumentSymbols + per-sym Locate/SemanticTokens + processSymbol
+	// + cppExtDepsQueue). Edges still resolve via a fake Unknown symbol
+	// in the !LoadExternalSymbol branch below; export then emits the
+	// edge by Identity without creating a node.
+	skipExternalLoad := false
+	if c.LoadExternalSymbol && c.Language == uniast.Cpp && !c.internal(loc) {
+		if mod, _, err := c.spec.NameSpace(loc.URI.File(), nil); err == nil &&
+			(mod == "cstdlib" || mod == "build_generated") {
+			skipExternalLoad = true
+		}
+	}
+
+	if !skipExternalLoad && c.LoadExternalSymbol && !c.internal(loc) && (c.NeedStdSymbol || !c.spec.IsStdToken(from)) {
 		// 2. load external symbol from its file
 		syms, err := c.cli.DocumentSymbols(ctx, loc.URI)
 		if err != nil {
@@ -2033,21 +2429,23 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 		}
 		// load the other external symbols in that file
 		for _, sym := range syms {
-			// save symbol first
-			if _, ok := c.syms[sym.Location]; !ok {
-				content, err := c.cli.Locate(sym.Location)
-				if err != nil {
-					return nil, err
-				}
-				sym.Text = content
-				c.addSymbol(sym.Location, sym)
+			c.mu.Lock()
+			_, already := c.syms[sym.Location]
+			c.mu.Unlock()
+			if already {
+				continue
 			}
+			content, err := c.cli.Locate(sym.Location)
+			if err != nil {
+				return nil, err
+			}
+			sym.Text = content
+			c.addSymbol(sym.Location, sym)
 		}
 		// load more external symbols if depth permits
 		if depth >= 0 {
 			// process target symbol
 			for _, sym := range syms {
-				// check if need process
 				if c.needProcessExternal(sym) {
 					// collect tokens before process
 					tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
@@ -2056,6 +2454,13 @@ func (c *Collector) getSymbolByLocation(ctx context.Context, loc Location, depth
 					}
 					sym.Tokens = tokens
 					c.processSymbol(ctx, sym, depth-1)
+				}
+				// Defer external C++ method/function deps to a final pass
+				// (inline collection would recurse via getSymbolByToken).
+				if c.Language == uniast.Cpp && (sym.Kind == SKMethod || sym.Kind == SKFunction) {
+					c.mu.Lock()
+					c.cppExtDepsQueue = append(c.cppExtDepsQueue, sym)
+					c.mu.Unlock()
 				}
 			}
 		}
@@ -2220,22 +2625,37 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 	if impl == "" || len(impl) < len(sym.Name) {
 		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
-	// search all methods
+	// C++ multi-inheritance: pick up additional base classes via
+	// typeHierarchy. clangd doesn't return supertypes for dependent
+	// template bases (`class Foo : public Tmpl<X,Y>`), so those edges
+	// will simply be absent — accepting that trade-off keeps the parser
+	// purely LSP-based with no text fallback.
+	if c.Language == uniast.Cpp {
+		c.collectCppBasesViaTypeHierarchy(ctx, sym)
+	}
+
+	// search all methods — snapshot c.syms first so we hold mu only briefly,
+	// then mutate c.funcs under mu.
+	c.mu.Lock()
+	candidates := make([]*DocumentSymbol, 0, len(c.syms))
 	for _, method := range c.syms {
-		// NOTICE: some class method (ex: XXType::new) are SKFunction, but still collect its receiver
 		if (method.Kind == SKMethod || method.Kind == SKFunction) && sym.Location.Include(method.Location) {
-			if _, ok := c.funcs[method]; !ok {
-				c.funcs[method] = functionInfo{}
-			}
-			f := c.funcs[method]
-			f.Method = &methodInfo{
-				Receiver:  *rd,
-				Interface: ind,
-				ImplHead:  impl,
-			}
-			c.funcs[method] = f
+			candidates = append(candidates, method)
 		}
 	}
+	for _, method := range candidates {
+		if _, ok := c.funcs[method]; !ok {
+			c.funcs[method] = functionInfo{}
+		}
+		f := c.funcs[method]
+		f.Method = &methodInfo{
+			Receiver:  *rd,
+			Interface: ind,
+			ImplHead:  impl,
+		}
+		c.funcs[method] = f
+	}
+	c.mu.Unlock()
 }
 
 func (c *Collector) needProcessExternal(sym *DocumentSymbol) bool {
@@ -2258,6 +2678,17 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 			rd = &dependency{sym.Tokens[rec].Location, rsym}
 			if err != nil || rsym == nil {
 				log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
+			}
+		}
+		// C++ fallback: clangd reports inline methods with an unqualified
+		// Name (e.g. `process(...)` instead of `ApiHandler::process(...)`),
+		// so FunctionSymbol can't locate a receiver token in the signature.
+		// Recover the receiver from the enclosing class/struct in the
+		// documentSymbol tree, otherwise distinct methods of distinct
+		// external classes collapse to namespace-level overloads.
+		if rd == nil && c.Language == uniast.Cpp && c.cli != nil {
+			if p := c.cli.GetParent(sym); p != nil && (p.Kind == SKClass || p.Kind == SKStruct || p.Kind == SKInterface) {
+				rd = &dependency{Location: p.Location, Symbol: p}
 			}
 		}
 		tsyms, ts := c.getDepsWithLimit(ctx, sym, tps, depth-1)
@@ -2325,14 +2756,18 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 			log.Error("get type symbol for token %s failed:%v\n", sym.Tokens[i], err)
 			return
 		}
+		c.mu.Lock()
 		c.vars[sym] = dependency{
 			Location: sym.Tokens[i].Location,
 			Symbol:   tsym,
 		}
+		c.mu.Unlock()
 	}
 }
 
 func (c *Collector) updateFunctionInfo(sym *DocumentSymbol, tsyms, ipsyms, opsyms map[int]dependency, ts, is, os []dependency, rsym *dependency, lastToken int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if _, ok := c.funcs[sym]; !ok {
 		c.funcs[sym] = functionInfo{}
 	}

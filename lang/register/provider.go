@@ -15,6 +15,7 @@
 package register
 
 import (
+	cppLsp "github.com/cloudwego/abcoder/lang/cpp/lsp"
 	javaLsp "github.com/cloudwego/abcoder/lang/java/lsp"
 	"github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
@@ -22,5 +23,5 @@ import (
 
 func RegisterProviders() {
 	lsp.RegisterProvider(uniast.Java, &javaLsp.JavaProvider{})
-
+	lsp.RegisterProvider(uniast.Cpp, &cppLsp.CppProvider{})
 }

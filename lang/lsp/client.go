@@ -18,26 +18,43 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	retry "github.com/avast/retry-go/v4"
 	"github.com/cloudwego/abcoder/lang/log"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	lsp "github.com/sourcegraph/go-lsp"
 	"github.com/sourcegraph/jsonrpc2"
+	"golang.org/x/sync/singleflight"
 )
 
 type LSPClient struct {
 	*jsonrpc2.Conn
 	*lspHandler
-	tokenTypes             []string
-	tokenModifiers         []string
-	files                  map[DocumentURI]*TextDocumentItem
-	provider               LanguageServiceProvider
+	tokenTypes     []string
+	tokenModifiers []string
+	files          map[DocumentURI]*TextDocumentItem
+	// filesMu guards files. Lock briefly when checking/inserting an entry;
+	// the per-file Mu inside TextDocumentItem guards per-document caches.
+	filesMu  sync.RWMutex
+	provider LanguageServiceProvider
+
+	// In-flight request dedup. When N workers simultaneously ask for
+	// DocumentSymbols / SemanticTokens / Definition of the same key, only
+	// one RPC is sent; the rest wait on the first one's result. After the
+	// result lands it goes into the per-file cache so future calls are
+	// instant.
+	docSymFlight    singleflight.Group // key: URI
+	semTokFlight    singleflight.Group // key: URI (full-doc semantic tokens)
+	definitionFlight singleflight.Group // key: URI + ":" + line + ":" + col
+
 	ClientOptions
 	LspOptions map[string]string
 }
@@ -84,17 +101,64 @@ func (c *LSPClient) Close() error {
 	return c.Conn.Close()
 }
 
-// Extra wrapper around json rpc to
-// 1. implement a transparent, generic cache
-func (cli *LSPClient) Call(ctx context.Context, method string, params, result interface{}, opts ...jsonrpc2.CallOption) error {
+// Extra wrapper around jsonrpc2 that retries transient RPC failures.
+// clangd (and other LSPs) occasionally reject otherwise-valid requests
+// with -32602 "Invalid params" / "trying to get AST for non-added
+// document" while a file is still being ready'd, or recover after a
+// brief pause. We retry up to 3 attempts with a fixed 50ms gap and skip
+// retry for terminal errors: MethodNotFound (-32601, server doesn't
+// implement the endpoint) and context cancellation (caller bailed).
+func (cli *LSPClient) Call(ctx context.Context, method string, params, result any, opts ...jsonrpc2.CallOption) error {
 	var raw json.RawMessage
-	if err := cli.Conn.Call(ctx, method, params, &raw); err != nil {
+	err := cli.Conn.Call(ctx, method, params, &raw)
+	if err != nil && shouldRetryRPC(err) {
+		raw = nil
+		err = retry.Do(
+			func() error {
+				raw = nil
+				return cli.Conn.Call(ctx, method, params, &raw)
+			},
+			retry.Context(ctx),
+			retry.Attempts(2), // initial call already happened; 2 more = 3 total
+			retry.Delay(50*time.Millisecond),
+			retry.DelayType(retry.FixedDelay),
+			retry.LastErrorOnly(true),
+			retry.RetryIf(shouldRetryRPC),
+		)
+	}
+	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(raw, result); err != nil {
-		return err
+	return json.Unmarshal(raw, result)
+}
+
+// shouldRetryRPC reports whether err is worth retrying. Terminal cases:
+// MethodNotFound (server doesn't implement) and ctx cancel/deadline.
+func shouldRetryRPC(err error) bool {
+	if err == nil {
+		return false
 	}
-	return nil
+	if IsJSONRPCMethodNotFound(err) {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	return true
+}
+
+// IsJSONRPCMethodNotFound reports whether err is a jsonrpc2 -32601
+// (server doesn't implement the method) — a terminal classification
+// signalling no point in retrying.
+func IsJSONRPCMethodNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var jrpcErr *jsonrpc2.Error
+	if errors.As(err, &jrpcErr) {
+		return jrpcErr.Code == -32601
+	}
+	return false
 }
 
 type initializeParams struct {
@@ -187,29 +251,31 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		return nil, fmt.Errorf("server did not provide References")
 	}
 
-	// SemanticTokensLegend
-	semanticTokensProvider, ok := vs["semanticTokensProvider"].(map[string]interface{})
-	if !ok || semanticTokensProvider == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider")
-	}
-	legend, ok := semanticTokensProvider["legend"].(map[string]interface{})
-	if !ok || legend == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend")
-	}
-	tokenTypes, ok := legend["tokenTypes"].([]interface{})
-	if !ok || tokenTypes == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend.tokenTypes")
-	}
-	tokenModifiers, ok := legend["tokenModifiers"].([]interface{})
-	if !ok || tokenModifiers == nil {
-		return nil, fmt.Errorf("server did not provide SemanticTokensProvider.legend.tokenModifiers")
-	}
-	// store to global
-	for _, t := range tokenTypes {
-		cli.tokenTypes = append(cli.tokenTypes, t.(string))
-	}
-	for _, m := range tokenModifiers {
-		cli.tokenModifiers = append(cli.tokenModifiers, m.(string))
+	// SemanticTokensLegend (optional). Newer LSP servers (e.g. gopls
+	// since the LSP 3.17 client-capability gating became strict) won't
+	// advertise `semanticTokensProvider` unless the client declares
+	// matching capability — and many abcoder language paths (Go uses
+	// the native parser, Java uses tree-sitter) never call
+	// SemanticTokens. Treat absence as "this server doesn't support
+	// semantic tokens"; the LSP call itself will surface a method-not-
+	// found error if anything tries.
+	if semanticTokensProvider, ok := vs["semanticTokensProvider"].(map[string]interface{}); ok && semanticTokensProvider != nil {
+		if legend, ok := semanticTokensProvider["legend"].(map[string]interface{}); ok && legend != nil {
+			if tokenTypes, ok := legend["tokenTypes"].([]interface{}); ok {
+				for _, t := range tokenTypes {
+					if s, ok := t.(string); ok {
+						cli.tokenTypes = append(cli.tokenTypes, s)
+					}
+				}
+			}
+			if tokenModifiers, ok := legend["tokenModifiers"].([]interface{}); ok {
+				for _, m := range tokenModifiers {
+					if s, ok := m.(string); ok {
+						cli.tokenModifiers = append(cli.tokenModifiers, s)
+					}
+				}
+			}
+		}
 	}
 
 	// notify the server that we have initialized

@@ -35,6 +35,30 @@ type dependency struct {
 	Symbol   *DocumentSymbol `json:"symbol"`
 }
 
+// lightIdentityForExternal builds a Identity for an external symbol we don't
+// want to fully export (no Type/Function entry produced) but still want to
+// reference from the current symbol's Implements / similar edge fields.
+// Returns nil if not enough info is available.
+func (c *Collector) lightIdentityForExternal(sym *DocumentSymbol) *uniast.Identity {
+	if sym == nil || sym.Name == "" {
+		return nil
+	}
+	file := sym.Location.URI.File()
+	mod, pkg, err := c.spec.NameSpace(file, nil)
+	if err != nil || mod == "" {
+		return nil
+	}
+	name := sym.Name
+	// For C++ classes, the short name from clangd doesn't include namespace;
+	// best-effort prepend the lexical scope from sibling symbols. Skip if it
+	// already qualifies.
+	if c.Language == uniast.Cpp {
+		name = applyCppScopePrefix(c.scopePrefix(sym), name)
+	}
+	id := uniast.NewIdentity(mod, pkg, name)
+	return &id
+}
+
 func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	var rel string
 	if c.internal(loc) {
@@ -78,6 +102,94 @@ func (c *Collector) fileLine(loc Location) uniast.FileLine {
 	}
 }
 
+// dedupCppFunction handles header-decl-vs-cpp-def collapsing for a single
+// emitted Function. Returns true when the caller should drop `obj` (the
+// existing entry already won, possibly with body fields copied over from
+// `obj`). Returns false when `obj` should be written into pkg.Functions
+// as the canonical version.
+func (c *Collector) dedupCppFunction(repo *uniast.Repository, symbol *DocumentSymbol, name, mod, path, content string, obj *uniast.Function) bool {
+	// Decide hasBody from clangd's AST (presence of CompoundStmt under a
+	// FunctionDecl). When the server doesn't support textDocument/ast we
+	// can't safely distinguish definition from declaration; default to
+	// `false` (treat as declaration) so the .cpp body still wins via the
+	// "no prev body" branch when a .cpp emit follows the .h decl.
+	hasBody := false
+	if c.exportCtx != nil {
+		if v, ok := c.cppASTHasBody(c.exportCtx, symbol); ok {
+			hasBody = v
+		}
+	}
+	isHeader := isCppHeaderPkg(path)
+	cur := cppFnLoc{mod: mod, pkg: path, hasBody: hasBody, isHeader: isHeader}
+	prev, hasPrev := c.cppFnEmitted[name]
+	if !hasPrev {
+		c.cppFnEmitted[name] = cur
+		return false
+	}
+	prevPkg := func() *uniast.Package {
+		if pm := repo.Modules[prev.mod]; pm != nil {
+			return pm.Packages[prev.pkg]
+		}
+		return nil
+	}
+	switch {
+	case prev.hasBody && !hasBody && prev.isHeader:
+		return true // header already has body
+	case prev.hasBody && !hasBody && !prev.isHeader:
+		// Move .cpp body into the .h entry we're about to emit.
+		if pp := prevPkg(); pp != nil {
+			if src, ok := pp.Functions[name]; ok {
+				copyFnBodyFields(obj, src)
+				delete(pp.Functions, name)
+			}
+		}
+	case hasBody && !prev.hasBody && prev.isHeader:
+		// .h decl already emitted — copy our body fields into it.
+		if pp := prevPkg(); pp != nil {
+			if hdr, ok := pp.Functions[name]; ok {
+				copyFnBodyFields(hdr, obj)
+				prev.hasBody = true
+				c.cppFnEmitted[name] = prev
+			}
+		}
+		return true
+	case hasBody && !prev.hasBody && !prev.isHeader:
+		if pp := prevPkg(); pp != nil {
+			delete(pp.Functions, name)
+		}
+	default:
+		// Same body status — prefer the header.
+		if prev.isHeader && !isHeader {
+			return true
+		}
+		if isHeader && !prev.isHeader {
+			if pp := prevPkg(); pp != nil {
+				delete(pp.Functions, name)
+			}
+			break
+		}
+		if prev.mod == mod && prev.pkg == path {
+			return true
+		}
+	}
+	c.cppFnEmitted[name] = cur
+	return false
+}
+
+// copyFnBodyFields copies the body-derived fields of src onto dst,
+// leaving dst's identity / receiver / location-anchoring intact. Used by
+// dedupCppFunction to merge a .cpp definition into a .h declaration.
+func copyFnBodyFields(dst, src *uniast.Function) {
+	dst.Content = src.Content
+	dst.FunctionCalls = src.FunctionCalls
+	dst.MethodCalls = src.MethodCalls
+	dst.GlobalVars = src.GlobalVars
+	dst.Types = src.Types
+	dst.Params = src.Params
+	dst.Results = src.Results
+	dst.Signature = src.Signature
+}
+
 func newModule(name string, dir string, lang uniast.Language) *uniast.Module {
 	ret := uniast.NewModule(name, dir, lang)
 	return ret
@@ -94,6 +206,11 @@ func (c *Collector) ExportLocalFunction() map[Location]*DocumentSymbol {
 }
 
 func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
+	// Stash ctx so recursive exportSymbol-and-friends can issue LSP
+	// requests (e.g. textDocument/ast for cpp kind classification)
+	// without threading a new parameter through every helper.
+	c.exportCtx = ctx
+	defer func() { c.exportCtx = nil }()
 	// recursively read all go files in repo
 	repo := uniast.NewRepository(c.repo)
 	modules, err := c.spec.WorkSpace(c.repo)
@@ -129,11 +246,43 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 		}
 	}
 
-	// export symbols
+	// External C++ methods skip processSymbol (gated by needProcessExternal)
+	// so c.funcs has no entry and Type.Methods stays empty. Recover the
+	// receiver from the documentSymbol parent.
+	if c.Language == uniast.Cpp && c.cli != nil {
+		for _, sym := range c.syms {
+			if sym.Kind != SKMethod {
+				continue
+			}
+			if fi, ok := c.funcs[sym]; ok && fi.Method != nil && fi.Method.Receiver.Symbol != nil {
+				continue
+			}
+			p := c.cli.GetParent(sym)
+			if p == nil || (p.Kind != SKClass && p.Kind != SKStruct && p.Kind != SKInterface) {
+				continue
+			}
+			c.receivers[p] = append(c.receivers[p], sym)
+			fi := c.funcs[sym]
+			if fi.Method == nil {
+				fi.Method = &methodInfo{}
+			}
+			fi.Method.Receiver = dependency{Location: p.Location, Symbol: p}
+			c.funcs[sym] = fi
+		}
+	}
+
 	log.Info("Export: exporting %d symbols...\n", len(c.syms))
 	visited := make(map[*DocumentSymbol]*uniast.Identity)
 	for _, symbol := range c.syms {
 		_, _ = c.exportSymbol(&repo, symbol, "", visited)
+	}
+
+	// Synthesize inherited methods per derived class so the call graph can
+	// be walked through NVI/virtual dispatch. Outgoing this-edges in the
+	// synthesized body are devirtualized to derived overrides where present.
+	if c.Language == uniast.Cpp {
+		log.Info("Export: synthesizing inherited C++ methods...\n")
+		c.synthesizeInheritedMethodsCpp(&repo)
 	}
 
 	log.Info("Export: connecting files to packages...\n")
@@ -165,6 +314,24 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 			continue
 		}
 		f.Package = pkgpath
+	}
+
+	// Drop packages that ended up empty after dedup / method-relocation.
+	// For C++ this commonly happens to .cpp packages whose only entries
+	// were method definitions relocated into their .h owner package.
+	for _, m := range repo.Modules {
+		if m == nil {
+			continue
+		}
+		for pkgPath, pkg := range m.Packages {
+			if pkg == nil {
+				delete(m.Packages, pkgPath)
+				continue
+			}
+			if len(pkg.Functions) == 0 && len(pkg.Types) == 0 && len(pkg.Vars) == 0 {
+				delete(m.Packages, pkgPath)
+			}
+		}
 	}
 
 	return &repo, nil
@@ -270,6 +437,35 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 		return
 	}
 
+	if c.Language == uniast.Cpp && c.exportCtx != nil {
+		// AST-only classification — no text fallback. clangd uses short
+		// kind names (strips the `Decl` suffix):
+		//   `TypeAlias` / `TypeAliasTemplate` -> alias of a type; drop
+		//     the symbol, references resolve to the target.
+		//   `UsingDirective` (`using namespace foo;`) -> NOT an alias.
+		//   `Using` / `UsingShadow` / `UsingPack` -> name-import; only
+		//     drop when importing a TYPE (so phantom Class nodes like
+		//     `using common::Provider;` get redirected to the real
+		//     type). LSP Kind says: SKClass/SKStruct/SKEnum/SKInterface
+		//     /SKTypeParameter are types.
+		isAlias := false
+		if kind, ok := c.cppASTKind(c.exportCtx, symbol); ok {
+			switch kind {
+			case ASTKindTypeAlias, ASTKindTypeAliasTemplate:
+				isAlias = true
+			case ASTKindUsing, ASTKindUsingShadow, ASTKindUsingPack:
+				switch symbol.Kind {
+				case SKClass, SKStruct, SKEnum, SKInterface, SKTypeParameter:
+					isAlias = true
+				}
+			}
+		}
+		if isAlias {
+			e = ErrExternalSymbol
+			return
+		}
+	}
+
 	// 判断是否为本地符号
 	// 只有符号是“定义”，或者符号是“本地方法”时，才需要完整导出
 	// 其他情况（如外部引用、或对本地非顶层符号的引用）都只导出标识符
@@ -344,12 +540,8 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			name = c.extractCppCallSig(symbol)
 		}
 
-		// join name with namespace
-		if ns := c.scopePrefix(symbol); ns != "" {
-			if !strings.HasPrefix(name, ns+"::") {
-				name = ns + "::" + name
-			}
-		}
+		// join name with namespace + class chain
+		name = applyCppScopePrefix(c.scopePrefix(symbol), name)
 	}
 
 	tmp := uniast.NewIdentity(mod, path, name)
@@ -377,6 +569,15 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 
 	// Save to visited ONLY WHEN no errors occur
 	visited[symbol] = id
+
+	// cstdlib (sysroot) and build_generated (codegen) modules carry
+	// only edges by design — collect already drops these syms from
+	// c.syms (see addSymbol), so this branch only fires for *recursive*
+	// emission via dep edges (Function.FunctionCalls / Types / etc.).
+	// Return the Identity so the edge still resolves; skip body emission.
+	if c.Language == uniast.Cpp && (mod == "cstdlib" || mod == "build_generated") {
+		return
+	}
 
 	// Walk down from repo struct
 	if repo.Modules[mod] == nil {
@@ -548,6 +749,22 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 				depid, err := c.exportSymbol(repo, dep.Symbol, tok, visited)
 				if err != nil {
+					// Preserve external call edges as lightweight Identities
+					// so the call graph remains walkable in default mode.
+					if errors.Is(err, ErrExternalSymbol) &&
+						(dep.Symbol.Kind == SKFunction || dep.Symbol.Kind == SKMethod) {
+						if ext := c.lightIdentityForExternal(dep.Symbol); ext != nil {
+							pdep := uniast.NewDependency(*ext, c.fileLine(dep.Location))
+							if dep.Symbol.Kind == SKFunction {
+								obj.FunctionCalls = uniast.InsertDependency(obj.FunctionCalls, pdep)
+							} else {
+								if obj.MethodCalls == nil {
+									obj.MethodCalls = make([]uniast.Dependency, 0, len(deps))
+								}
+								obj.MethodCalls = uniast.InsertDependency(obj.MethodCalls, pdep)
+							}
+						}
+					}
 					continue
 				}
 				pdep := uniast.NewDependency(*depid, c.fileLine(dep.Location))
@@ -576,14 +793,57 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 			}
 		}
 		obj.Identity = *id
-		pkg.Functions[id.Name] = obj
+		// C++: a method is reported by clangd as two DocumentSymbols, one
+		// at the header declaration and one at the .cpp definition. We
+		// want exactly one Function in the AST per NodeID, preferring the
+		// one that carries the body (and thus FC/MC edges). When the
+		// definition is unreachable (external base classes, pure-virtual
+		// C++ dedup: clangd reports the .h declaration and .cpp definition
+		// as two DocumentSymbols. Collapse them into a single entry under
+		// the .h pkg (the "owner") carrying the .cpp body's edges.
+		// `content` is raw symbol text — ImplHead-wrapped obj.Content can
+		// look like it has a body even when the original was a decl.
+		dropForDup := false
+		if c.Language == uniast.Cpp && (k == SKMethod || k == SKFunction) {
+			dropForDup = c.dedupCppFunction(repo, symbol, id.Name, mod, path, content, obj)
+		}
+		if !dropForDup {
+			pkg.Functions[id.Name] = obj
+		}
 
 	// Type
 	case SKStruct, SKTypeParameter, SKInterface, SKEnum, SKClass:
+		// Forward declarations (`class X;` / `struct X;`) are reported by
+		// clangd as separate DocumentSymbols. Skip them — the real
+		// definition is emitted by a different pass under its own pkg.
+		// (typedef X Y; also goes through SKClass/SKStruct in clangd but
+		// must NOT be filtered — it never starts with the class/struct
+		// keyword.)
+		if c.Language == uniast.Cpp && (k == SKClass || k == SKStruct) &&
+			!strings.Contains(content, "{") {
+			trim := strings.TrimSpace(content)
+			if strings.HasPrefix(trim, "class ") || strings.HasPrefix(trim, "struct ") {
+				break
+			}
+		}
+		tkind := mapKind(k)
+		// C++ typedefs are reported by clangd with SymbolKind Class/Struct,
+		// but they're aliases. Tag them as Typedef when clang AST says so.
+		// No text-prefix fallback — when ast is unavailable we just leave
+		// it as struct/class.
+		// clangd's textDocument/ast returns short kind names (no "Decl"
+		// suffix): `Typedef` for `typedef X Y;` and `TypeAlias` for
+		// `using Y = X;`.
+		if c.Language == uniast.Cpp && c.exportCtx != nil {
+			if kind, ok := c.cppASTKind(c.exportCtx, symbol); ok &&
+				(kind == ASTKindTypedef || kind == ASTKindTypeAlias) {
+				tkind = uniast.TypeKindTypedef
+			}
+		}
 		obj := &uniast.Type{
 			FileLine: fileLine,
 			Content:  content,
-			TypeKind: mapKind(k),
+			TypeKind: tkind,
 			Exported: public,
 		}
 		// Implements relationship is preserved as a first-class field rather
@@ -597,6 +857,17 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				}
 				iid, err := c.exportSymbol(repo, rel.Symbol, tok, visited)
 				if err != nil {
+					// External base classes are valuable signal even when
+					// the full external symbol isn't loaded — emit a
+					// lightweight Identity so consumers still see the
+					// inheritance edge. (Only do this when we actually
+					// have enough info to form a stable Identity.)
+					if errors.Is(err, ErrExternalSymbol) {
+						if ext := c.lightIdentityForExternal(rel.Symbol); ext != nil {
+							obj.Implements = append(obj.Implements, *ext)
+							implSyms[rel.Symbol] = true
+						}
+					}
 					continue
 				}
 				obj.Implements = append(obj.Implements, *iid)
@@ -638,9 +909,15 @@ func (c *Collector) exportSymbol(repo *uniast.Repository, symbol *DocumentSymbol
 				if err != nil {
 					continue
 				}
-				// NOTICE: use method name as key here
+				// NOTICE: use method name as key here.
+				// For C++: derive the key from the constructed Identity
+				// Name (mid.Name), which includes the full signature
+				// (`ns::Class::handle(int x)`), then strip the receiver
+				// scope via cppBaseName. This produces "handle(int x)"
+				// vs "handle(long x)" so overloads don't collapse onto a
+				// single short-name key.
 				if c.Language == uniast.Cpp {
-					methodName := c.cppBaseName(method.Name)
+					methodName := c.cppBaseName(mid.Name)
 					_, methodExist := obj.Methods[methodName]
 					isHeaderMethod := strings.HasSuffix(method.Location.URI.File(), ".h")
 					if methodExist && isHeaderMethod {
@@ -707,14 +984,306 @@ func (c *Collector) scopePrefix(sym *DocumentSymbol) string {
 		if p == nil {
 			break
 		}
-		if p.Kind == lsp.SKNamespace {
+		// Walk over enclosing namespaces AND class/struct/interface scopes so
+		// inline methods of external classes get the full receiver qualifier
+		// (e.g. `cppservice::ApiHandler::process`). Without the class hop,
+		// every method in an external header collapses to `ns::method` and
+		// distinct methods of distinct classes clash.
+		switch p.Kind {
+		case lsp.SKNamespace, lsp.SKClass, lsp.SKStruct, lsp.SKInterface:
 			if p.Name != "" {
-				parts = append([]string{p.Name}, parts...)
+				n := p.Name
+				if i := strings.IndexByte(n, '<'); i >= 0 { // strip template args: Foo<T> -> Foo
+					n = n[:i]
+				}
+				parts = append([]string{n}, parts...)
 			}
 		}
 		cur = p
 	}
 	return strings.Join(parts, "::") // "a::b"
+}
+
+// applyCppScopePrefix prepends the lexical scope (namespace+class chain) to
+// the bare symbol name, but only the portion that's actually missing.
+//
+// Examples (prefix = "cppservice::ApiHandler"):
+//
+//	"process(...)"                       -> "cppservice::ApiHandler::process(...)"
+//	"ApiHandler::process(...)"           -> "cppservice::ApiHandler::process(...)"
+//	"cppservice::ApiHandler::process()"  -> unchanged
+func applyCppScopePrefix(prefix, name string) string {
+	if prefix == "" {
+		return name
+	}
+	parts := strings.Split(prefix, "::")
+	for i := 0; i < len(parts); i++ {
+		suffix := strings.Join(parts[i:], "::") + "::"
+		if strings.HasPrefix(name, suffix) {
+			if i == 0 {
+				return name
+			}
+			return strings.Join(parts[:i], "::") + "::" + name
+		}
+	}
+	return prefix + "::" + name
+}
+
+// synthesizeInheritedMethodsCpp walks every C++ Type with `Implements` and
+// emits a derived-class view of each inherited method, mirroring the way
+// Model B describes inheritance: a synthesized `D::m` symbol that owns
+// the body of `B::m` but is bound to `D`'s vtable. Virtual dispatch inside
+// the inherited body is devirtualized — calls to `B::n` get rewritten to
+// `D::n` when `D` overrides `n` — so a walker can step from
+// `D::inherited` straight into `D::override` without losing the chain at
+// `B::n`.
+//
+// We deliberately do not rewrite caller-side edges here: the receiver's
+// static type at each call site is not currently propagated through the
+// collector, so we cannot reliably choose the right `D` per call. That
+// rewrite is a follow-up; the synthesized symbols are still useful on
+// their own (they materialize the inheritance closure in the AST, and
+// downstream tooling can map B::m → {D::m} via the Implements graph).
+func (c *Collector) synthesizeInheritedMethodsCpp(repo *uniast.Repository) {
+	// Build a flat index of every concrete function in the repo keyed by
+	// its Identity, so we can look up methods of a base class B in O(1).
+	type funcSlot struct {
+		mod *uniast.Module
+		pkg *uniast.Package
+		fn  *uniast.Function
+	}
+	byReceiver := map[uniast.Identity][]*funcSlot{}
+	// typesById lets a synthesised method back-fill the derived class's
+	// Type.Methods map.
+	typesById := map[uniast.Identity]*uniast.Type{}
+	for _, mod := range repo.Modules {
+		for _, pkg := range mod.Packages {
+			for _, fn := range pkg.Functions {
+				if fn.IsMethod && fn.Receiver != nil {
+					byReceiver[fn.Receiver.Type] = append(byReceiver[fn.Receiver.Type], &funcSlot{mod: mod, pkg: pkg, fn: fn})
+				}
+			}
+			for _, ty := range pkg.Types {
+				typesById[ty.Identity] = ty
+			}
+		}
+	}
+
+	// methodLocalSig returns the receiver-scope-stripped signature
+	// "method(params)" — overload-distinguishing key for dedup so e.g.
+	// `Base::foo(int)` and `Base::foo(string)` don't collide.
+	methodLocalSig := func(qualified string) string {
+		head := qualified
+		tail := ""
+		if i := strings.Index(qualified, "("); i >= 0 {
+			head = qualified[:i]
+			tail = qualified[i:]
+		}
+		if i := strings.LastIndex(head, "::"); i >= 0 {
+			head = head[i+2:]
+		}
+		return head + tail
+	}
+	// methodScope strips the trailing "::method(params)" giving the
+	// receiver namespace+class prefix.
+	methodScope := func(qualified string) string {
+		s := qualified
+		if i := strings.Index(s, "("); i >= 0 {
+			s = s[:i]
+		}
+		if i := strings.LastIndex(s, "::"); i >= 0 {
+			return s[:i]
+		}
+		return ""
+	}
+	// Replace the receiver scope of a qualified method name with `newScope`,
+	// keeping the trailing "::method(params)" intact. Used to rewrite
+	// `B::n(args)` -> `D::n(args)` inside synthesized bodies.
+	withScope := func(qualified, newScope string) string {
+		head := qualified
+		tail := ""
+		if i := strings.Index(head, "("); i >= 0 {
+			tail = head[i:]
+			head = head[:i]
+		}
+		short := head
+		if i := strings.LastIndex(head, "::"); i >= 0 {
+			short = head[i+2:]
+		}
+		if newScope == "" {
+			return short + tail
+		}
+		return newScope + "::" + short + tail
+	}
+
+	// Collect transitive bases of a type (BFS over Implements).
+	transitiveBases := func(t *uniast.Type) []uniast.Identity {
+		seen := map[uniast.Identity]bool{}
+		var out []uniast.Identity
+		queue := append([]uniast.Identity(nil), t.Implements...)
+		for len(queue) > 0 {
+			b := queue[0]
+			queue = queue[1:]
+			if seen[b] {
+				continue
+			}
+			seen[b] = true
+			out = append(out, b)
+			// follow base's bases via repo
+			if bm := repo.Modules[b.ModPath]; bm != nil {
+				if bp := bm.Packages[b.PkgPath]; bp != nil {
+					if bt := bp.Types[b.Name]; bt != nil {
+						queue = append(queue, bt.Implements...)
+					}
+				}
+			}
+		}
+		return out
+	}
+
+	// Iterate over each Type in each module/package; types-snapshot first
+	// to avoid mutating the map while iterating.
+	type typeSlot struct {
+		mod *uniast.Module
+		pkg *uniast.Package
+		ty  *uniast.Type
+	}
+	var allTypes []typeSlot
+	for _, mod := range repo.Modules {
+		for _, pkg := range mod.Packages {
+			for _, ty := range pkg.Types {
+				if len(ty.Implements) > 0 {
+					allTypes = append(allTypes, typeSlot{mod, pkg, ty})
+				}
+			}
+		}
+	}
+
+	for _, ts := range allTypes {
+		D := ts.ty
+		// D's own methods, indexed by local signature (short name + param
+		// list) so overloads like `foo(int)` vs `foo(string)` are treated
+		// as distinct.
+		dOwnBySig := map[string]bool{}
+		for _, f := range byReceiver[D.Identity] {
+			dOwnBySig[methodLocalSig(f.fn.Name)] = true
+		}
+		// Methods already synthesized this round, keyed by local sig,
+		// to avoid duplicates when both diamond bases provide the same
+		// overload.
+		synthBySig := map[string]bool{}
+
+		dScope := D.Identity.Name // "ns::ClassD"
+
+		for _, baseID := range transitiveBases(D) {
+			baseMethods := byReceiver[baseID]
+			// C++ headers + .cpp produce two records with identical
+			// Identity.Name (declaration in header, definition in cpp).
+			// Pick the one with a richer call graph so the synthesis
+			// downstream isn't sensitive to map-iteration order. Keyed
+			// by local sig so overloads survive.
+			bestBySig := map[string]*funcSlot{}
+			callCount := func(f *uniast.Function) int {
+				return len(f.MethodCalls) + len(f.FunctionCalls) + len(f.GlobalVars) + len(f.Types)
+			}
+			for _, bf := range baseMethods {
+				s := methodLocalSig(bf.fn.Name)
+				cur, ok := bestBySig[s]
+				if !ok || callCount(bf.fn) > callCount(cur.fn) {
+					bestBySig[s] = bf
+				}
+			}
+			for sig, bf := range bestBySig {
+				if dOwnBySig[sig] || synthBySig[sig] {
+					continue
+				}
+				// Construct synthesized Identity: "<dScope>::<methodTail>".
+				// Search for the receiver-name `::` only in the head (before
+				// the parameter list) — parameter types like `const
+				// std::string&` contain `::` of their own and would otherwise
+				// trick LastIndex into picking the wrong split point.
+				tail := bf.fn.Name
+				head := bf.fn.Name
+				paramStart := len(bf.fn.Name)
+				if j := strings.Index(bf.fn.Name, "("); j >= 0 {
+					head = bf.fn.Name[:j]
+					paramStart = j
+				}
+				if i := strings.LastIndex(head, "::"); i >= 0 {
+					tail = bf.fn.Name[i+2:]
+				} else {
+					tail = bf.fn.Name[paramStart:] // method has no scope at all
+					tail = head + tail
+				}
+				newName := dScope + "::" + tail
+				newId := uniast.NewIdentity(ts.mod.Name, ts.pkg.PkgPath, newName)
+				if _, exists := ts.pkg.Functions[newName]; exists {
+					synthBySig[sig] = true
+					continue
+				}
+
+				// Deep-copy the function, devirtualizing this-edges where D
+				// overrides the called signature. Match by local sig so we
+				// don't redirect `Base::foo(string)` to `D::foo(string)`
+				// when D only overrode `foo(int)`.
+				rewriteScope := func(target uniast.Identity) uniast.Identity {
+					if methodScope(target.Name) != baseID.Name {
+						return target
+					}
+					if !dOwnBySig[methodLocalSig(target.Name)] {
+						return target
+					}
+					// D has its own override of this signature: redirect
+					// target to D::<sig>.
+					return uniast.NewIdentity(D.Identity.ModPath, D.Identity.PkgPath, withScope(target.Name, dScope))
+				}
+				cloneDeps := func(in []uniast.Dependency) []uniast.Dependency {
+					if len(in) == 0 {
+						return nil
+					}
+					out := make([]uniast.Dependency, 0, len(in))
+					for _, d := range in {
+						nd := d
+						nd.Identity = rewriteScope(d.Identity)
+						out = append(out, nd)
+					}
+					return out
+				}
+
+				synth := &uniast.Function{
+					FileLine:      bf.fn.FileLine,
+					Content:       bf.fn.Content,
+					Signature:     bf.fn.Signature,
+					Exported:      bf.fn.Exported,
+					IsMethod:      true,
+					Receiver:      &uniast.Receiver{IsPointer: false, Type: D.Identity},
+					MethodCalls:   cloneDeps(bf.fn.MethodCalls),
+					FunctionCalls: cloneDeps(bf.fn.FunctionCalls),
+					GlobalVars:    cloneDeps(bf.fn.GlobalVars),
+					Types:         cloneDeps(bf.fn.Types),
+					Params:        cloneDeps(bf.fn.Params),
+					Results:       cloneDeps(bf.fn.Results),
+					Identity:      newId,
+				}
+				ts.pkg.Functions[newId.Name] = synth
+				synthBySig[sig] = true
+				// Back-fill the derived Type's Methods map so consumers
+				// can discover the inherited method through D.Methods.
+				// Key derived from the synthesised Identity Name via
+				// cppBaseName so it matches the native-method key style
+				// ("handle(int x)") and overloads don't collapse.
+				if dt := typesById[D.Identity]; dt != nil {
+					if dt.Methods == nil {
+						dt.Methods = map[string]uniast.Identity{}
+					}
+					key := c.cppBaseName(newId.Name)
+					if _, exists := dt.Methods[key]; !exists {
+						dt.Methods[key] = newId
+					}
+				}
+			}
+		}
+	}
 }
 
 func (c *Collector) cppBaseName(n string) string {
@@ -730,11 +1299,44 @@ func (c *Collector) cppBaseName(n string) string {
 	return strings.TrimSpace(n)
 }
 
-// extractCppCallSig returns "sym.Name(params)" where params is extracted from sym.Text.
+// extractCppCallSig returns "sym.Name(params)".
+//
+// Fast path: clangd populates DocumentSymbol.Detail with the canonical
+// signature (e.g. "void(int x)") for methods and functions — use that
+// directly. Fall back to text-level extraction only when Detail is empty
+// (older LSPs or non-clangd providers).
 func (c *Collector) extractCppCallSig(sym *lsp.DocumentSymbol) (ret string) {
 	name := strings.TrimSpace(sym.Name)
 	if name == "" {
 		return ""
+	}
+	if detail := strings.TrimSpace(sym.Detail); detail != "" {
+		// clangd's Detail is the bare type "void(int x)" — we want
+		// "name(int x)". Find the params parenthesis group.
+		if i := strings.IndexByte(detail, '('); i >= 0 {
+			params := detail[i:]
+			// Trim trailing return-type-style annotations after a
+			// matching ')' close (e.g. " const" / " noexcept" / " -> X").
+			depth := 0
+			end := -1
+			for j := 0; j < len(params); j++ {
+				switch params[j] {
+				case '(':
+					depth++
+				case ')':
+					depth--
+					if depth == 0 {
+						end = j + 1
+					}
+				}
+				if end > 0 {
+					break
+				}
+			}
+			if end > 0 {
+				return name + params[:end]
+			}
+		}
 	}
 	text := sym.Text
 	if text == "" {

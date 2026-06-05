@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 
@@ -167,6 +168,14 @@ func NewURI(file string) DocumentURI {
 	if !filepath.IsAbs(file) {
 		file, _ = filepath.Abs(file)
 	}
+	// Canonicalise via realpath so symlinks don't produce two URIs for the
+	// same physical file. clangd resolves symlinks internally and returns
+	// realpath-based URIs in its responses; if we registered the file
+	// under the symlinked path, the response URI wouldn't match our
+	// `cli.files` key (and breaks every downstream Location comparison).
+	if real, err := filepath.EvalSymlinks(file); err == nil && real != "" {
+		file = real
+	}
 	return DocumentURI("file://" + file)
 }
 
@@ -179,10 +188,27 @@ type TextDocumentItem struct {
 	Symbols        map[Range]*DocumentSymbol `json:"-"`
 	Definitions    map[Position][]Location   `json:"-"`
 	SemanticTokens *SemanticTokens           `json:"-"`
+	// Mu protects Symbols, Definitions, SemanticTokens, ServerOpened from
+	// concurrent access. Pointer so that copying TextDocumentItem (e.g.
+	// when building didOpen params) doesn't copy the lock. RPC calls are
+	// issued without holding this lock; only cache check / write are
+	// guarded.
+	Mu *sync.Mutex `json:"-"`
+	// ServerOpened tracks whether we've actually sent textDocument/didOpen
+	// for this file to the LSP server. Read helpers like ensureLocalFile
+	// populate the local cache without notifying the server; DidOpen must
+	// still send the notification on first transition to true so clangd
+	// can answer subsequent AST queries (e.g. documentSymbol/definition).
+	ServerOpened bool `json:"-"`
 }
 
 type DocumentSymbol struct {
-	Name     string            `json:"name"`
+	Name string `json:"name"`
+	// Detail is the optional "more detail for this symbol" string from
+	// the LSP spec — clangd populates it with the function signature
+	// (e.g. "void(int x)") for SKMethod/SKFunction kinds, which lets us
+	// skip our own text-level signature extraction in extractCppCallSig.
+	Detail   string            `json:"detail,omitempty"`
 	Kind     SymbolKind        `json:"kind"`
 	Tags     []json.RawMessage `json:"tags"`
 	Children []*DocumentSymbol `json:"children"`
@@ -242,6 +268,68 @@ type SymbolInformation struct {
 	Kind          SymbolKind `json:"kind"`
 	Location      Location   `json:"location"`
 	ContainerName string     `json:"containerName,omitempty"`
+}
+
+// ASTNode mirrors clangd's `textDocument/ast` response shape. It's NOT
+// part of the LSP standard — clangd-only — and we use it to skip text
+// heuristics for function body / typedef / using-declaration kind
+// detection. Other LSPs returning "method not found" is normal and
+// callers must fall back to text inspection.
+//
+// Reference: https://clangd.llvm.org/extensions#ast
+//
+// clangd uses short kind names (no "Decl" suffix). The constants below
+// cover every kind the C++ collector keys off — keep them in sync with
+// clangd's `clang::Decl::Kind` short-name table when extending.
+const (
+	ASTRoleDeclaration = "declaration"
+
+	ASTKindCompound          = "Compound" // CompoundStmt — a function body
+	ASTKindTypedef           = "Typedef"
+	ASTKindTypeAlias         = "TypeAlias"
+	ASTKindTypeAliasTemplate = "TypeAliasTemplate"
+	ASTKindUsing             = "Using"
+	ASTKindUsingShadow       = "UsingShadow"
+	ASTKindUsingPack         = "UsingPack"
+)
+
+// AstHasFunctionBody reports whether `n` is a function declaration node
+// with a function body (a Compound child). Lambdas in default arguments
+// and other nested local constructs sit DEEPER than direct children, so
+// a single-level scan rules them out — the classic
+// `void f(std::function<void()> cb = []{});` declaration must NOT be
+// classified as having a body.
+func (n *ASTNode) HasFunctionBody() bool {
+	if n == nil {
+		return false
+	}
+	for _, ch := range n.Children {
+		if ch != nil && ch.Kind == ASTKindCompound {
+			return true
+		}
+	}
+	return false
+}
+
+type ASTNode struct {
+	// Role is a coarse category ("declaration", "statement", "expression",
+	// "specifier", "type", "templateArgument"). Not load-bearing for our
+	// use — we key off Kind.
+	Role string `json:"role"`
+	// Kind is the clang AST node class. Examples we care about:
+	//   FunctionDecl / CXXMethodDecl / CXXConstructorDecl / CXXDestructorDecl
+	//   TypedefDecl / TypeAliasDecl / TypeAliasTemplateDecl
+	//   UsingDecl / UsingDirectiveDecl / UsingShadowDecl / UsingPackDecl
+	//   CompoundStmt  (presence in children = function has body)
+	Kind string `json:"kind"`
+	// Detail is the clang-pretty-printed name/type of this node.
+	Detail string `json:"detail,omitempty"`
+	// Arcana is the raw clang "ast-dump" line for this node.
+	Arcana string `json:"arcana,omitempty"`
+	// Range covers the entire node.
+	Range Range `json:"range,omitempty"`
+	// Children are nested AST nodes.
+	Children []*ASTNode `json:"children,omitempty"`
 }
 
 // TypeHierarchyItem represents a node in the type hierarchy tree.
@@ -354,4 +442,22 @@ func (cli *LSPClient) TypeHierarchySubtypes(ctx context.Context, item TypeHierar
 	}
 	// Default implementation (or return an error if not supported)
 	return nil, fmt.Errorf("TypeHierarchySubtypes not supported for this language")
+}
+
+// AST issues clangd's `textDocument/ast` request directly. The endpoint
+// is a clangd extension (not standard LSP); other LSPs return
+// MethodNotFound and the caller must fall back to text heuristics.
+func (cli *LSPClient) AST(ctx context.Context, uri DocumentURI, rng Range) (*ASTNode, error) {
+	params := struct {
+		TextDocument TextDocumentIdentifier `json:"textDocument"`
+		Range        Range                  `json:"range"`
+	}{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        rng,
+	}
+	var result *ASTNode
+	if err := cli.Call(ctx, "textDocument/ast", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

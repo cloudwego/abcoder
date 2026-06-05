@@ -16,16 +16,78 @@ package cpp
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	lsp "github.com/cloudwego/abcoder/lang/lsp"
 	"github.com/cloudwego/abcoder/lang/uniast"
 	"github.com/cloudwego/abcoder/lang/utils"
 )
 
+// clangd semantic-token type names.
+const (
+	tokClass         = "class"
+	tokStruct        = "struct"
+	tokType          = "type"
+	tokInterface     = "interface"
+	tokConcept       = "concept"
+	tokEnum          = "enum"
+	tokEnumMember    = "enumMember"
+	tokFunction      = "function"
+	tokMethod        = "method"
+	tokMacro         = "macro"
+	tokVariable      = "variable"
+	tokParameter     = "parameter"
+	tokTypeParameter = "typeParameter"
+	tokNamespace     = "namespace"
+	tokComment       = "comment"
+	tokModifier      = "modifier"
+	tokBracket       = "bracket"
+	tokLabel         = "label"
+	tokOperator      = "operator"
+	tokProperty      = "property"
+	tokUnknown       = "unknown"
+)
+
+// clangd semantic-token modifier names.
+const (
+	modDeclaration   = "declaration"
+	modDefinition    = "definition"
+	modGlobalScope   = "globalScope"
+	modDefaultLibrary = "defaultLibrary"
+)
+
 type CppSpec struct {
-	repo string
+	repo     string // repository root absolute realpath
+	selfName string // "host/org/repo" of the repo being parsed
+
+	// User-declared sysroot prefixes. Any file path under one of these is
+	// bucketed under module `cstdlib`. Set via the abcoder `--sysroot`
+	// flag (repeatable). Order doesn't matter — first match wins.
+	sysroots []string
+
+	repoMu   sync.Mutex
+	repoMods map[string]repoInfo // dir containing .git -> resolved repo info
+
+	// clangd often reports Range covering only the identifier, so alias /
+	// base-class detection falls back to reading source. declCache memoises
+	// declarationText per (URI, line, col).
+	srcMu     sync.Mutex
+	srcLines  map[string][]string
+	declCache map[declKey]string
+}
+
+type declKey struct {
+	uri  lsp.DocumentURI
+	line int
+	col  int
+}
+
+type repoInfo struct {
+	root string // repository root on disk
+	name string // "org/repo" derived from remote.origin.url, falls back to base(root)
 }
 
 func (c *CppSpec) ProtectedSymbolKinds() []lsp.SymbolKind {
@@ -33,7 +95,61 @@ func (c *CppSpec) ProtectedSymbolKinds() []lsp.SymbolKind {
 }
 
 func NewCppSpec() *CppSpec {
-	return &CppSpec{}
+	return &CppSpec{
+		repoMods:  map[string]repoInfo{},
+		srcLines:  map[string][]string{},
+		declCache: map[declKey]string{},
+	}
+}
+
+// SetSysroots registers path prefixes whose contents are classified as
+// the `cstdlib` module. Entries are realpath-resolved to match clangd URIs.
+func (c *CppSpec) SetSysroots(roots []string) {
+	c.sysroots = c.sysroots[:0]
+	for _, r := range roots {
+		if r = strings.TrimSpace(r); r == "" {
+			continue
+		}
+		c.sysroots = append(c.sysroots, canonicalizeAbs(r))
+	}
+}
+
+// canonicalizeAbs returns an absolute, realpath-resolved version of p.
+// Either step is allowed to fail; the remaining transformations still
+// apply. Used so path-prefix comparisons (repo, sysroots) match what
+// clangd reports in sym.Location.URI.
+func canonicalizeAbs(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil && real != "" {
+		p = real
+	}
+	return p
+}
+
+// sourceLine returns line N (0-based) from the file at uri, reading and
+// caching the file content on first access. Returns "" on any error or if
+// N is out of range. Safe for concurrent use.
+func (c *CppSpec) sourceLine(uri lsp.DocumentURI, n int) string {
+	path := uri.File()
+	c.srcMu.Lock()
+	lines, ok := c.srcLines[path]
+	c.srcMu.Unlock()
+	if !ok {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return ""
+		}
+		lines = strings.Split(string(b), "\n")
+		c.srcMu.Lock()
+		c.srcLines[path] = lines
+		c.srcMu.Unlock()
+	}
+	if n < 0 || n >= len(lines) {
+		return ""
+	}
+	return lines[n]
 }
 
 func (c *CppSpec) FileImports(content []byte) ([]uniast.Import, error) {
@@ -42,34 +158,214 @@ func (c *CppSpec) FileImports(content []byte) ([]uniast.Import, error) {
 
 // XXX: maybe multi module support for C++?
 func (c *CppSpec) WorkSpace(root string) (map[string]string, error) {
-	c.repo = root
-	rets := map[string]string{}
-	absPath, err := filepath.Abs(root)
-	if err != nil {
+	if _, err := filepath.Abs(root); err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
-	rets["current"] = absPath
-	return rets, nil
+	// Path comparisons must match clangd's URI form (realpath).
+	c.repo = canonicalizeAbs(root)
+	absPath := c.repo
+
+	// Derive a module name for this repo from its own .git/config; fall back
+	// to the directory basename so the JSON never gets the generic "current".
+	name := ""
+	if info, err := os.Stat(filepath.Join(absPath, ".git")); err == nil && info.IsDir() {
+		name = readGitOriginOrgRepo(filepath.Join(absPath, ".git", "config"))
+	}
+	if name == "" {
+		name = filepath.Base(absPath)
+	}
+	c.selfName = name
+
+	return map[string]string{name: absPath}, nil
 }
 
 // returns: modname, pathpath, error
 // Multiple symbols with the same name could occur (for example in the Linux kernel).
 // The identify is mod::pkg::name. So we use the pkg (the file name) to distinguish them.
 func (c *CppSpec) NameSpace(path string, file *uniast.File) (string, string, error) {
-	// external lib: only standard library (system headers), in /usr/
-	if !strings.HasPrefix(path, c.repo) {
-		if strings.HasPrefix(path, "/usr") {
-			// assume it is c system library
-			return "cstdlib", "cstdlib", nil
-		}
-		return "external", "external", nil
+	// Build-time generated artifacts (IDL/proto/blade glue under
+	// build64_release). Route to a dedicated module so they're
+	// distinguishable from hand-written project sources.
+	if i := strings.Index(path, "/build64_release/"); i >= 0 {
+		return "build_generated", path[i+len("/build64_release/"):], nil
 	}
+	if hasPathPrefix(path, c.repo) {
+		rel, _ := filepath.Rel(c.repo, path)
+		return c.selfName, rel, nil
+	}
+	// User-declared sysroot(s): bucket every header/source under them as
+	// `cstdlib`. Stripping the sysroot prefix keeps pkg paths stable across
+	// machines that install toolchains in different locations.
+	for _, sr := range c.sysroots {
+		if sr == "" {
+			continue
+		}
+		if hasPathPrefix(path, sr) {
+			rel, _ := filepath.Rel(sr, path)
+			return "cstdlib", rel, nil
+		}
+	}
+	if info, ok := c.lookupExternalRepo(path); ok {
+		relpath, err := filepath.Rel(info.root, path)
+		if err != nil {
+			relpath = path
+		}
+		return info.name, relpath, nil
+	}
+	return "external", path, nil
+}
 
-	relpath, _ := filepath.Rel(c.repo, path)
-	return "current", relpath, nil
+// hasPathPrefix is HasPrefix that respects path boundaries: "/a/foo" is not a
+// prefix of "/a/foobar". This avoids false matches when one repo's path is a
+// textual prefix of another's (e.g. /freq vs /freq_service).
+func hasPathPrefix(p, root string) bool {
+	if !strings.HasPrefix(p, root) {
+		return false
+	}
+	if len(p) == len(root) {
+		return true
+	}
+	return p[len(root)] == filepath.Separator
+}
+
+// lookupExternalRepo walks upward from path until it finds a directory holding
+// a .git entry, parses remote.origin.url to derive "org/repo", and caches the
+// result. Returns ok=false if no enclosing git repo is found.
+func (c *CppSpec) lookupExternalRepo(path string) (repoInfo, bool) {
+	dir := filepath.Dir(path)
+	visited := []string{}
+	for {
+		if dir == "" || dir == "/" || dir == "." {
+			break
+		}
+		c.repoMu.Lock()
+		info, hit := c.repoMods[dir]
+		c.repoMu.Unlock()
+		if hit {
+			c.cacheChain(visited, info)
+			if info.root == "" {
+				return repoInfo{}, false
+			}
+			return info, true
+		}
+		gitPath := filepath.Join(dir, ".git")
+		if fi, err := os.Stat(gitPath); err == nil && fi.IsDir() {
+			name := readGitOriginOrgRepo(filepath.Join(gitPath, "config"))
+			if name == "" {
+				name = filepath.Base(dir)
+			}
+			info = repoInfo{root: dir, name: name}
+			c.repoMu.Lock()
+			c.repoMods[dir] = info
+			c.repoMu.Unlock()
+			c.cacheChain(visited, info)
+			return info, true
+		}
+		visited = append(visited, dir)
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	// negative-cache so future lookups under the same path don't re-walk
+	neg := repoInfo{}
+	c.repoMu.Lock()
+	for _, d := range visited {
+		c.repoMods[d] = neg
+	}
+	c.repoMu.Unlock()
+	return repoInfo{}, false
+}
+
+func (c *CppSpec) cacheChain(dirs []string, info repoInfo) {
+	if len(dirs) == 0 {
+		return
+	}
+	c.repoMu.Lock()
+	defer c.repoMu.Unlock()
+	for _, d := range dirs {
+		c.repoMods[d] = info
+	}
+}
+
+// readGitOriginOrgRepo parses a git config file and returns "host/org/repo"
+// derived from the [remote "origin"] url. Supports both ssh and https forms:
+//
+//	git@code.byted.org:data/cppservice          -> code.byted.org/data/cppservice
+//	https://code.byted.org/data-arch/feathub.git -> code.byted.org/data-arch/feathub
+//
+// When the host can't be determined, returns "org/repo" without prefix.
+func readGitOriginOrgRepo(cfgPath string) string {
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return ""
+	}
+	inOrigin := false
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "[") {
+			inOrigin = strings.Contains(line, `remote "origin"`)
+			continue
+		}
+		if !inOrigin {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq < 0 || strings.TrimSpace(line[:eq]) != "url" {
+			continue
+		}
+		u := strings.TrimSpace(line[eq+1:])
+		u = strings.TrimSuffix(u, ".git")
+		host := ""
+		// Prefer scheme-based parse first so `https://...` isn't
+		// mistaken for the ssh `user@host:path` form (both contain `:`).
+		if i := strings.Index(u, "://"); i >= 0 {
+			// https://host/org/repo
+			rest := u[i+3:]
+			if at := strings.LastIndex(rest, "@"); at >= 0 {
+				rest = rest[at+1:] // strip user@
+			}
+			if slash := strings.IndexByte(rest, '/'); slash >= 0 {
+				host = rest[:slash]
+				u = rest[slash+1:]
+			} else {
+				u = rest
+			}
+		} else if i := strings.LastIndex(u, ":"); i >= 0 && !strings.Contains(u[:i], "/") {
+			// ssh: git@host:org/repo
+			head := u[:i]
+			if at := strings.LastIndex(head, "@"); at >= 0 {
+				host = head[at+1:]
+			} else {
+				host = head
+			}
+			u = u[i+1:]
+		}
+		parts := strings.Split(u, "/")
+		var orgRepo string
+		if n := len(parts); n >= 2 {
+			orgRepo = parts[n-2] + "/" + parts[n-1]
+		} else {
+			orgRepo = u
+		}
+		if host != "" {
+			return host + "/" + orgRepo
+		}
+		return orgRepo
+	}
+	return ""
 }
 
 func (c *CppSpec) ShouldSkip(path string) bool {
+	// Build-time generated artifacts (IDL/proto/blade codegen under
+	// build64_release). Skipping at scanner level avoids the heavy
+	// DocumentSymbols + per-sym Locate/SemanticTokens cost. Edges from
+	// in-repo source that reference these headers still resolve via the
+	// fake-Unknown fallback in getSymbolByLocation.
+	if strings.Contains(path, "/build64_release/") {
+		return true
+	}
 	if (strings.HasSuffix(path, ".cpp") && !strings.HasSuffix(path, "_test.cpp")) || strings.HasSuffix(path, ".h") {
 		return false
 	}
@@ -77,7 +373,7 @@ func (c *CppSpec) ShouldSkip(path string) bool {
 }
 
 func (c *CppSpec) IsDocToken(tok lsp.Token) bool {
-	return tok.Type == "comment"
+	return tok.Type == tokComment
 }
 
 func (c *CppSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
@@ -86,7 +382,7 @@ func (c *CppSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
 			continue
 		}
 		for _, m := range t.Modifiers {
-			if m == "declaration" {
+			if m == modDeclaration {
 				return i
 			}
 		}
@@ -96,40 +392,44 @@ func (c *CppSpec) DeclareTokenOfSymbol(sym lsp.DocumentSymbol) int {
 
 func (c *CppSpec) IsEntityToken(tok lsp.Token) bool {
 	for _, m := range tok.Modifiers {
-		if m == "declaration" || m == "definition" {
+		if m == modDeclaration || m == modDefinition {
 			return false
 		}
 	}
-
-	return tok.Type == "class" || tok.Type == "function" || tok.Type == "method" || tok.Type == "variable"
+	return tok.Type == tokClass || tok.Type == tokFunction || tok.Type == tokMethod || tok.Type == tokVariable
 }
 
 func (c *CppSpec) IsStdToken(tok lsp.Token) bool {
-	panic("TODO")
+	for _, m := range tok.Modifiers {
+		if m == modDefaultLibrary {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *CppSpec) TokenKind(tok lsp.Token) lsp.SymbolKind {
 	switch tok.Type {
-	case "class":
+	case tokClass:
 		return lsp.SKClass
-	case "enum":
+	case tokEnum:
 		return lsp.SKEnum
-	case "enumMember":
+	case tokEnumMember:
 		return lsp.SKEnumMember
-	case "function", "macro":
+	case tokFunction, tokMacro:
 		return lsp.SKFunction
 	// rust spec does not treat parameter as a variable
-	case "parameter":
+	case tokParameter:
 		return lsp.SKVariable
-	case "typeParameter":
+	case tokTypeParameter:
 		return lsp.SKTypeParameter
-	case "method":
+	case tokMethod:
 		return lsp.SKMethod
-	case "namespace":
+	case tokNamespace:
 		return lsp.SKNamespace
-	case "variable":
+	case tokVariable:
 		return lsp.SKVariable
-	case "interface", "concept", "modifier", "type", "bracket", "comment", "label", "operator", "property", "unknown":
+	case tokInterface, tokConcept, tokModifier, tokType, tokBracket, tokComment, tokLabel, tokOperator, tokProperty, tokUnknown:
 		return lsp.SKUnknown
 	}
 	panic(fmt.Sprintf("Weird token type: %s at %+v\n", tok.Type, tok.Location))
@@ -150,7 +450,7 @@ func (c *CppSpec) IsPublicSymbol(sym lsp.DocumentSymbol) bool {
 		return false
 	}
 	for _, m := range sym.Tokens[id].Modifiers {
-		if m == "globalScope" {
+		if m == modGlobalScope {
 			return true
 		}
 	}
@@ -181,7 +481,7 @@ func (c *CppSpec) ImplSymbol(sym lsp.DocumentSymbol) (int, int, int) {
 			continue
 		}
 		switch tok.Type {
-		case "class", "struct":
+		case tokClass, tokStruct:
 			return inter, i, fn
 		}
 	}
@@ -214,7 +514,7 @@ func cppShortTypeName(name string) string {
 }
 
 func (c *CppSpec) GetUnloadedSymbol(from lsp.Token, define lsp.Location) (string, error) {
-	panic("TODO")
+	return "", nil
 }
 
 func (c *CppSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []int) {
@@ -232,7 +532,7 @@ func (c *CppSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []i
 
 	// 1) type params
 	for i, tok := range sym.Tokens {
-		if tok.Type == "typeParameter" {
+		if tok.Type == tokTypeParameter {
 			typeParams = append(typeParams, i)
 		}
 	}
@@ -240,7 +540,7 @@ func (c *CppSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []i
 	// 2) find name token (method/function)
 	nameTokIdx := -1
 	for i, tok := range sym.Tokens {
-		if tok.Type == "method" || tok.Type == "function" {
+		if tok.Type == tokMethod || tok.Type == tokFunction {
 			nameTokIdx = i
 			break
 		}
@@ -258,7 +558,7 @@ func (c *CppSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []i
 				continue
 			}
 			// prefer type-ish token kinds for receiver
-			if tok.Type == "class" || tok.Type == "struct" || tok.Type == "type" {
+			if tok.Type == tokClass || tok.Type == tokStruct || tok.Type == tokType {
 				receiver = i
 				break
 			}
@@ -291,7 +591,7 @@ func (c *CppSpec) FunctionSymbol(sym lsp.DocumentSymbol) (int, []int, []int, []i
 		if !c.IsEntityToken(tok) {
 			continue
 		}
-		if tok.Type == "typeParameter" || tok.Type == "namespace" {
+		if tok.Type == tokTypeParameter || tok.Type == tokNamespace {
 			continue
 		}
 

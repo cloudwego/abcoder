@@ -36,6 +36,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"runtime/pprof"
+	runtimeTrace "runtime/trace"
 	"strings"
 
 	internalCmd "github.com/cloudwego/abcoder/internal/cmd"
@@ -98,10 +101,14 @@ Use this command to verify installation or when reporting issues.`,
 
 func newParseCmd() *cobra.Command {
 	var (
-		flagOutput string
-		flagLsp    string
-		javaHome   string
-		opts       lang.ParseOptions
+		flagOutput       string
+		flagLsp          string
+		javaHome         string
+		flagCPUProfile   string
+		flagTrace        string
+		flagMutexProfile string
+		flagBlockProfile string
+		opts             lang.ParseOptions
 	)
 
 	cmd := &cobra.Command{
@@ -152,6 +159,53 @@ Language Support:
 				opts.LSP = flagLsp
 			}
 
+			if flagCPUProfile != "" {
+				f, err := os.Create(flagCPUProfile)
+				if err != nil {
+					return fmt.Errorf("create cpu profile: %w", err)
+				}
+				defer f.Close()
+				if err := pprof.StartCPUProfile(f); err != nil {
+					return fmt.Errorf("start cpu profile: %w", err)
+				}
+				defer pprof.StopCPUProfile()
+			}
+			if flagTrace != "" {
+				f, err := os.Create(flagTrace)
+				if err != nil {
+					return fmt.Errorf("create trace: %w", err)
+				}
+				defer f.Close()
+				if err := runtimeTrace.Start(f); err != nil {
+					return fmt.Errorf("start trace: %w", err)
+				}
+				defer runtimeTrace.Stop()
+			}
+			if flagMutexProfile != "" {
+				runtime.SetMutexProfileFraction(1)
+				defer func() {
+					f, err := os.Create(flagMutexProfile)
+					if err != nil {
+						log.Error("create mutex profile: %v", err)
+						return
+					}
+					defer f.Close()
+					_ = pprof.Lookup("mutex").WriteTo(f, 0)
+				}()
+			}
+			if flagBlockProfile != "" {
+				runtime.SetBlockProfileRate(1)
+				defer func() {
+					f, err := os.Create(flagBlockProfile)
+					if err != nil {
+						log.Error("create block profile: %v", err)
+						return
+					}
+					defer f.Close()
+					_ = pprof.Lookup("block").WriteTo(f, 0)
+				}()
+			}
+
 			lspOptions := make(map[string]string)
 			if javaHome != "" {
 				lspOptions["java.home"] = javaHome
@@ -188,10 +242,15 @@ Language Support:
 	cmd.Flags().BoolVar(&opts.LoadByPackages, "load-by-packages", false, "Load packages one by one instead of all at once (only works for Go, uses more memory).")
 	cmd.Flags().BoolVar(&opts.DisableBuildGraph, "disable-build-graph", false, "Disable the step of building the dependency graph among AST nodes.")
 	cmd.Flags().StringSliceVar(&opts.Excludes, "exclude", []string{}, "Files or directories to exclude from parsing (can be specified multiple times).")
+	cmd.Flags().StringSliceVar(&opts.Sysroots, "sysroot", []string{}, "Filesystem prefix(es) whose contents should be classified under module `cstdlib` (e.g. /opt/toolchain/sysroot). Repeatable. C++ only.")
 	cmd.Flags().StringVar(&opts.RepoID, "repo-id", "", "Custom identifier for this repository (useful for multi-repo scenarios).")
 	cmd.Flags().StringArrayVar(&opts.BuildFlags, "build-flag", []string{}, "Pass build flags to the Go parser (e.g. -tags=xxx).")
 	cmd.Flags().StringVar(&opts.TSConfig, "tsconfig", "", "Path to tsconfig.json file for TypeScript project configuration.")
 	cmd.Flags().StringSliceVar(&opts.TSSrcDir, "ts-src-dir", []string{}, "Additional TypeScript source directories (can be specified multiple times).")
+	cmd.Flags().StringVar(&flagCPUProfile, "cpu-profile", "", "Write a CPU pprof profile to this file.")
+	cmd.Flags().StringVar(&flagTrace, "trace", "", "Write a runtime/trace event file to this file.")
+	cmd.Flags().StringVar(&flagMutexProfile, "mutex-profile", "", "Write a mutex contention pprof profile to this file.")
+	cmd.Flags().StringVar(&flagBlockProfile, "block-profile", "", "Write a goroutine blocking pprof profile to this file.")
 
 	return cmd
 }
