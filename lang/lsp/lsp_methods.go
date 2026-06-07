@@ -471,8 +471,15 @@ func (cli *LSPClient) Locate(id Location) (string, error) {
 	}
 	text := f.Text
 	// get block text of range
+	if id.Range.Start.Line < 0 || id.Range.Start.Line >= len(f.LineCounts) ||
+		id.Range.End.Line < 0 || id.Range.End.Line >= len(f.LineCounts) {
+		return "", fmt.Errorf("range %s out of bounds for %s", id.Range, id.URI)
+	}
 	start := f.LineCounts[id.Range.Start.Line] + id.Range.Start.Character
 	end := f.LineCounts[id.Range.End.Line] + id.Range.End.Character
+	if start < 0 || end > len(text) || start > end {
+		return "", fmt.Errorf("range %s out of bounds for %s", id.Range, id.URI)
+	}
 	return text[start:end], nil
 }
 
