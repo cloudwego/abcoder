@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/cloudwego/abcoder/llm/log"
@@ -43,6 +45,11 @@ type mcpServerConfig struct {
 
 // runInitSpec implements the init-spec command
 func RunInitSpec(targetDir string) error {
+	// Check and install jq dependency required by hook scripts
+	if err := ensureJqInstalled(); err != nil {
+		return fmt.Errorf("failed to ensure jq is installed: %w", err)
+	}
+
 	if targetDir == "" {
 		// Default to current directory if not specified
 		cwd, err := os.Getwd()
@@ -263,4 +270,62 @@ Next steps:
 For more information, see:
   - https://github.com/cloudwego/abcoder
 `, targetDir, configPath, astsDir)
+}
+
+// ensureJqInstalled checks if jq is installed and attempts to install it if not found
+func ensureJqInstalled() error {
+	if _, err := exec.LookPath("jq"); err == nil {
+		log.Info("jq is already installed")
+		return nil
+	}
+
+	log.Info("jq not found, attempting to install...")
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		// Detect available package manager
+		if _, err := exec.LookPath("apt-get"); err == nil {
+			cmd = exec.Command("sudo", "apt-get", "install", "-y", "jq")
+		} else if _, err := exec.LookPath("yum"); err == nil {
+			cmd = exec.Command("sudo", "yum", "install", "-y", "jq")
+		} else if _, err := exec.LookPath("dnf"); err == nil {
+			cmd = exec.Command("sudo", "dnf", "install", "-y", "jq")
+		} else if _, err := exec.LookPath("apk"); err == nil {
+			cmd = exec.Command("apk", "add", "jq")
+		} else {
+			return fmt.Errorf("jq is required but not found, and no supported package manager (apt-get/yum/dnf/apk) was detected.\n" +
+				"Please install jq manually:\n" +
+				"  - Ubuntu/Debian: sudo apt-get install -y jq\n" +
+				"  - CentOS/RHEL: sudo yum install -y jq\n" +
+				"  - Fedora: sudo dnf install -y jq\n" +
+				"  - Alpine: apk add jq")
+		}
+	case "darwin":
+		if _, err := exec.LookPath("brew"); err == nil {
+			cmd = exec.Command("brew", "install", "jq")
+		} else {
+			return fmt.Errorf("jq is required but not found, and Homebrew is not available.\n" +
+				"Please install jq manually:\n" +
+				"  - Install Homebrew first: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n" +
+				"  - Then run: brew install jq")
+		}
+	default:
+		return fmt.Errorf("jq is required but not found. Automatic installation is not supported on %s.\n"+
+			"Please install jq manually: https://jqlang.github.io/jq/download/", runtime.GOOS)
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to install jq: %w", err)
+	}
+
+	// Verify jq is available after installation
+	if _, err := exec.LookPath("jq"); err != nil {
+		return fmt.Errorf("jq was installed but still not found in PATH. Please check your PATH configuration")
+	}
+
+	log.Info("jq installed successfully")
+	return nil
 }
