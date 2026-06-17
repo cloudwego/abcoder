@@ -120,6 +120,10 @@ type Collector struct {
 	// doesn't implement textDocument/ast (jsonrpc2 -32601). After this
 	// we stop issuing AST requests entirely.
 	cppASTUnsupported bool
+	// cppTHCrashes counts typeHierarchy-attributed clangd crashes (for
+	// visibility only — typeHierarchy is NOT disabled; the server is
+	// restarted and typeHierarchy keeps being used). Guarded by c.mu.
+	cppTHCrashes int
 	// exportCtx is the context.Context belonging to the current Export()
 	// invocation. Set at the top of Export and cleared at return; gives
 	// exportSymbol-and-friends access to ctx without rippling a new
@@ -198,9 +202,27 @@ func (c *Collector) cppASTForSymbol(ctx context.Context, sym *DocumentSymbol) *A
 	if c.cli == nil || sym == nil || c.cppASTUnsupported {
 		return nil
 	}
+	// clangd's textDocument/ast returns the tightest AST node that fully
+	// CONTAINS the requested range, but it deliberately returns null when
+	// that node is the TranslationUnitDecl — it refuses to dump a whole TU
+	// (which would expand every system/3rd-party include). A whole-file
+	// range therefore only resolves for files whose entire content sits
+	// under a single top-level node (typical headers: one `namespace {...}`).
+	// A .cpp/.cc with multiple top-level decls (includes + several out-of-
+	// line definitions + DEFINE_* macros) always resolves to the TU, so its
+	// whole-file request is null — verified empirically: even a single-line
+	// range at the top of such a file returns null, while a range enclosed
+	// by one method definition returns that CXXMethod node. The whole-file
+	// result is cached, so retry the (one-RPC, header-friendly) path first;
+	// when it's nil, fall back to a per-symbol request scoped to the
+	// symbol's own range, which clangd answers reliably for out-of-line
+	// .cpp definitions.
 	root := c.cppFileAST(ctx, sym.Location.URI)
 	if root == nil {
-		return nil
+		root = c.cppSymbolAST(ctx, sym)
+		if root == nil {
+			return nil
+		}
 	}
 	target := sym.Location.Range
 	var best *ASTNode
@@ -222,11 +244,62 @@ func (c *Collector) cppASTForSymbol(ctx context.Context, sym *DocumentSymbol) *A
 	if best != nil {
 		return best
 	}
+	// Fallback: LSP documentSymbol ranges and clangd AST node ranges often
+	// disagree on the END boundary for multi-line out-of-line definitions
+	// (e.g. `int C::f(...) { ... }` in a .cpp): documentSymbol reports the
+	// closing-brace line, clangd's AST FunctionDecl range can end a line
+	// earlier, so the strict full-range Include above misses the node and
+	// hasBody wrongly defaults to false — losing the .cpp body at dedup.
+	// The symbol's START position is reliable, so retry matching only that,
+	// picking the smallest enclosing declaration node.
+	startOnly := Range{Start: target.Start, End: target.Start}
+	var walkStart func(n *ASTNode)
+	walkStart = func(n *ASTNode) {
+		if n == nil {
+			return
+		}
+		if n.Role == ASTRoleDeclaration && n.Range.Include(startOnly) {
+			if best == nil || best.Range.Include(n.Range) {
+				best = n
+			}
+		}
+		for _, ch := range n.Children {
+			walkStart(ch)
+		}
+	}
+	walkStart(root)
+	if best != nil {
+		return best
+	}
 	// No declaration node matched the symbol's range — return nil rather
 	// than falling back to the TranslationUnit root, which would let
 	// downstream callers (e.g. cppASTHasBody) confuse "no symbol here"
 	// with "found some unrelated node".
 	return nil
+}
+
+// cppSymbolAST fetches the AST scoped to a single symbol's range. The
+// whole-file AST is unusable for .cpp files (clangd returns null for any
+// range whose tightest enclosing node is the TranslationUnitDecl), so this
+// per-symbol request is the primary path for out-of-line definitions: the
+// symbol's range is enclosed by its own FunctionDecl/CXXMethodDecl, which
+// clangd returns reliably — including the Compound body child used by
+// HasFunctionBody to tell a definition from a declaration.
+func (c *Collector) cppSymbolAST(ctx context.Context, sym *DocumentSymbol) *ASTNode {
+	if c.cppASTUnsupported {
+		return nil
+	}
+	_, _ = c.cli.DidOpen(ctx, sym.Location.URI)
+	node, err := c.cli.AST(ctx, sym.Location.URI, sym.Location.Range)
+	if err != nil {
+		if IsJSONRPCMethodNotFound(err) {
+			c.mu.Lock()
+			c.cppASTUnsupported = true
+			c.mu.Unlock()
+		}
+		return nil
+	}
+	return node
 }
 
 // cppFileAST returns the cached AST root for uri, fetching once on
@@ -322,6 +395,23 @@ func (c *Collector) cppASTKind(ctx context.Context, sym *DocumentSymbol) (kind s
 // class extend" — clangd has the parsed C++ AST so it knows about
 // using-declarations, type aliases, and namespace-qualified bases
 // without us reparsing the declaration text.
+// noteTHError records a typeHierarchy RPC failure. Connection-loss failures
+// are the clangd crash signature; we count + log them for visibility but do
+// NOT disable typeHierarchy. The LSPClient respawns the server and the next
+// class is attempted again — typeHierarchy stays enabled for the whole parse.
+// The crashing class still gets its bases via collectCppBasesViaAST (always
+// called alongside), so nothing is lost by keeping typeHierarchy on.
+func (c *Collector) noteTHError(err error) {
+	if err == nil || !IsConnClosed(err) {
+		return
+	}
+	c.mu.Lock()
+	c.cppTHCrashes++
+	n := c.cppTHCrashes
+	c.mu.Unlock()
+	log.Error("C++ typeHierarchy crashed the LSP server (count=%d); restarted, continuing with typeHierarchy still enabled", n)
+}
+
 func (c *Collector) collectCppBasesViaTypeHierarchy(ctx context.Context, sym *DocumentSymbol) bool {
 	if c.cli == nil {
 		return false
@@ -333,13 +423,18 @@ func (c *Collector) collectCppBasesViaTypeHierarchy(ctx context.Context, sym *Do
 		pos = sym.SelectionRange.Start
 	}
 	items, err := c.cli.PrepareTypeHierarchy(ctx, sym.Location.URI, pos)
-	if err != nil || len(items) == 0 {
+	if err != nil {
+		c.noteTHError(err)
+		return false
+	}
+	if len(items) == 0 {
 		return false
 	}
 	resolvedAny := false
 	for _, item := range items {
 		supers, err := c.cli.TypeHierarchySupertypes(ctx, item)
 		if err != nil {
+			c.noteTHError(err)
 			continue
 		}
 		for _, sup := range supers {
@@ -354,6 +449,97 @@ func (c *Collector) collectCppBasesViaTypeHierarchy(ctx context.Context, sym *Do
 		}
 	}
 	return resolvedAny
+}
+
+// collectCppBasesViaAST resolves base classes from clangd's
+// textDocument/ast. Unlike typeHierarchy/supertypes, the AST exposes
+// base specifiers for DEPENDENT TEMPLATE bases too
+// (`class Foo : public Tmpl<X,Y>`): the class's CXXRecord node carries a
+// child with role=="base" whose nested type node (TemplateSpecialization
+// for templated bases, Record otherwise) points at the base class name in
+// source. We resolve that position via textDocument/definition
+// (getSymbolByToken) and record an implements-rel. Pure LSP — no text
+// parsing of the inheritance clause.
+func (c *Collector) collectCppBasesViaAST(ctx context.Context, sym *DocumentSymbol) {
+	if c.cli == nil {
+		return
+	}
+	// Reuse the cached whole-file AST (cppASTForSymbol → cppFileAST cache):
+	// one textDocument/ast per FILE, not per class. The returned node is the
+	// tightest declaration containing the class range — i.e. its CXXRecord,
+	// whose children carry the base specifiers.
+	rec := c.cppASTForSymbol(ctx, sym)
+	if rec == nil {
+		return
+	}
+	if rec.Kind != "CXXRecord" {
+		if r := cppFindRecord(rec, sym.Name); r != nil {
+			rec = r
+		}
+	}
+	for _, child := range rec.Children {
+		if child.Role != "base" {
+			continue
+		}
+		pos, ok := cppBaseNamePos(child)
+		if !ok {
+			continue
+		}
+		loc := Location{URI: sym.Location.URI, Range: Range{Start: pos, End: pos}}
+		baseSym, err := c.getSymbolByToken(ctx, Token{Location: loc, Type: "class"})
+		if err != nil || baseSym == nil || baseSym == sym || baseSym.Name == "" {
+			continue
+		}
+		c.addImplementsRel(sym, baseSym, loc)
+	}
+}
+
+// cppFindRecord returns the CXXRecord declaration node for class `name`
+// within an AST subtree (the cli.AST root may be the record itself or a
+// wrapping node). Returns nil if not found.
+func cppFindRecord(n *ASTNode, name string) *ASTNode {
+	if n == nil {
+		return nil
+	}
+	if n.Role == ASTRoleDeclaration && n.Kind == "CXXRecord" && (name == "" || n.Detail == name) {
+		return n
+	}
+	for _, ch := range n.Children {
+		if r := cppFindRecord(ch, name); r != nil {
+			return r
+		}
+	}
+	return nil
+}
+
+// cppBaseNamePos finds the source position of the base class NAME under a
+// role=="base" specifier node. It returns the start of the outermost
+// (pre-order first) type node of kind TemplateSpecialization or Record —
+// i.e. the base class itself, not its template arguments or enclosing
+// namespace specifiers.
+func cppBaseNamePos(base *ASTNode) (Position, bool) {
+	var found *ASTNode
+	var walk func(n *ASTNode) bool
+	walk = func(n *ASTNode) bool {
+		if n == nil {
+			return false
+		}
+		if n.Role == "type" && (n.Kind == "TemplateSpecialization" || n.Kind == "Record") {
+			found = n
+			return true
+		}
+		for _, ch := range n.Children {
+			if walk(ch) {
+				return true
+			}
+		}
+		return false
+	}
+	walk(base)
+	if found == nil {
+		return Position{}, false
+	}
+	return found.Range.Start, true
 }
 
 type methodInfo struct {
@@ -446,6 +632,20 @@ func (c *Collector) configureLSP(ctx context.Context) {
 	}
 }
 
+// runSafe runs fn, recovering from any panic so a single bad symbol — e.g. a
+// clangd-reported degenerate token range that trips an out-of-range slice in
+// the language spec (CppSpec.FunctionSymbol) — is skipped instead of killing
+// the whole parse. This is the in-process half of "crash → skip & continue";
+// the LSPClient restart logic handles the other half (server crashes).
+func (c *Collector) runSafe(what string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("recovered from panic during %s (skipping symbol): %v", what, r)
+		}
+	}()
+	fn()
+}
+
 func (c *Collector) Collect(ctx context.Context) error {
 	var root_syms []*DocumentSymbol
 	var err error
@@ -479,7 +679,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 		for _, sym := range root_syms {
 			sym := sym
 			psg.Go(func() error {
-				c.processSymbol(ctx, sym, 1)
+				c.runSafe("processSymbol", func() { c.processSymbol(ctx, sym, 1) })
 				return nil
 			})
 		}
@@ -526,7 +726,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 	for _, sym := range entity_syms {
 		sym := sym
 		deg.Go(func() error {
-			c.collectDepsForEntity(ctx, sym)
+			c.runSafe("collectDepsForEntity", func() { c.collectDepsForEntity(ctx, sym) })
 			return nil
 		})
 	}
@@ -556,13 +756,15 @@ func (c *Collector) Collect(ctx context.Context) error {
 		for _, sym := range uniq {
 			sym := sym
 			eg.Go(func() error {
-				if len(sym.Tokens) == 0 {
-					tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
-					if err == nil {
-						sym.Tokens = tokens
+				c.runSafe("collectDepsForEntity(ext)", func() {
+					if len(sym.Tokens) == 0 {
+						tokens, err := c.cli.SemanticTokens(ctx, sym.Location)
+						if err == nil {
+							sym.Tokens = tokens
+						}
 					}
-				}
-				c.collectDepsForEntity(ctx, sym)
+					c.collectDepsForEntity(ctx, sym)
+				})
 				return nil
 			})
 		}
@@ -2625,13 +2827,15 @@ func (c *Collector) collectImpl(ctx context.Context, sym *DocumentSymbol, depth 
 	if impl == "" || len(impl) < len(sym.Name) {
 		impl = fmt.Sprintf("class %s {\n", sym.Name)
 	}
-	// C++ multi-inheritance: pick up additional base classes via
-	// typeHierarchy. clangd doesn't return supertypes for dependent
-	// template bases (`class Foo : public Tmpl<X,Y>`), so those edges
-	// will simply be absent — accepting that trade-off keeps the parser
-	// purely LSP-based with no text fallback.
+	// C++ inheritance: resolve base classes via LSP. typeHierarchy handles
+	// concrete (non-dependent) bases; it does NOT report dependent template
+	// bases (`class Foo : public Tmpl<X,Y>`), so we additionally read the
+	// base specifiers from clangd's textDocument/ast and resolve each via
+	// textDocument/definition (collectCppBasesViaAST). Both feed
+	// addImplementsRel, which dedups — purely LSP, no text fallback.
 	if c.Language == uniast.Cpp {
 		c.collectCppBasesViaTypeHierarchy(ctx, sym)
+		c.collectCppBasesViaAST(ctx, sym)
 	}
 
 	// search all methods — snapshot c.syms first so we hold mu only briefly,

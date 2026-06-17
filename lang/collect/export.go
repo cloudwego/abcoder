@@ -274,7 +274,11 @@ func (c *Collector) Export(ctx context.Context) (*uniast.Repository, error) {
 	log.Info("Export: exporting %d symbols...\n", len(c.syms))
 	visited := make(map[*DocumentSymbol]*uniast.Identity)
 	for _, symbol := range c.syms {
-		_, _ = c.exportSymbol(&repo, symbol, "", visited)
+		symbol := symbol
+		// recover per-symbol: a panic while exporting one symbol (e.g. a
+		// degenerate range tripping an out-of-range deep in fileLine) skips
+		// that symbol instead of aborting the whole export. "崩了就跳过".
+		c.runSafe("exportSymbol", func() { _, _ = c.exportSymbol(&repo, symbol, "", visited) })
 	}
 
 	// Synthesize inherited methods per derived class so the call graph can

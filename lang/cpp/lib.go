@@ -29,13 +29,15 @@ func InstallLanguageServer() (string, error) {
 }
 
 func GetDefaultLSP() (lang uniast.Language, name string) {
-	// background-index=false: clangd's persisted index only covers files in
-	// compile_commands.json (the project's own TUs), a small slice of the
-	// cross-TU work abcoder triggers. Disabling it skips disk writes and
-	// background indexer scheduling overhead.
+	// background-index=true: build clangd's persisted cross-TU index so
+	// definition/references/typeHierarchy queries hit the index instead of
+	// re-parsing TUs on demand. The persisted index survives the LSPClient's
+	// crash-restarts (loaded from disk, incremental), so a restart doesn't
+	// re-index from scratch. Heavier upfront + more disk, but speeds the
+	// per-symbol query storm on large workspaces.
 	// pch-storage=disk: keeps preambles on disk (clangd cleans them on
 	// graceful exit). memory mode is ~17% faster but doubles peak RSS.
-	return uniast.Cpp, "clangd-18 --background-index=false --pch-storage=disk -j=32 --clang-tidy=false"
+	return uniast.Cpp, "clangd-18 --background-index=true --pch-storage=disk -j=32 --clang-tidy=false"
 }
 
 func CheckRepo(repo string) (string, time.Duration) {
