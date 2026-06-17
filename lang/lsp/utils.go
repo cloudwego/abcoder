@@ -41,7 +41,14 @@ func GetDistance(text string, start Position, pos Position) int {
 	lines := utils.CountLinesPooled(text)
 	defer utils.PutCount(lines)
 	// find the line of the position
-	return (*lines)[pos.Line-start.Line] + pos.Character - start.Character
+	l := pos.Line - start.Line
+	// Defensive: out-of-range line (degenerate clangd range) -> -1, which
+	// ChunkHead already treats as "no text". Avoids an index-out-of-range
+	// panic mid-collect/export.
+	if l < 0 || l >= len(*lines) {
+		return -1
+	}
+	return (*lines)[l] + pos.Character - start.Character
 }
 
 // calculate the relative index of a position to a text
@@ -57,6 +64,16 @@ func ChunkHead(text string, textPos Position, pos Position) string {
 func RelativePostionWithLines(lines []int, basePos Position, pos Position) int {
 	// find the line of the position
 	l := pos.Line - basePos.Line
+	// Defensive: clangd can report a position whose line is outside the
+	// cached line table (degenerate / macro-expanded / stale ranges), which
+	// would otherwise panic here with index-out-of-range and abort the whole
+	// parse (seen in both CppSpec.FunctionSymbol during collect and
+	// fileLine→PositionOffset during export). Return -1, the same "unknown
+	// offset" sentinel PositionOffset already produces for invalid input;
+	// callers either guard on `< 0` or just record a -1 offset.
+	if l < 0 || l >= len(lines) {
+		return -1
+	}
 	return lines[l] + pos.Character - basePos.Character
 }
 

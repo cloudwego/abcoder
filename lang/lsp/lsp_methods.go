@@ -470,9 +470,19 @@ func (cli *LSPClient) Locate(id Location) (string, error) {
 		return "", err
 	}
 	text := f.Text
-	// get block text of range
+	// get block text of range. Guard against degenerate ranges: clangd can
+	// report inverted (Start after End) or out-of-bounds ranges for some
+	// tokens (e.g. macro-expanded or deduced `auto` locations). Without this
+	// guard text[start:end] panics with "slice bounds out of range".
+	if id.Range.Start.Line < 0 || id.Range.Start.Line >= len(f.LineCounts) ||
+		id.Range.End.Line < 0 || id.Range.End.Line >= len(f.LineCounts) {
+		return "", nil
+	}
 	start := f.LineCounts[id.Range.Start.Line] + id.Range.Start.Character
 	end := f.LineCounts[id.Range.End.Line] + id.Range.End.Character
+	if start < 0 || end > len(text) || start > end {
+		return "", nil
+	}
 	return text[start:end], nil
 }
 

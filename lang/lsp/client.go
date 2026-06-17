@@ -57,6 +57,19 @@ type LSPClient struct {
 
 	ClientOptions
 	LspOptions map[string]string
+
+	// --- restart resilience: clangd can segfault (e.g. in typeParents on
+	// pathological template typeHierarchy), which closes the jsonrpc2 conn
+	// and would otherwise make every later request fail forever. connMu
+	// guards swapping the live Conn/lspHandler/gen during a respawn;
+	// in-flight callers keep using their captured (now-old) conn pointer,
+	// which stays valid (only the field write is synchronized). ---
+	connMu      sync.RWMutex
+	gen         uint64
+	repoURI     DocumentURI
+	autoRestart bool // respawn the server on connection loss (C++ only)
+	restartMu   sync.Mutex
+	restarts    int
 }
 
 type ClientOptions struct {
@@ -84,6 +97,12 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 	cli.provider = GetProvider(opts.Language)
 	cli.Verbose = opts.Verbose
 
+	// restart resilience: remember how to respawn, enable for C++ (the only
+	// language whose server is known to crash mid-parse). gen starts at 1.
+	cli.repoURI = NewURI(repo)
+	cli.autoRestart = opts.Language == uniast.Cpp
+	cli.gen = 1
+
 	if openfile != "" {
 		_, err := cli.DidOpen(context.Background(), NewURI(openfile))
 		if err != nil {
@@ -97,8 +116,126 @@ func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientO
 }
 
 func (c *LSPClient) Close() error {
-	c.lspHandler.Close()
-	return c.Conn.Close()
+	c.connMu.RLock()
+	conn := c.Conn
+	h := c.lspHandler
+	c.connMu.RUnlock()
+	if h != nil {
+		h.Close()
+	}
+	if conn != nil {
+		return conn.Close()
+	}
+	return nil
+}
+
+// curConn returns the live connection and its generation under a read lock.
+// Callers capture the pointer and use it without holding the lock; a
+// concurrent restart that swaps c.Conn is safe because the old conn object
+// stays valid (GC-reachable) for the in-flight call.
+func (cli *LSPClient) curConn() (*jsonrpc2.Conn, uint64) {
+	cli.connMu.RLock()
+	defer cli.connMu.RUnlock()
+	return cli.Conn, cli.gen
+}
+
+// Notify shadows the embedded jsonrpc2.Conn.Notify so notifications go
+// through the restart-aware connection accessor (and trigger a respawn if
+// the transport has died).
+func (cli *LSPClient) Notify(ctx context.Context, method string, params any, opts ...jsonrpc2.CallOption) error {
+	conn, gen := cli.curConn()
+	err := conn.Notify(ctx, method, params, opts...)
+	if err != nil && IsConnClosed(err) {
+		cli.maybeRestart(gen)
+	}
+	return err
+}
+
+// IsConnClosed reports whether err means the LSP transport died (server
+// crashed / pipe closed) — unrecoverable on the same connection.
+func IsConnClosed(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, jsonrpc2.ErrClosed) {
+		return true
+	}
+	s := err.Error()
+	return strings.Contains(s, "connection is closed") ||
+		strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "use of closed network connection")
+}
+
+// maybeRestart respawns the LSP server iff it hasn't already been restarted
+// since the caller captured observedGen. Safe to call from many goroutines
+// that all observed the same dead connection — only the first wins; the rest
+// see a bumped generation and return. After a restart, every cached document
+// is marked not-opened so the next DidOpen re-notifies the fresh server.
+func (cli *LSPClient) maybeRestart(observedGen uint64) {
+	if !cli.autoRestart {
+		return
+	}
+	cli.restartMu.Lock()
+	defer cli.restartMu.Unlock()
+	cli.connMu.RLock()
+	cur := cli.gen
+	cli.connMu.RUnlock()
+	if cur != observedGen {
+		return // already restarted by another goroutine
+	}
+	log.Error("LSP server connection lost; restarting (restart #%d)...", cli.restarts+1)
+	svr, err := startLSPSever(cli.Server, cli.ClientOptions)
+	if err != nil {
+		log.Error("LSP restart: failed to start server: %v", err)
+		return
+	}
+	newcli, err := initLSPClient(context.Background(), svr, cli.repoURI, cli.Verbose, cli.Language, cli.InitializationOptions)
+	if err != nil {
+		log.Error("LSP restart: failed to init server: %v", err)
+		return
+	}
+	cli.connMu.Lock()
+	oldConn := cli.Conn
+	oldH := cli.lspHandler
+	cli.Conn = newcli.Conn
+	cli.lspHandler = newcli.lspHandler
+	if len(newcli.tokenTypes) > 0 {
+		cli.tokenTypes = newcli.tokenTypes
+	}
+	if len(newcli.tokenModifiers) > 0 {
+		cli.tokenModifiers = newcli.tokenModifiers
+	}
+	cli.gen++
+	newGen := cli.gen
+	cli.connMu.Unlock()
+	cli.restarts++
+	cli.resetServerOpened()
+	if oldH != nil {
+		oldH.Close()
+	}
+	if oldConn != nil {
+		_ = oldConn.Close()
+	}
+	log.Error("LSP server restarted (gen=%d).", newGen)
+}
+
+// resetServerOpened marks every cached document as not-yet-opened on the
+// (new) server so DidOpen re-sends textDocument/didOpen after a restart.
+func (cli *LSPClient) resetServerOpened() {
+	cli.filesMu.RLock()
+	fs := make([]*TextDocumentItem, 0, len(cli.files))
+	for _, f := range cli.files {
+		fs = append(fs, f)
+	}
+	cli.filesMu.RUnlock()
+	for _, f := range fs {
+		if f == nil || f.Mu == nil {
+			continue
+		}
+		f.Mu.Lock()
+		f.ServerOpened = false
+		f.Mu.Unlock()
+	}
 }
 
 // Extra wrapper around jsonrpc2 that retries transient RPC failures.
@@ -109,14 +246,24 @@ func (c *LSPClient) Close() error {
 // retry for terminal errors: MethodNotFound (-32601, server doesn't
 // implement the endpoint) and context cancellation (caller bailed).
 func (cli *LSPClient) Call(ctx context.Context, method string, params, result any, opts ...jsonrpc2.CallOption) error {
+	conn, gen := cli.curConn()
 	var raw json.RawMessage
-	err := cli.Conn.Call(ctx, method, params, &raw)
+	err := conn.Call(ctx, method, params, &raw)
+	if err != nil && IsConnClosed(err) {
+		// The server crashed (e.g. clangd segfault in typeParents on a
+		// pathological template typeHierarchy). Retrying on the dead conn
+		// is pointless; respawn it so subsequent symbols keep working, and
+		// surface the error so THIS call is skipped (C++ base collection
+		// falls back to collectCppBasesViaAST).
+		cli.maybeRestart(gen)
+		return err
+	}
 	if err != nil && shouldRetryRPC(err) {
 		raw = nil
 		err = retry.Do(
 			func() error {
 				raw = nil
-				return cli.Conn.Call(ctx, method, params, &raw)
+				return conn.Call(ctx, method, params, &raw)
 			},
 			retry.Context(ctx),
 			retry.Attempts(2), // initial call already happened; 2 more = 3 total
@@ -125,6 +272,10 @@ func (cli *LSPClient) Call(ctx context.Context, method string, params, result an
 			retry.LastErrorOnly(true),
 			retry.RetryIf(shouldRetryRPC),
 		)
+		if err != nil && IsConnClosed(err) {
+			cli.maybeRestart(gen)
+			return err
+		}
 	}
 	if err != nil {
 		return err
