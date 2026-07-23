@@ -63,21 +63,7 @@ func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
 		return nil, err
 	}
 
-	num_projfiles := 0
-	scanner := func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		base := filepath.Base(path)
-		if base == "pyproject.toml" {
-			num_projfiles++
-			if num_projfiles > 1 {
-				panic("multiple pyproject.toml files found")
-			}
-		}
-		return nil
-	}
-	if err := filepath.Walk(root, scanner); err != nil {
+	if _, err := os.Stat(absPath); err != nil {
 		return nil, err
 	}
 
