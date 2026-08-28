@@ -149,7 +149,7 @@ export class MonorepoUtils {
       if (fs.existsSync(packageJsonPath)) {
         try {
           const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-          const relativePath = path.relative(rootPath, currentDir);
+          const relativePath = path.relative(rootPath, currentDir).replace(/\\/g, '/');
           
           packages.push({
             path: relativePath,
