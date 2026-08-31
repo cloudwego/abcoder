@@ -16,7 +16,9 @@ package python
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,6 +34,86 @@ const lspName = "pylsp"
 const lspUrl = "https://github.com/Hoblovski/python-lsp-server.git"
 const lspBranch = "abc"
 const lspPath = "pylsp"
+
+func pylspInstallPath() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("find user cache directory: %w", err)
+	}
+	return filepath.Join(cacheDir, "abcoder", lspPath), nil
+}
+
+func validatePylspSource(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("inspect cached pylsp path %q: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("cached pylsp path %q is not a directory", path)
+	}
+	gitInfo, gitErr := os.Stat(filepath.Join(path, ".git"))
+	if gitErr != nil || !gitInfo.IsDir() {
+		return fmt.Errorf("cached pylsp path %q is not a git checkout", path)
+	}
+	projectInfo, projectErr := os.Stat(filepath.Join(path, "pyproject.toml"))
+	if projectErr != nil || projectInfo.IsDir() {
+		return fmt.Errorf("cached pylsp checkout %q has no pyproject.toml", path)
+	}
+	return nil
+}
+
+func clonePylspSource(path string) error {
+	log.Error("Installing pylsp... Now running git clone -b %s %s %s", lspBranch, lspUrl, path)
+	if output, err := exec.Command("git", "clone", "-b", lspBranch, lspUrl, path).CombinedOutput(); err != nil {
+		return fmt.Errorf("clone pylsp into %q: %w: %s", path, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func ensurePylspSourceWithClone(path string, clone func(string) error) error {
+	if _, err := os.Stat(path); err == nil {
+		if err := validatePylspSource(path); err != nil {
+			return err
+		}
+		log.Info("Reusing cached pylsp checkout at %s", path)
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect cached pylsp path %q: %w", path, err)
+	}
+
+	parent := filepath.Dir(path)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("create pylsp cache directory: %w", err)
+	}
+	tempPath, err := os.MkdirTemp(parent, ".pylsp-clone-")
+	if err != nil {
+		return fmt.Errorf("create temporary pylsp checkout: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempPath); err != nil {
+			log.Error("failed to clean up temporary pylsp checkout %s: %v", tempPath, err)
+		}
+	}()
+
+	if err := clone(tempPath); err != nil {
+		return err
+	}
+	if err := validatePylspSource(tempPath); err != nil {
+		return fmt.Errorf("validate cloned pylsp checkout: %w", err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		if validationErr := validatePylspSource(path); validationErr == nil {
+			log.Info("Reusing pylsp checkout installed concurrently at %s", path)
+			return nil
+		}
+		return fmt.Errorf("publish pylsp checkout at %q: %w", path, err)
+	}
+	return nil
+}
+
+func ensurePylspSource(path string) error {
+	return ensurePylspSourceWithClone(path, clonePylspSource)
+}
 
 func CheckPythonVersion() error {
 	// Check python3 command availability and get version.
@@ -66,15 +148,18 @@ func InstallLanguageServer() (string, error) {
 		log.Error("python version check failed: %v", err)
 		return "", err
 	}
-	// git clone
-	log.Error("Installing pylsp... Now running git clone -b %s %s %s", lspBranch, lspUrl, lspPath)
-	if err := exec.Command("git", "clone", "-b", lspBranch, lspUrl, lspPath).Run(); err != nil {
-		log.Error("git clone failed: %v", err)
+	path, err := pylspInstallPath()
+	if err != nil {
+		log.Error("failed to determine pylsp install path: %v", err)
 		return "", err
 	}
-	// python -m pip install -e projectRoot/pylsp
+	if err := ensurePylspSource(path); err != nil {
+		log.Error("failed to prepare pylsp source: %v", err)
+		return "", err
+	}
+	// Install the cached checkout in editable mode.
 	log.Error("Installing pylsp via pip. This might take some time, make sure the network connection is ok.")
-	if err := exec.Command("python3", "-m", "pip", "install", "--break-system-packages", "-e", lspPath).Run(); err != nil {
+	if err := exec.Command("python3", "-m", "pip", "install", "--break-system-packages", "-e", path).Run(); err != nil {
 		log.Error("python3 -m pip install failed: %v", err)
 		return "", err
 	}
