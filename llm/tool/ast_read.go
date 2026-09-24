@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -33,15 +34,15 @@ import (
 
 const (
 	ToolListRepos           = "list_repos"
-	DescListRepos           = "[DISCOVERY] level1/4: List all repositories. No parameters required. Always the first step in any analysis workflow."
+	DescListRepos           = "[REPO DISCOVERY] level1/5: List all repositories. No parameters required. Always the first step in any analysis workflow."
 	ToolGetRepoStructure    = "get_repo_structure"
-	DescGetRepoStructure    = "[STRUCTURE] level2/4: Get repository structure. Input: repo_name from list_repos output. Output: modules with packages and files."
+	DescGetRepoStructure    = "[REPO STRUCTURE] level2/5: Get repository structure. Input: repo_name from list_repos output. Options: return_package_detail (default false) for package details; compress_suffix (default false) to compress common package prefixes. Strategy: If output is too large, retry with return_package_detail=false and compress_suffix=true. Output: modules with packages (and compress_var_map if compressed)."
 	ToolGetPackageStructure = "get_package_structure"
-	DescGetPackageStructure = "[STRUCTURE] level3/4: Get package structure with node_ids. Input: repo_name, mod_path, pkg_path from get_repo_structure output. Output: files with node_ids."
+	DescGetPackageStructure = "[PACKAGE STRUCTURE] level3/5: Get package structure with pkg_path. Input: repo_name, mod_path, pkg_path from get_repo_structure output. Output: files with node_ids."
 	ToolGetFileStructure    = "get_file_structure"
-	DescGetFileStructure    = "[STRUCTURE] level3/4: Get file structure with node list. Input: repo_name, file_path from get_repo_structure output. Output: nodes with signatures."
+	DescGetFileStructure    = "[FILE STRUCTURE] level4/5: Get file structure with file_path. Input: repo_name, file_path from get_repo_structure output. Output: nodes with signatures."
 	ToolGetASTNode          = "get_ast_node"
-	DescGetASTNode          = "[ANALYSIS] level4/4: Get detailed AST node info. Input: repo_name, node_ids from previous calls. Output: codes, dependencies, references, implementations."
+	DescGetASTNode          = "[AST NODE DETAIL] level5/5: Get detailed AST node info. Input: repo_name, node_ids from previous calls. Output: codes, dependencies, references, implementations."
 	// ToolWriteASTNode        = "write_ast_node"
 )
 
@@ -181,12 +182,16 @@ func (t *ASTReadTools) ListRepos(ctx context.Context, req ListReposReq) (*ListRe
 }
 
 type GetRepoStructReq struct {
-	RepoName string `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+	RepoName            string `json:"repo_name" jsonschema:"description=the name of the repository (output of list_repos tool)"`
+	ReturnPackageDetail bool   `json:"return_package_detail,omitempty" jsonschema:"description=whether to return the internal structure (files) of the package, default is false"`
+	CompressSuffix      bool   `json:"compress_suffix,omitempty" jsonschema:"description=whether to compress the suffix of the package path, default is false"`
 }
 
 type GetRepoStructResp struct {
-	Modules []ModuleStruct `json:"modules" jsonschema:"description=the module structure of the repository"`
-	Error   string         `json:"error,omitempty" jsonschema:"description=the error message"`
+	Modules        []ModuleStruct    `json:"modules" jsonschema:"description=the module structure of the repository"`
+	IsCompressed   bool              `json:"is_compressed" jsonschema:"description=whether the strings in is compressed"`
+	CompressVarMap map[string]string `json:"compress_var_map,omitempty" jsonschema:"description=the map of compressed variable names to their original values"`
+	Error          string            `json:"error,omitempty" jsonschema:"description=the error message"`
 }
 
 type ModuleStruct struct {
@@ -279,6 +284,7 @@ func (t *ASTReadTools) GetRepoStructure(_ context.Context, req GetRepoStructReq)
 	}
 
 	resp := new(GetRepoStructResp)
+	needCompress := req.CompressSuffix
 	for _, mod := range repo.Modules {
 		if mod.IsExternal() {
 			continue
@@ -290,18 +296,68 @@ func (t *ASTReadTools) GetRepoStructure(_ context.Context, req GetRepoStructReq)
 			pp := PackageStruct{
 				PkgPath: p,
 			}
-			files := mod.GetPkgFiles(p)
-			for _, f := range files {
-				pp.Files = append(pp.Files, FileStruct{
-					FilePath: f.Path,
-				})
+			if req.ReturnPackageDetail {
+				files := mod.GetPkgFiles(p)
+				for _, f := range files {
+					pp.Files = append(pp.Files, FileStruct{
+						FilePath: f.Path,
+					})
+				}
 			}
 			mm.Packages = append(mm.Packages, pp)
 		}
+		if len(mod.Packages) > 100 {
+			needCompress = true
+		}
 		resp.Modules = append(resp.Modules, mm)
+	}
+	if needCompress {
+		resp.CompressVarMap = make(map[string]string)
+		for i, mod := range resp.Modules {
+			suffix := compressSuffix(i, mod)
+			if suffix == "" {
+				continue
+			}
+			resp.CompressVarMap[strconv.Itoa(i)] = suffix
+		}
+		resp.IsCompressed = true
 	}
 	log.Debug("get repo structure, resp: %v", abutil.MarshalJSONIndentNoError(resp))
 	return resp, nil
+}
+
+func compressSuffix(index int, mod ModuleStruct) string {
+	if len(mod.Packages) == 0 {
+		return ""
+	}
+	limit := 50
+	if len(mod.Packages) < limit {
+		limit = len(mod.Packages)
+	}
+
+	prefix := string(mod.Packages[0].PkgPath)
+	for i := 1; i < limit; i++ {
+		path := string(mod.Packages[i].PkgPath)
+		for !strings.HasPrefix(path, prefix) {
+			prefix = prefix[:len(prefix)-1]
+			if prefix == "" {
+				break
+			}
+		}
+	}
+
+	if prefix == "" {
+		return ""
+	}
+
+	replacement := fmt.Sprintf("{{%d}}", index)
+	for i := range mod.Packages {
+		original := string(mod.Packages[i].PkgPath)
+		if strings.HasPrefix(original, prefix) {
+			mod.Packages[i].PkgPath = uniast.PkgPath(replacement + original[len(prefix):])
+		}
+	}
+	return prefix
 }
 
 type GetPackageStructReq struct {
