@@ -4,14 +4,48 @@ on: [ pull_request ]
 
 jobs:
   compliant:
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted, Linux, X64 ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Check License Header
         uses: apache/skywalking-eyes/header@v0.4.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Check Spell
-      #   uses: crate-ci/typos@master
+      - name: Check Spell
+        uses: crate-ci/typos@master
+
+  lint:
+    runs-on: [ self-hosted, Linux, X64 ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false # don't use cache for self-hosted runners
+
+      - name: Golangci Lint
+        # https://golangci-lint.run/
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          only-new-issues: true
+
+  typecheck:
+    runs-on: [ self-hosted, Linux, X64 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: false # don't use cache for self-hosted runners
+
+      - name: Install dependencies
+        working-directory: ./ts-parser
+        run: npm ci
+
+      - name: Run TypeScript type check
+        working-directory: ./ts-parser
+        run: npm run typecheck
